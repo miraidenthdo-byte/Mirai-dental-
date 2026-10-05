@@ -267,26 +267,56 @@ mark { background: var(--accent-soft); color: var(--ink); border-radius: 4px; pa
 }
 .complete strong { font-family: var(--font-display); font-weight: 400; font-size: 1.3rem; display: block; color: var(--ok); }
 
-/* ---------- Form ---------- */
-.form { display: flex; flex-direction: column; gap: 18px; }
-.field { display: flex; flex-direction: column; gap: 6px; }
-.field label, .field .label { font-weight: 700; font-size: .9rem; }
-.field .hint { font-size: .78rem; color: var(--ink-soft); }
-.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-@media (max-width: 520px) { .row2 { grid-template-columns: 1fr; } }
-input[type="text"], input[type="number"], select, textarea {
+/* ---------- Inputs ---------- */
+input[type="text"], input[type="number"], input[type="password"], select, textarea {
   width: 100%; border: 1.5px solid var(--line); background: var(--surface); border-radius: var(--radius-sm); padding: 10px 12px; min-height: 44px;
 }
 textarea { resize: vertical; min-height: 72px; line-height: 1.6; }
 input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
-.step-edit { padding: 14px; border-radius: var(--radius); background: var(--surface-2); display: flex; flex-direction: column; gap: 10px; }
-.step-edit-head { display: flex; align-items: center; gap: 8px; }
-.step-edit-head .num { width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: #3E2229; display: grid; place-items: center; font-weight: 700; font-size: .88rem; }
-.step-edit-head .tools { margin-left: auto; display: flex; gap: 2px; }
-.step-edit-head .tools button { width: 36px; height: 36px; }
-.note-row { display: grid; grid-template-columns: 140px 1fr; gap: 8px; }
-@media (max-width: 520px) { .note-row { grid-template-columns: 1fr; } }
-.form-foot { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; padding-top: 6px; }
+.icon-btn:disabled { opacity: .3; cursor: default; background: transparent; }
+
+/* ---------- Lock / Inline editor ---------- */
+.btn.lock { border-style: dashed; color: var(--ink-soft); }
+.btn.lock:hover { border-style: solid; }
+.lock-hint { font-size: .78rem; color: var(--ink-soft); display: inline-flex; align-items: center; gap: 4px; }
+.lock-hint svg { width: 14px; height: 14px; }
+.editbar {
+  position: sticky; top: calc(env(safe-area-inset-top, 0px) + 65px); z-index: 10;
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;
+  padding: 10px 12px 10px 16px; border-radius: var(--radius); background: var(--accent-soft); border: 1.5px solid var(--accent); box-shadow: var(--shadow);
+}
+.editbar-state { display: flex; align-items: center; gap: 10px; color: var(--accent-ink); }
+.editbar-state svg { width: 24px; height: 24px; }
+.editbar-state b { display: block; font-size: .95rem; line-height: 1.25; }
+.editbar-state small { display: block; font-size: .75rem; color: var(--ink-soft); line-height: 1.3; }
+.editbar-actions { display: flex; gap: 8px; }
+textarea.ed {
+  display: block; width: 100%; min-height: 0; resize: none; overflow: hidden; line-height: 1.65; padding: 8px 10px;
+  border: 1.5px dashed color-mix(in srgb, var(--accent) 75%, transparent); background: var(--surface);
+}
+textarea.ed:focus { border-style: solid; }
+textarea.ed-title { font-size: clamp(1.3rem, 4vw, 1.7rem); font-weight: 700; line-height: 1.4; }
+textarea.ed-sum { color: var(--ink-soft); }
+.ed-row { display: flex; flex-wrap: wrap; gap: 8px 14px; }
+.ed-inline { display: flex; align-items: center; gap: 6px; font-size: .84rem; color: var(--ink-soft); }
+.ed-inline.grow { flex: 1 1 220px; min-width: 0; }
+.ed-inline > span { flex: none; }
+.ed-inline input, .ed-inline select { min-height: 38px; padding: 6px 10px; width: auto; }
+.ed-inline.grow input { flex: 1; min-width: 0; }
+.ed-inline input[type="number"] { width: 5em; }
+.step.editing { border-style: dashed; border-color: color-mix(in srgb, var(--accent) 65%, transparent); }
+.step-num { width: 44px; height: 44px; border-radius: 50%; background: var(--accent); color: #3E2229; display: grid; place-items: center; font-weight: 700; font-variant-numeric: tabular-nums; }
+.step.editing .step-body { padding-top: 0; }
+.note.ed-note { align-items: flex-start; }
+.ed-note-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.ed-note select { min-height: 34px; padding: 4px 8px; width: auto; align-self: flex-start; font-size: .82rem; font-weight: 700; }
+.ed-note textarea.ed { font-size: .88rem; }
+.ed-add-note { display: flex; flex-wrap: wrap; gap: 6px; }
+.step-tools { display: flex; justify-content: flex-end; gap: 2px; border-top: 1px dashed var(--line); padding-top: 6px; }
+.step-tools .icon-btn { width: 40px; height: 40px; }
+.editor-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; }
+.pin-input { font-size: 1.6rem; letter-spacing: .6em; text-align: center; font-variant-numeric: tabular-nums; }
+.err { color: var(--warn-ink); font-size: .85rem; min-height: 1.4em; margin: 0; }
 
 /* ---------- Tab bar ---------- */
 .tabbar {
@@ -342,7 +372,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
     <div class="search">
       <svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
       <label for="q" class="sr-only">マニュアルを検索</label>
-      <input id="q" type="search" placeholder="マニュアルを検索（例：滅菌）" autocomplete="off">
+      <input id="q" type="search" placeholder="マニュアルを検索" autocomplete="off">
     </div>
     <button class="icon-btn" id="openSettings" aria-label="設定">
       <svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
@@ -395,6 +425,8 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
     user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
     cal: '<rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
     search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',
+    lock: '<rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3M12 14.5v2"/>',
+    unlock: '<rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 7.6-1.7M12 14.5v2"/>',
     copy: '<rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V5.5A1.5 1.5 0 0 0 14.5 4h-9A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8"/>'
   };
   const svg = (name, cls) => `<svg class="i ${cls || ''}" viewBox="0 0 24 24" aria-hidden="true">${ICON[name] || ''}</svg>`;
@@ -625,7 +657,8 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
     favs: Array.isArray(saved.favs) ? saved.favs : ['m10', 'm8'],
     recent: Array.isArray(saved.recent) ? saved.recent : ['m1', 'm2'],
     checks: saved.checks && typeof saved.checks === 'object' ? saved.checks : {},
-    largeText: !!saved.largeText
+    largeText: !!saved.largeText,
+    pin: typeof saved.pin === 'string' ? saved.pin : ''
   };
   document.documentElement.classList.toggle('large-text', state.largeText);
 
@@ -798,6 +831,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
   function renderDetail(id) {
     const m = getManual(id);
     if (!m) { view.innerHTML = emptyHTML('search', 'マニュアルが見つかりませんでした。<br><a href="#home">ホームへ戻る</a>'); return; }
+    if (editing && editing.id === id) return renderEditor();
     state.recent = [id, ...state.recent.filter(x => x !== id)].slice(0, 8);
     store.save();
     const c = catById(m.cat);
@@ -820,7 +854,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
         <div class="actions">
           <button class="btn ${isFav ? 'faved' : ''}" id="favBtn" aria-pressed="${isFav}">${svg('heart')}${isFav ? 'お気に入り済み' : 'お気に入り'}</button>
           <button class="btn" id="resetBtn">${svg('reset')}チェックをリセット</button>
-          <a class="btn" href="#edit-${esc(m.id)}">${svg('pen')}編集</a>
+          <button class="btn lock" id="lockBtn">${svg('lock')}ロックを解除して編集</button>
         </div>
         <div class="progress" id="progress">
           <div class="progress-bar"><i id="progressFill"></i></div>
@@ -871,6 +905,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
       toast(on ? 'お気に入りから外しました' : 'お気に入りに追加しました');
       renderDetail(id);
     });
+    $('#lockBtn').addEventListener('click', () => askUnlock(id));
     $('#resetBtn').addEventListener('click', () => {
       delete state.checks[id];
       store.save();
@@ -879,173 +914,295 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
     });
   }
 
-  /* ================= 画面: 作成・編集 ================= */
-  function renderEdit(id) {
-    const orig = id ? getManual(id) : null;
-    if (id && !orig) { location.hash = '#home'; return; }
-    const draft = orig ? JSON.parse(JSON.stringify(orig)) : {
+  /* ================= その場編集（ロック付き） ================= */
+  // editing: ロックを解除して編集中のマニュアル。null のときはロック中
+  let editing = null;
+  const editHash = () => editing.isNew ? '#new' : '#m-' + editing.id;
+  const isDirty = () => !!editing && JSON.stringify(editing.draft) !== editing.snapshot;
+
+  function toDraft(m) {
+    return {
+      id: m.id, cat: m.cat, title: m.title, summary: m.summary || '', minutes: m.minutes || 5,
+      author: m.author || '', tagsText: (m.tags || []).join(', '), updated: m.updated,
+      steps: m.steps.map((s, i) => ({ o: i, t: s.t, kind: s.warn ? 'warn' : s.tip ? 'tip' : 'none', note: s.warn || s.tip || '' }))
+    };
+  }
+
+  function beginEdit(m, isNew) {
+    editing = { id: m.id, isNew, draft: toDraft(m) };
+    editing.snapshot = JSON.stringify(editing.draft);
+  }
+
+  function newManual() {
+    beginEdit({
       id: 'u' + Date.now().toString(36), cat: listFilter !== 'all' ? listFilter : 'reception', title: '', summary: '', minutes: 5,
-      author: '', tags: [], steps: [{ t: '' }, { t: '' }, { t: '' }]
+      author: '', tags: [], updated: today(), steps: [{ t: '' }, { t: '' }, { t: '' }]
+    }, true);
+    editing.snapshot = JSON.stringify(editing.draft);
+  }
+
+  // ロック解除：暗証番号があれば入力、なければ確認だけ
+  function askUnlock(id) {
+    const unlock = () => {
+      beginEdit(getManual(id), false);
+      closeSheet();
+      renderDetail(id);
+      syncChrome();
+      toast('ロックを解除しました');
     };
-
-    function stepsHTML() {
-      return draft.steps.map((s, i) => {
-        const kind = s.warn ? 'warn' : s.tip ? 'tip' : 'none';
-        return `<div class="step-edit" data-i="${i}">
-          <div class="step-edit-head">
-            <span class="num">${i + 1}</span><span class="label" style="font-weight:700;font-size:.88rem">ステップ${i + 1}</span>
-            <span class="tools">
-              <button type="button" class="icon-btn" data-act="up" aria-label="上へ移動" ${i === 0 ? 'disabled' : ''}>${svg('up')}</button>
-              <button type="button" class="icon-btn" data-act="down" aria-label="下へ移動" ${i === draft.steps.length - 1 ? 'disabled' : ''}>${svg('down')}</button>
-              <button type="button" class="icon-btn" data-act="del" aria-label="このステップを削除">${svg('trash')}</button>
-            </span>
-          </div>
-          <label class="sr-only" for="st-${i}">ステップ${i + 1}の内容</label>
-          <textarea id="st-${i}" data-f="t" rows="2" placeholder="やることを1つ、短く書きます">${esc(s.t)}</textarea>
-          <div class="note-row">
-            <label class="sr-only" for="sk-${i}">補足の種類</label>
-            <select id="sk-${i}" data-f="kind">
-              <option value="none" ${kind === 'none' ? 'selected' : ''}>補足なし</option>
-              <option value="tip" ${kind === 'tip' ? 'selected' : ''}>ポイント</option>
-              <option value="warn" ${kind === 'warn' ? 'selected' : ''}>注意</option>
-            </select>
-            <label class="sr-only" for="sn-${i}">補足の内容</label>
-            <input id="sn-${i}" type="text" data-f="note" placeholder="コツや注意点（任意）" value="${esc(s.warn || s.tip || '')}" ${kind === 'none' ? 'hidden' : ''}>
-          </div>
-        </div>`;
-      }).join('');
-    }
-
-    view.innerHTML = `
-      <div><a class="back" href="${orig ? '#m-' + esc(orig.id) : '#home'}">${svg('back')}${orig ? 'マニュアルへ戻る' : 'ホームへ戻る'}</a></div>
-      <section>
-        <div class="section-head"><h2>${orig ? 'マニュアルを編集' : '新しいマニュアルを作成'}</h2></div>
-        <form class="form" id="form" novalidate>
-          <div class="field">
-            <label for="f-title">タイトル</label>
-            <input id="f-title" type="text" required maxlength="60" placeholder="例：レントゲン撮影の準備" value="${esc(draft.title)}">
-          </div>
-          <div class="row2">
-            <div class="field">
-              <label for="f-cat">カテゴリ</label>
-              <select id="f-cat">${CATEGORIES.map(c => `<option value="${c.id}" ${draft.cat === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select>
-            </div>
-            <div class="field">
-              <label for="f-min">所要時間（分）</label>
-              <input id="f-min" type="number" min="1" max="240" inputmode="numeric" value="${esc(draft.minutes)}">
-            </div>
-          </div>
-          <div class="field">
-            <label for="f-sum">概要</label>
-            <textarea id="f-sum" rows="2" placeholder="どんなときに使うマニュアルか、ひとことで">${esc(draft.summary)}</textarea>
-          </div>
-          <div class="row2">
-            <div class="field">
-              <label for="f-author">作成・担当</label>
-              <input id="f-author" type="text" placeholder="例：衛生士チーム" value="${esc(draft.author)}">
-            </div>
-            <div class="field">
-              <label for="f-tags">キーワード</label>
-              <input id="f-tags" type="text" placeholder="例：レントゲン, 防護" value="${esc((draft.tags || []).join(', '))}">
-              <span class="hint">カンマ区切り。検索で見つけやすくなります</span>
-            </div>
-          </div>
-          <div class="field">
-            <span class="label">手順</span>
-            <div id="stepsEdit" style="display:flex;flex-direction:column;gap:10px">${stepsHTML()}</div>
-            <button type="button" class="btn" id="addStep" style="align-self:flex-start">${svg('plus')}ステップを追加</button>
-          </div>
-          <div class="form-foot">
-            ${orig ? `<button type="button" class="btn danger" id="delBtn">${svg('trash')}削除する</button>` : '<span></span>'}
-            <button type="submit" class="btn primary">${svg('check')}保存する</button>
-          </div>
-        </form>
-      </section>`;
-
-    const stepsEl = $('#stepsEdit');
-    const collect = () => {
-      stepsEl.querySelectorAll('.step-edit').forEach(box => {
-        const i = +box.dataset.i;
-        const kind = box.querySelector('[data-f="kind"]').value;
-        const note = box.querySelector('[data-f="note"]').value.trim();
-        const s = { t: box.querySelector('[data-f="t"]').value };
-        if (kind === 'tip' && note) s.tip = note;
-        if (kind === 'warn' && note) s.warn = note;
-        draft.steps[i] = s;
-      });
-    };
-    const redrawSteps = () => { stepsEl.innerHTML = stepsHTML(); };
-
-    stepsEl.addEventListener('click', e => {
-      const b = e.target.closest('[data-act]');
-      if (!b) return;
-      collect();
-      const i = +b.closest('.step-edit').dataset.i;
-      const act = b.dataset.act;
-      if (act === 'up' && i > 0) [draft.steps[i - 1], draft.steps[i]] = [draft.steps[i], draft.steps[i - 1]];
-      if (act === 'down' && i < draft.steps.length - 1) [draft.steps[i + 1], draft.steps[i]] = [draft.steps[i], draft.steps[i + 1]];
-      if (act === 'del') { draft.steps.splice(i, 1); if (!draft.steps.length) draft.steps.push({ t: '' }); }
-      redrawSteps();
-    });
-    stepsEl.addEventListener('change', e => {
-      if (e.target.dataset.f === 'kind') {
-        const input = e.target.closest('.note-row').querySelector('[data-f="note"]');
-        input.hidden = e.target.value === 'none';
-        if (!input.hidden) input.focus();
-      }
-    });
-    $('#addStep').addEventListener('click', () => {
-      collect();
-      draft.steps.push({ t: '' });
-      redrawSteps();
-      $(`#st-${draft.steps.length - 1}`).focus();
-    });
-
-    $('#form').addEventListener('submit', e => {
-      e.preventDefault();
-      collect();
-      const title = $('#f-title').value.trim();
-      if (!title) { toast('タイトルを入力してください'); $('#f-title').focus(); return; }
-      const steps = draft.steps.map(s => ({ ...s, t: s.t.trim() })).filter(s => s.t);
-      if (!steps.length) { toast('手順を1つ以上入力してください'); $('#st-0').focus(); return; }
-      const m = {
-        ...draft, title, steps,
-        cat: $('#f-cat').value,
-        minutes: Math.max(1, Math.min(240, parseInt($('#f-min').value, 10) || 5)),
-        summary: $('#f-sum').value.trim(),
-        author: $('#f-author').value.trim(),
-        tags: $('#f-tags').value.split(/[,、，]/).map(t => t.trim().replace(/^#/, '')).filter(Boolean),
-        updated: today()
-      };
-      if (orig) {
-        state.manuals = state.manuals.map(x => x.id === m.id ? m : x);
-        if (orig.steps.length !== m.steps.length) delete state.checks[m.id];
-      } else {
-        state.manuals.unshift(m);
-      }
-      store.save();
-      toast('保存しました');
-      location.hash = '#m-' + m.id;
-    });
-
-    if (orig) $('#delBtn').addEventListener('click', () => {
+    if (state.pin) {
       openSheet(`
-        <div class="sheet-head"><h2>このマニュアルを削除しますか？</h2></div>
-        <p style="margin:0">「${esc(orig.title)}」を削除します。この操作は取り消せません。</p>
+        <div class="sheet-head"><h2>暗証番号を入力</h2><button class="icon-btn" data-close aria-label="閉じる">${svg('x')}</button></div>
+        <p style="margin:0" class="muted">編集ロックを解除するには、4桁の暗証番号を入力してください。</p>
+        <label for="pinIn" class="sr-only">暗証番号</label>
+        <input id="pinIn" class="pin-input" type="password" inputmode="numeric" maxlength="4" autocomplete="off">
+        <p class="err" id="pinErr"></p>
         <div class="actions" style="justify-content:flex-end">
           <button class="btn" data-close>やめる</button>
-          <button class="btn danger" id="confirmDel">${svg('trash')}削除する</button>
+          <button class="btn primary" id="pinOk">${svg('unlock')}解除する</button>
         </div>`);
-      $('#confirmDel').addEventListener('click', () => {
-        state.manuals = state.manuals.filter(x => x.id !== orig.id);
-        state.favs = state.favs.filter(x => x !== orig.id);
-        state.recent = state.recent.filter(x => x !== orig.id);
-        delete state.checks[orig.id];
-        store.save();
-        closeSheet();
-        toast('削除しました');
-        location.hash = '#cat-' + orig.cat;
-      });
+      const input = $('#pinIn');
+      const tryPin = () => {
+        if (input.value === state.pin) unlock();
+        else { $('#pinErr').textContent = '暗証番号がちがいます'; input.value = ''; input.focus(); }
+      };
+      $('#pinOk').addEventListener('click', tryPin);
+      input.addEventListener('keydown', e => { if (e.key === 'Enter') tryPin(); });
+      input.addEventListener('input', () => { if (input.value.length === 4) tryPin(); });
+    } else {
+      openSheet(`
+        <div class="sheet-head"><h2>ロックを解除しますか？</h2></div>
+        <p style="margin:0">解除すると、この画面でそのまま内容を書き換えられます。「保存してロック」を押すと、自動でロックに戻ります。</p>
+        <p style="margin:0;font-size:.82rem" class="muted">設定で暗証番号を決めておくと、解除のときに入力が必要になります。</p>
+        <div class="actions" style="justify-content:flex-end">
+          <button class="btn" data-close>やめる</button>
+          <button class="btn primary" id="unlockOk">${svg('unlock')}解除して編集する</button>
+        </div>`);
+      $('#unlockOk').addEventListener('click', unlock);
+    }
+  }
+
+  // 保存：成功したら保存したマニュアルを返し、ロックに戻す
+  function saveEdit() {
+    const d = editing.draft;
+    if (!d.title.trim()) { toast('タイトルを入力してください'); const t = $('#ed-title'); if (t) t.focus(); return null; }
+    const kept = d.steps.filter(s => s.t.trim());
+    if (!kept.length) { toast('手順を1つ以上入力してください'); const t = $('#ed-st-0'); if (t) t.focus(); return null; }
+    const m = {
+      id: d.id, cat: d.cat, title: d.title.trim(), summary: d.summary.trim(),
+      minutes: Math.max(1, Math.min(240, parseInt(d.minutes, 10) || 5)),
+      author: d.author.trim(),
+      tags: d.tagsText.split(/[,、，]/).map(t => t.trim().replace(/^#/, '')).filter(Boolean),
+      updated: today(),
+      steps: kept.map(s => {
+        const o = { t: s.t.trim() };
+        const n = s.note.trim();
+        if (s.kind === 'tip' && n) o.tip = n;
+        if (s.kind === 'warn' && n) o.warn = n;
+        return o;
+      })
+    };
+    if (editing.isNew) {
+      state.manuals.unshift(m);
+    } else {
+      // 並べ替え・削除に合わせて、チェック済みの印も付け替える
+      const old = new Set(state.checks[m.id] || []);
+      const moved = kept.map((s, i) => (s.o !== undefined && old.has(s.o)) ? i : -1).filter(i => i >= 0);
+      if (moved.length) state.checks[m.id] = moved; else delete state.checks[m.id];
+      state.manuals = state.manuals.map(x => x.id === m.id ? m : x);
+    }
+    store.save();
+    editing = null;
+    return m;
+  }
+
+  function finishSave() {
+    const m = saveEdit();
+    if (!m) return;
+    toast('保存してロックしました');
+    if (location.hash !== '#m-' + m.id) location.hash = '#m-' + m.id;
+    else { renderDetail(m.id); syncChrome(); }
+  }
+
+  function cancelEdit() {
+    const leave = () => {
+      const wasNew = editing.isNew, id = editing.id;
+      editing = null;
+      closeSheet();
+      if (wasNew) location.hash = '#home';
+      else { renderDetail(id); syncChrome(); toast('ロックしました'); }
+    };
+    if (!isDirty()) return leave();
+    openSheet(`
+      <div class="sheet-head"><h2>変更を取り消しますか？</h2></div>
+      <p style="margin:0">書き換えた内容は保存されず、元に戻ります。</p>
+      <div class="actions" style="justify-content:flex-end">
+        <button class="btn" data-close>編集を続ける</button>
+        <button class="btn danger" id="discardOk">取り消してロック</button>
+      </div>`);
+    $('#discardOk').addEventListener('click', leave);
+  }
+
+  // 保存していない変更があるまま、ほかの画面へ移ろうとしたとき
+  function confirmLeave(target) {
+    openSheet(`
+      <div class="sheet-head"><h2>保存していない変更があります</h2></div>
+      <p style="margin:0">このまま移動すると、書き換えた内容は消えてしまいます。</p>
+      <div class="actions" style="justify-content:flex-end">
+        <button class="btn" data-close>編集を続ける</button>
+        <button class="btn danger" id="leaveDiscard">保存せずに移動</button>
+        <button class="btn primary" id="leaveSave">${svg('lock')}保存して移動</button>
+      </div>`);
+    $('#leaveDiscard').addEventListener('click', () => { editing = null; closeSheet(); location.hash = target; });
+    $('#leaveSave').addEventListener('click', () => {
+      closeSheet();
+      if (saveEdit()) { toast('保存してロックしました'); location.hash = target; }
+    });
+  }
+
+  document.addEventListener('click', e => {
+    if (!editing) return;
+    const a = e.target.closest('a[href^="#"]');
+    if (!a) return;
+    const target = a.getAttribute('href');
+    if (target === editHash()) { e.preventDefault(); return; }
+    if (!isDirty()) { editing = null; return; }
+    e.preventDefault();
+    confirmLeave(target);
+  }, true);
+  window.addEventListener('beforeunload', e => { if (isDirty()) { e.preventDefault(); e.returnValue = ''; } });
+
+  const autosize = el => { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; };
+
+  function renderEditor() {
+    const d = editing.draft;
+    const c = catById(d.cat);
+    const last = d.steps.length - 1;
+    view.innerHTML = `
+      <div class="editor" style="${catStyle(c.id)};display:flex;flex-direction:column;gap:18px">
+        <div class="editbar" role="region" aria-label="編集中">
+          <span class="editbar-state">${svg('unlock')}<span><b>編集中</b><small>${editing.isNew ? '新しいマニュアル' : 'ロックを解除しています'}</small></span></span>
+          <span class="editbar-actions">
+            <button type="button" class="btn sm" data-ed="cancel">取り消す</button>
+            <button type="button" class="btn sm primary" data-ed="save">${svg('lock')}保存してロック</button>
+          </span>
+        </div>
+        <header class="detail-head">
+          <div class="ed-row">
+            <label class="ed-inline"><span>カテゴリ</span>
+              <select id="ed-cat" data-k="cat">${CATEGORIES.map(x => `<option value="${x.id}" ${d.cat === x.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
+            </label>
+            <label class="ed-inline"><span>所要時間 約</span>
+              <input id="ed-min" type="number" min="1" max="240" inputmode="numeric" data-k="minutes" value="${esc(d.minutes)}"><span>分</span>
+            </label>
+          </div>
+          <label for="ed-title" class="sr-only">タイトル</label>
+          <textarea id="ed-title" class="ed ed-title" data-k="title" rows="1" maxlength="60" placeholder="タイトル（例：レントゲン撮影の準備）">${esc(d.title)}</textarea>
+          <label for="ed-sum" class="sr-only">概要</label>
+          <textarea id="ed-sum" class="ed ed-sum" data-k="summary" rows="1" placeholder="どんなときに使うマニュアルか、ひとことで">${esc(d.summary)}</textarea>
+          <div class="ed-row">
+            <label class="ed-inline grow"><span>担当</span><input id="ed-author" type="text" data-k="author" placeholder="例：衛生士チーム" value="${esc(d.author)}"></label>
+            <label class="ed-inline grow"><span>キーワード</span><input id="ed-tags" type="text" data-k="tagsText" placeholder="カンマ区切り（例：電話, 予約）" value="${esc(d.tagsText)}"></label>
+          </div>
+        </header>
+        <ol class="steps">
+          ${d.steps.map((s, i) => `
+            <li class="step editing" data-i="${i}">
+              <span class="step-num">${i + 1}</span>
+              <div class="step-body">
+                <textarea id="ed-st-${i}" class="ed" data-f="t" rows="1" placeholder="やることを1つ、短く書きます" aria-label="ステップ${i + 1}の内容">${esc(s.t)}</textarea>
+                ${s.kind !== 'none' ? `
+                  <div class="note ${s.kind} ed-note">${svg(s.kind === 'tip' ? 'bulb' : 'alert')}
+                    <div class="ed-note-body">
+                      <select id="ed-kind-${i}" data-f="kind" aria-label="補足の種類">
+                        <option value="tip" ${s.kind === 'tip' ? 'selected' : ''}>ポイント</option>
+                        <option value="warn" ${s.kind === 'warn' ? 'selected' : ''}>注意</option>
+                        <option value="none">補足を外す</option>
+                      </select>
+                      <textarea id="ed-note-${i}" class="ed" data-f="note" rows="1" placeholder="${s.kind === 'tip' ? 'コツや覚えておくと良いこと' : '気をつけること'}" aria-label="補足の内容">${esc(s.note)}</textarea>
+                    </div>
+                  </div>` : `
+                  <div class="ed-add-note">
+                    <button type="button" class="btn sm" data-act="tip">${svg('bulb')}ポイントを追加</button>
+                    <button type="button" class="btn sm" data-act="warn">${svg('alert')}注意を追加</button>
+                  </div>`}
+                <div class="step-tools">
+                  <button type="button" class="icon-btn" data-act="up" aria-label="ステップ${i + 1}を上へ" ${i === 0 ? 'disabled' : ''}>${svg('up')}</button>
+                  <button type="button" class="icon-btn" data-act="down" aria-label="ステップ${i + 1}を下へ" ${i === last ? 'disabled' : ''}>${svg('down')}</button>
+                  <button type="button" class="icon-btn" data-act="del" aria-label="ステップ${i + 1}を削除">${svg('trash')}</button>
+                </div>
+              </div>
+            </li>`).join('')}
+        </ol>
+        <div class="editor-foot">
+          <button type="button" class="btn" data-ed="add">${svg('plus')}ステップを追加</button>
+          ${editing.isNew ? '' : `<button type="button" class="btn danger" data-ed="delete">${svg('trash')}このマニュアルを削除</button>`}
+        </div>
+      </div>`;
+
+    const root = $('.editor', view);
+    root.querySelectorAll('textarea.ed').forEach(autosize);
+    const redraw = focusId => {
+      const y = window.scrollY;
+      renderEditor();
+      window.scrollTo(0, y);
+      if (focusId) { const el = $('#' + focusId); if (el) el.focus(); }
+    };
+
+    root.addEventListener('input', e => {
+      const el = e.target;
+      if (el.tagName === 'TEXTAREA') autosize(el);
+      if (el.dataset.k && el.tagName !== 'SELECT') d[el.dataset.k] = el.value;
+      const li = el.closest('.step');
+      if (li && el.dataset.f && el.dataset.f !== 'kind') d.steps[+li.dataset.i][el.dataset.f] = el.value;
+    });
+    root.addEventListener('change', e => {
+      const el = e.target;
+      if (el.dataset.k === 'cat') { d.cat = el.value; redraw(); }
+      if (el.dataset.f === 'kind') {
+        const i = +el.closest('.step').dataset.i;
+        d.steps[i].kind = el.value;
+        if (el.value === 'none') d.steps[i].note = '';
+        redraw();
+      }
+    });
+    root.addEventListener('click', e => {
+      const b = e.target.closest('[data-act], [data-ed]');
+      if (!b || b.disabled) return;
+      const ed = b.dataset.ed;
+      if (ed === 'save') return finishSave();
+      if (ed === 'cancel') return cancelEdit();
+      if (ed === 'add') { d.steps.push({ t: '', kind: 'none', note: '' }); return redraw('ed-st-' + (d.steps.length - 1)); }
+      if (ed === 'delete') return askDelete();
+      const i = +b.closest('.step').dataset.i;
+      const act = b.dataset.act;
+      if (act === 'tip' || act === 'warn') { d.steps[i].kind = act; return redraw('ed-note-' + i); }
+      if (act === 'up' && i > 0) [d.steps[i - 1], d.steps[i]] = [d.steps[i], d.steps[i - 1]];
+      if (act === 'down' && i < last) [d.steps[i + 1], d.steps[i]] = [d.steps[i], d.steps[i + 1]];
+      if (act === 'del') { d.steps.splice(i, 1); if (!d.steps.length) d.steps.push({ t: '', kind: 'none', note: '' }); }
+      redraw();
+    });
+  }
+
+  function askDelete() {
+    const m = getManual(editing.id);
+    openSheet(`
+      <div class="sheet-head"><h2>このマニュアルを削除しますか？</h2></div>
+      <p style="margin:0">「${esc(m.title)}」を削除します。この操作は取り消せません。</p>
+      <div class="actions" style="justify-content:flex-end">
+        <button class="btn" data-close>やめる</button>
+        <button class="btn danger" id="confirmDel">${svg('trash')}削除する</button>
+      </div>`);
+    $('#confirmDel').addEventListener('click', () => {
+      state.manuals = state.manuals.filter(x => x.id !== m.id);
+      state.favs = state.favs.filter(x => x !== m.id);
+      state.recent = state.recent.filter(x => x !== m.id);
+      delete state.checks[m.id];
+      store.save();
+      editing = null;
+      closeSheet();
+      toast('削除しました');
+      location.hash = '#cat-' + m.cat;
     });
   }
 
@@ -1070,6 +1227,16 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
           <button data-size="normal" aria-pressed="${!state.largeText}">ふつう</button>
           <button data-size="large" aria-pressed="${state.largeText}">大きめ</button>
         </div>
+      </div>
+      <div class="setting">
+        <span class="setting-title">編集ロックの暗証番号</span>
+        <span class="muted" style="font-size:.84rem">${state.pin
+          ? '暗証番号が設定されています。外すときは、今の暗証番号を入力してください。'
+          : '4桁の数字を決めておくと、ロックを解除するときに入力が必要になります（誤操作防止用）。'}</span>
+        <label for="pinSet" class="sr-only">${state.pin ? '今の暗証番号' : '新しい暗証番号'}</label>
+        <input id="pinSet" class="pin-input" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="0000">
+        <p class="err" id="pinSetErr"></p>
+        <button class="btn sm ${state.pin ? 'danger' : ''}" id="pinSetBtn" style="align-self:flex-start">${svg(state.pin ? 'unlock' : 'lock')}${state.pin ? '暗証番号を外す' : '暗証番号を設定する'}</button>
       </div>
       <div class="setting">
         <span class="setting-title">データの書き出し</span>
@@ -1100,6 +1267,20 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
       store.save();
       overlay.querySelectorAll('[data-size]').forEach(x => x.setAttribute('aria-pressed', x === b));
     }));
+    $('#pinSetBtn').addEventListener('click', () => {
+      const v = $('#pinSet').value;
+      if (state.pin) {
+        if (v !== state.pin) { $('#pinSetErr').textContent = '暗証番号がちがいます'; return; }
+        state.pin = '';
+        toast('暗証番号を外しました');
+      } else {
+        if (!/^\d{4}$/.test(v)) { $('#pinSetErr').textContent = '4桁の数字を入力してください'; return; }
+        state.pin = v;
+        toast('暗証番号を設定しました');
+      }
+      store.save();
+      openSettings();
+    });
     $('#copyExport').addEventListener('click', () => {
       const box = $('#exportBox');
       const fallback = () => { box.focus(); box.select(); toast('選択しました。コピーしてください'); };
@@ -1113,6 +1294,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
         const list = Array.isArray(data) ? data : data.manuals;
         if (!Array.isArray(list) || !list.every(m => m && m.id && m.title && Array.isArray(m.steps))) throw new Error('bad');
         state.manuals = list;
+        editing = null;
         store.save();
         closeSheet();
         toast(`${list.length}件のマニュアルを読み込みました`);
@@ -1134,6 +1316,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
       if (b.dataset.armed) {
         state.manuals = JSON.parse(JSON.stringify(DEFAULT_MANUALS));
         state.checks = {};
+        editing = null;
         state.favs = state.favs.filter(getManual);
         state.recent = state.recent.filter(getManual);
         store.save();
@@ -1170,17 +1353,33 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
     });
   }
 
+  // 編集中は検索を止め、タブの表示をそろえる
+  function syncChrome() {
+    q.disabled = !!editing;
+    q.placeholder = editing ? '編集中は検索できません' : 'マニュアルを検索';
+    setTab();
+  }
+
   function route() {
+    if (editing && location.hash !== editHash()) {
+      if (isDirty()) {
+        const target = location.hash || '#home';
+        history.replaceState(null, '', editHash());
+        confirmLeave(target);
+        return;
+      }
+      editing = null;
+    }
     const h = location.hash.slice(1) || 'home';
     if (q.value && !h.startsWith('m-')) q.value = '';
     if (h.startsWith('m-')) { q.value = ''; renderDetail(h.slice(2)); }
     else if (h.startsWith('cat-')) renderList(h.slice(4));
     else if (h === 'all') { listFilter = 'all'; renderList(null); }
     else if (h === 'fav') renderFav();
-    else if (h === 'new') renderEdit(null);
-    else if (h.startsWith('edit-')) renderEdit(h.slice(5));
+    else if (h === 'new') { if (!editing) newManual(); renderEditor(); }
+    else if (h.startsWith('edit-')) { history.replaceState(null, '', '#m-' + h.slice(5)); renderDetail(h.slice(5)); }
     else renderHome();
-    setTab();
+    syncChrome();
     window.scrollTo(0, 0);
   }
   window.addEventListener('hashchange', route);
