@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>自費患者管理</title>
+<style>
+  :root {
+    --bg: #f4f6f5; --surface: #ffffff; --surface-2: #f8faf9; --border: #dde3e0;
+    --text: #1d2725; --muted: #64716d; --accent: #0f766e; --accent-soft: #e0f2ef;
+    --danger: #b42318; --danger-soft: #fdecea; --warn: #9a6700; --warn-soft: #fff4d6;
+    --implant: #2563eb; --implant-soft: #e5edff;
+    --ortho: #9333ea; --ortho-soft: #f3e8ff;
+    --prosth: #c2410c; --prosth-soft: #ffedd5;
+    --radius: 10px; --shadow: 0 1px 2px rgba(0,0,0,.05), 0 2px 8px rgba(0,0,0,.04);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font-family: "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", Meiryo, system-ui, sans-serif;
+    font-size: 14px; line-height: 1.55; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  header { background: var(--surface); border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 10; }
+  .header-inner { max-width: 1200px; margin: 0 auto; padding: 10px 16px;
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .brand { font-weight: 700; font-size: 16px; }
+  .brand small { color: var(--muted); font-weight: 400; margin-left: 6px; font-size: 12px; }
+  nav { display: flex; gap: 4px; }
+  nav button { border: 0; background: none; padding: 8px 14px; border-radius: 8px; cursor: pointer; color: var(--muted); }
+  nav button.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .spacer { flex: 1; }
+  .demo-badge { background: var(--warn-soft); color: var(--warn); padding: 3px 10px; border-radius: 99px; font-size: 12px; }
+  main { max-width: 1200px; margin: 0 auto; padding: 20px 16px 60px; }
+  h2 { font-size: 17px; margin: 0 0 12px; }
+  h3 { font-size: 15px; margin: 0 0 10px; }
+
+  .btn { border: 1px solid var(--border); background: var(--surface); padding: 7px 14px;
+    border-radius: 8px; cursor: pointer; white-space: nowrap; }
+  .btn:hover { background: var(--surface-2); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { filter: brightness(1.08); }
+  .btn.danger { color: var(--danger); border-color: #f1c4bf; }
+  .btn.small { padding: 4px 10px; font-size: 13px; }
+  .btn.link { border: 0; background: none; color: var(--accent); padding: 4px 6px; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 16px; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .kpi .label { color: var(--muted); font-size: 12px; }
+  .kpi .value { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .kpi .sub { color: var(--muted); font-size: 12px; }
+  .cat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .cat-card { border-top: 4px solid var(--c); }
+  .cat-card .count { font-size: 28px; font-weight: 700; color: var(--c); }
+  .stat-list { display: flex; flex-wrap: wrap; gap: 6px 12px; color: var(--muted); font-size: 13px; }
+  .alerts { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; }
+  .alert-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--border); cursor: pointer; }
+  .alert-item:first-of-type { border-top: 0; }
+  .alert-item:hover .alert-name { color: var(--accent); }
+  .alert-name { font-weight: 600; }
+  .alert-meta { color: var(--muted); font-size: 12px; }
+  .empty { color: var(--muted); padding: 12px 0; text-align: center; font-size: 13px; }
+
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+  .toolbar input[type=search] { flex: 1 1 220px; min-width: 0; }
+  input, select, textarea { border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; background: var(--surface); width: 100%; }
+  .toolbar select, .toolbar input { width: auto; }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+  textarea { min-height: 70px; resize: vertical; }
+
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; background: var(--surface); }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-size: 12px; color: var(--muted); font-weight: 600; background: var(--surface-2); white-space: nowrap; }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover { background: var(--surface-2); }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .nowrap { white-space: nowrap; }
+
+  .tag { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 12px; font-weight: 600; margin: 1px 2px 1px 0; white-space: nowrap; }
+  .tag.implant { background: var(--implant-soft); color: var(--implant); }
+  .tag.ortho { background: var(--ortho-soft); color: var(--ortho); }
+  .tag.prosth { background: var(--prosth-soft); color: var(--prosth); }
+  .status { display: inline-block; padding: 1px 8px; border-radius: 6px; font-size: 12px; background: var(--surface-2); border: 1px solid var(--border); white-space: nowrap; }
+  .status.s-active { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+  .status.s-done { color: var(--muted); }
+  .status.s-stop { background: var(--danger-soft); color: var(--danger); border-color: transparent; }
+  .owe { color: var(--danger); font-weight: 600; }
+  .warn, .info-grid span.warn { color: var(--warn) !important; }
+
+  /* 詳細パネル */
+  .detail-head { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; margin-bottom: 16px; }
+  .detail-head h2 { font-size: 20px; margin: 0; }
+  .detail-head .kana { color: var(--muted); font-size: 12px; }
+  .info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px 16px; }
+  .info-grid div span { display: block; color: var(--muted); font-size: 12px; }
+  .case-card { margin-top: 14px; border-left: 4px solid var(--c); }
+  .case-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+  .case-head .title { font-weight: 700; font-size: 15px; }
+  .money { display: flex; gap: 18px; flex-wrap: wrap; margin: 10px 0; padding: 10px 12px; background: var(--surface-2); border-radius: 8px; }
+  .money div span { display: block; color: var(--muted); font-size: 12px; }
+  .money div b { font-variant-numeric: tabular-nums; font-size: 15px; }
+  .progress { height: 6px; background: var(--border); border-radius: 99px; overflow: hidden; margin-top: 4px; width: 160px; }
+  .progress i { display: block; height: 100%; background: var(--accent); }
+  .pay-table td, .pay-table th { padding: 6px 8px; font-size: 13px; }
+  .pay-table tbody tr { cursor: default; }
+  .memo { white-space: pre-wrap; background: var(--surface-2); padding: 8px 10px; border-radius: 8px; margin-top: 8px; font-size: 13px; }
+
+  /* モーダル */
+  .modal-bg { position: fixed; inset: 0; background: rgba(15, 23, 21, .45); display: none; align-items: flex-start; justify-content: center; z-index: 50; overflow-y: auto; padding: 32px 12px; }
+  .modal-bg.open { display: flex; }
+  .modal { background: var(--surface); border-radius: 12px; width: 100%; max-width: 720px; padding: 20px; box-shadow: 0 10px 40px rgba(0,0,0,.2); }
+  .modal h2 { margin-bottom: 16px; }
+  .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px 14px; }
+  .form-grid .full { grid-column: 1 / -1; }
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 3px; }
+  label .req { color: var(--danger); }
+  fieldset { border: 1px dashed var(--border); border-radius: 10px; padding: 12px; margin: 14px 0 0; }
+  legend { font-size: 12px; font-weight: 600; padding: 0 6px; color: var(--c, var(--muted)); }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; flex-wrap: wrap; }
+  .modal-actions .left { margin-right: auto; }
+
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1d2725; color: #fff; padding: 10px 18px; border-radius: 8px; z-index: 100; display: none; max-width: 90vw; }
+  .toast.error { background: var(--danger); }
+  .loading { position: fixed; inset: 0; background: rgba(255,255,255,.6); display: none; align-items: center; justify-content: center; z-index: 90; font-weight: 600; color: var(--accent); }
+  .loading.show { display: flex; }
+
+  @media (max-width: 640px) {
+    .hide-sm { display: none; }
+    .kpi .value { font-size: 20px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="header-inner">
+    <div class="brand">Mirai Dental<small>自費患者管理</small></div>
+    <nav>
+      <button data-view="dashboard" class="active">ダッシュボード</button>
+      <button data-view="list">患者一覧</button>
+    </nav>
+    <div class="spacer"></div>
+    <span id="demoBadge" class="demo-badge" hidden>デモモード（サンプルデータ）</span>
+    <button class="btn primary" id="newPatientBtn">＋ 新規患者</button>
+  </div>
+</header>
+
+<main>
+  <section id="view-dashboard"></section>
+  <section id="view-list" hidden></section>
+  <section id="view-detail" hidden></section>
+</main>
+
+<div class="modal-bg" id="modalBg"><div class="modal" id="modal"></div></div>
+<div class="toast" id="toast"></div>
+<div class="loading" id="loading">保存中…</div>
+
+<script>
+/* ───────────────────────── 定数 ───────────────────────── */
+const CATEGORIES = {
+  implant: { label: 'インプラント', color: 'var(--implant)' },
+  ortho:   { label: '矯正',         color: 'var(--ortho)' },
+  prosth:  { label: '自費補綴',     color: 'var(--prosth)' },
+};
+const STATUSES = ['相談中', '検査・診断', '治療中', '保定・経過観察', 'メンテナンス', '完了', '中断'];
+const ACTIVE_STATUSES = ['検査・診断', '治療中', '保定・経過観察'];
+const PAYMENT_METHODS = ['一括', '分割（院内）', 'デンタルローン', 'クレジットカード', '治療ごと'];
+const PAY_INPUT_METHODS = ['現金', 'クレジットカード', '銀行振込', 'デンタルローン', 'その他'];
+const ORTHO_APPLIANCES = ['表側ワイヤー', '裏側ワイヤー', 'マウスピース型', '部分矯正', '小児矯正（I期）', 'その他'];
+const PROSTH_TYPES = ['クラウン', 'インレー', 'アンレー', 'ブリッジ', 'ラミネートベニア', '義歯（金属床など）', 'その他'];
+const MATERIALS = ['ジルコニア', 'e.max（二ケイ酸リチウム）', 'オールセラミック', 'メタルボンド', 'ゴールド', 'ハイブリッドレジン', 'チタン', 'コバルトクロム', 'その他'];
+const ALERT_DAYS = { warranty: 90, noVisit: 180, consultFollow: 30 };
+
+/* ───────────────────────── 状態 ───────────────────────── */
+let DB = { patients: [], cases: [], payments: [] };
+let currentView = 'dashboard';
+let currentPatientId = null;
+let listFilter = { q: '', category: '', status: 'active', sort: 'kana' };
+
+/* ───────────────────────── バックエンド呼び出し ───────────────────────── */
+const IS_GAS = typeof google !== 'undefined' && google.script && google.script.run;
+
+function api(name, ...args) {
+  if (IS_GAS) {
+    return new Promise((resolve, reject) => {
+      google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[name](...args);
+    });
+  }
+  return Promise.resolve().then(() => Mock[name](...args));
+}
+
+/** GAS 外（ブラウザで直接開いた場合）のデモ用バックエンド。データはこのブラウザ内にのみ保存。 */
+const Mock = (() => {
+  const KEY = 'mirai-patient-manager-demo';
+  const uid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()));
+  const load = () => {
+    try { const s = localStorage.getItem(KEY); if (s) return JSON.parse(s); } catch (_) {}
+    return seed();
+  };
+  let data = load();
+  const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (_) {} };
+  const all = () => JSON.parse(JSON.stringify({ ...data, user: 'demo@example.com' }));
+  const upsert = (table, obj) => {
+    const list = data[table];
+    const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    const i = list.findIndex(r => r.id === obj.id);
+    if (i >= 0) list[i] = { ...list[i], ...obj, updatedAt: now };
+    else list.push({ ...obj, id: obj.id || uid(), createdAt: now, updatedAt: now });
+    persist();
+  };
+  function seed() {
+    const d = (offset) => { const t = new Date(); t.setDate(t.getDate() + offset); return t.toISOString().slice(0, 10); };
+    const P = (id, chartNo, name, kana, birthDate, gender, phone) => ({ id, chartNo, name, kana, birthDate, gender, phone, email: '', address: '', memo: '' });
+    const patients = [
+      P('p1', '10234', '山田 花子', 'ヤマダ ハナコ', '1975-04-12', '女性', '090-1111-2222'),
+      P('p2', '10571', '佐藤 健', 'サトウ ケン', '1988-11-03', '男性', '080-3333-4444'),
+      P('p3', '11002', '鈴木 美咲', 'スズキ ミサキ', '2001-07-25', '女性', '070-5555-6666'),
+      P('p4', '09876', '高橋 誠', 'タカハシ マコト', '1962-02-08', '男性', '090-7777-8888'),
+      P('p5', '11240', '伊藤 さくら', 'イトウ サクラ', '1994-09-30', '女性', '080-9999-0000'),
+      P('p6', '11301', '渡辺 翔太', 'ワタナベ ショウタ', '2013-05-17', '男性', '090-2468-1357'),
+    ];
+    const C = (o) => ({ status: '治療中', title: '', sites: '', doctor: '院長', consultDate: '', startDate: '', plannedEndDate: '', completedDate: '', lastVisit: '', nextVisit: '', warrantyUntil: '', fee: '', paymentMethod: '一括', implantSystem: '', implantCount: '', surgery1Date: '', surgery2Date: '', prosthesisDate: '', orthoAppliance: '', retentionStartDate: '', adjustFee: '', prosthType: '', material: '', setDate: '', memo: '', ...o });
+    const cases = [
+      C({ id: 'c1', patientId: 'p1', category: 'implant', title: '下顎臼歯部インプラント', sites: '#36, #37', consultDate: d(-120), startDate: d(-90), surgery1Date: d(-60), implantSystem: 'Straumann BLT', implantCount: 2, fee: 880000, paymentMethod: '分割（院内）', lastVisit: d(-14), nextVisit: d(10), memo: '骨造成なし。二次手術は約3か月後予定。' }),
+      C({ id: 'c2', patientId: 'p1', category: 'prosth', title: '上顎前歯セラミック', sites: '#11, #21', prosthType: 'クラウン', material: 'e.max（二ケイ酸リチウム）', fee: 286000, startDate: d(-500), setDate: d(-460), completedDate: d(-460), warrantyUntil: d(45), lastVisit: d(-200), status: 'メンテナンス' }),
+      C({ id: 'c3', patientId: 'p2', category: 'ortho', title: 'マウスピース矯正（全顎）', orthoAppliance: 'マウスピース型', consultDate: d(-300), startDate: d(-270), plannedEndDate: d(400), fee: 990000, paymentMethod: 'デンタルローン', adjustFee: 5500, lastVisit: d(-30), nextVisit: '' }),
+      C({ id: 'c4', patientId: 'p3', category: 'ortho', title: '表側ワイヤー矯正', orthoAppliance: '表側ワイヤー', status: '保定・経過観察', startDate: d(-800), retentionStartDate: d(-60), fee: 880000, paymentMethod: '分割（院内）', lastVisit: d(-60), nextVisit: d(30) }),
+      C({ id: 'c5', patientId: 'p4', category: 'implant', title: '上顎前歯部インプラント', sites: '#12', status: 'メンテナンス', implantSystem: 'Nobel Active', implantCount: 1, startDate: d(-900), surgery1Date: d(-880), surgery2Date: d(-790), prosthesisDate: d(-760), completedDate: d(-760), warrantyUntil: d(1000), fee: 440000, lastVisit: d(-240) }),
+      C({ id: 'c6', patientId: 'p5', category: 'prosth', title: 'ジルコニアクラウン', sites: '#46', status: '相談中', prosthType: 'クラウン', material: 'ジルコニア', consultDate: d(-40), fee: 132000 }),
+      C({ id: 'c7', patientId: 'p6', category: 'ortho', title: '小児矯正（I期）', orthoAppliance: '小児矯正（I期）', status: '検査・診断', consultDate: d(-20), fee: 385000, nextVisit: d(5), paymentMethod: '一括' }),
+    ];
+    const Y = (id, caseId, patientId, date, amount, method) => ({ id, caseId, patientId, date, amount, method, memo: '' });
+    const payments = [
+      Y('y1', 'c1', 'p1', d(-90), 300000, '銀行振込'), Y('y2', 'c1', 'p1', d(-60), 200000, '銀行振込'),
+      Y('y3', 'c2', 'p1', d(-500), 286000, 'クレジットカード'),
+      Y('y4', 'c3', 'p2', d(-270), 990000, 'デンタルローン'),
+      Y('y5', 'c4', 'p3', d(-800), 440000, '現金'), Y('y6', 'c4', 'p3', d(-500), 300000, '現金'),
+      Y('y7', 'c5', 'p4', d(-900), 440000, 'クレジットカード'),
+      Y('y8', 'c7', 'p6', d(-20), 55000, '現金'),
+    ];
+    return { patients, cases, payments };
+  }
+  return {
+    getAllData: all,
+    savePatient(p) {
+      if (!p.name) throw new Error('氏名は必須です');
+      const dup = p.chartNo && data.patients.find(x => x.chartNo === p.chartNo && x.id !== p.id);
+      if (dup) throw new Error(`カルテ番号 ${p.chartNo} は既に ${dup.name} さんで登録されています`);
+      upsert('patients', p); return all();
+    },
+    deletePatient(id) {
+      data.payments = data.payments.filter(r => r.patientId !== id);
+      data.cases = data.cases.filter(r => r.patientId !== id);
+      data.patients = data.patients.filter(r => r.id !== id);
+      persist(); return all();
+    },
+    saveCase(c) { upsert('cases', c); return all(); },
+    deleteCase(id) {
+      data.payments = data.payments.filter(r => r.caseId !== id);
+      data.cases = data.cases.filter(r => r.id !== id);
+      persist(); return all();
+    },
+    savePayment(p) {
+      if (!(Number(p.amount) > 0)) throw new Error('金額は1円以上で入力してください');
+      upsert('payments', p); return all();
+    },
+    deletePayment(id) { data.payments = data.payments.filter(r => r.id !== id); persist(); return all(); },
+  };
+})();
+
+/* ───────────────────────── ユーティリティ ───────────────────────── */
+const $ = (sel, root = document) => root.querySelector(sel);
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const yen = (n) => (n === '' || n == null || isNaN(n)) ? '—' : '¥' + Number(n).toLocaleString('ja-JP');
+const today = () => { const t = new Date(); t.setHours(0, 0, 0, 0); return t; };
+const parseDate = (s) => { if (!s) return null; const [y, m, d] = String(s).split('-').map(Number); return (y && m && d) ? new Date(y, m - 1, d) : null; };
+const daysFromToday = (s) => { const dt = parseDate(s); return dt ? Math.round((dt - today()) / 86400000) : null; };
+const fmtDate = (s) => { const dt = parseDate(s); return dt ? `${dt.getFullYear()}/${String(dt.getMonth() + 1).padStart(2, '0')}/${String(dt.getDate()).padStart(2, '0')}` : '—'; };
+const age = (s) => { const b = parseDate(s); if (!b) return ''; const t = today(); let a = t.getFullYear() - b.getFullYear(); if (t < new Date(t.getFullYear(), b.getMonth(), b.getDate())) a--; return a; };
+const tag = (cat) => `<span class="tag ${cat}">${esc(CATEGORIES[cat]?.label || cat)}</span>`;
+const statusBadge = (s) => {
+  const cls = ACTIVE_STATUSES.includes(s) ? 's-active' : s === '完了' ? 's-done' : s === '中断' ? 's-stop' : '';
+  return `<span class="status ${cls}">${esc(s || '—')}</span>`;
+};
+const normalizeKana = (s) => String(s || '').replace(/[ぁ-ゖ]/g, c => String.fromCharCode(c.charCodeAt(0) + 0x60)).replace(/\s/g, '').toLowerCase();
+
+function toast(msg, isError) {
+  const el = $('#toast');
+  el.textContent = msg; el.className = 'toast' + (isError ? ' error' : ''); el.style.display = 'block';
+  clearTimeout(toast.t); toast.t = setTimeout(() => (el.style.display = 'none'), isError ? 5000 : 2500);
+}
+
+async function run(name, ...args) {
+  $('#loading').classList.add('show');
+  try {
+    DB = await api(name, ...args);
+    render();
+    return true;
+  } catch (e) {
+    toast(e && e.message ? e.message : String(e), true);
+    return false;
+  } finally {
+    $('#loading').classList.remove('show');
+  }
+}
+
+/* ───────────────────────── 集計 ───────────────────────── */
+function paidFor(caseId) {
+  return DB.payments.filter(p => p.caseId === caseId).reduce((s, p) => s + (Number(p.amount) || 0), 0);
+}
+function balanceFor(c) {
+  const fee = Number(c.fee) || 0;
+  return c.status === '中断' || c.status === '相談中' ? 0 : Math.max(fee - paidFor(c.id), 0);
+}
+function casesOf(patientId) { return DB.cases.filter(c => c.patientId === patientId); }
+function patientOf(id) { return DB.patients.find(p => p.id === id); }
+
+function buildAlerts() {
+  const alerts = { noNext: [], owe: [], warranty: [], recall: [], consult: [] };
+  DB.cases.forEach(c => {
+    const p = patientOf(c.patientId); if (!p) return;
+    const next = daysFromToday(c.nextVisit);
+    if (ACTIVE_STATUSES.includes(c.status) && (next === null || next < 0)) {
+      alerts.noNext.push({ p, c, meta: c.nextVisit ? `前回予約 ${fmtDate(c.nextVisit)}（経過）` : '次回予約なし' });
+    }
+    const bal = balanceFor(c);
+    if (bal > 0) alerts.owe.push({ p, c, meta: `未収 ${yen(bal)} / 契約 ${yen(c.fee)}`, sort: -bal });
+    const w = daysFromToday(c.warrantyUntil);
+    if (w !== null && w >= 0 && w <= ALERT_DAYS.warranty) {
+      alerts.warranty.push({ p, c, meta: `保証期限 ${fmtDate(c.warrantyUntil)}（あと${w}日）`, sort: w });
+    }
+    const last = daysFromToday(c.lastVisit);
+    if (['メンテナンス', '保定・経過観察'].includes(c.status) && (next === null || next < 0) && last !== null && -last >= ALERT_DAYS.noVisit) {
+      alerts.recall.push({ p, c, meta: `最終来院 ${fmtDate(c.lastVisit)}（${-last}日前）`, sort: last });
+    }
+    const consult = daysFromToday(c.consultDate || c.createdAt?.slice(0, 10));
+    if (c.status === '相談中' && consult !== null && -consult >= ALERT_DAYS.consultFollow) {
+      alerts.consult.push({ p, c, meta: `相談日 ${fmtDate(c.consultDate)}（${-consult}日経過）`, sort: consult });
+    }
+  });
+  Object.values(alerts).forEach(list => list.sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0)));
+  return alerts;
+}
+
+/* ───────────────────────── 画面描画 ───────────────────────── */
+function render() {
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.view === currentView || (currentView === 'detail' && b.dataset.view === 'list')));
+  ['dashboard', 'list', 'detail'].forEach(v => ($('#view-' + v).hidden = v !== currentView));
+  if (currentView === 'dashboard') renderDashboard();
+  if (currentView === 'list') renderList();
+  if (currentView === 'detail') renderDetail();
+}
+
+function show(view, patientId) {
+  currentView = view;
+  if (patientId) currentPatientId = patientId;
+  render();
+  window.scrollTo(0, 0);
+}
+
+function renderDashboard() {
+  const t = today();
+  const ym = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}`;
+  const monthIncome = DB.payments.filter(p => String(p.date).startsWith(ym)).reduce((s, p) => s + Number(p.amount || 0), 0);
+  const totalOwe = DB.cases.reduce((s, c) => s + balanceFor(c), 0);
+  const activeCases = DB.cases.filter(c => ACTIVE_STATUSES.includes(c.status));
+  const consultCases = DB.cases.filter(c => c.status === '相談中');
+  const alerts = buildAlerts();
+
+  const catCards = Object.entries(CATEGORIES).map(([key, cat]) => {
+    const list = DB.cases.filter(c => c.category === key);
+    const counts = STATUSES.map(s => [s, list.filter(c => c.status === s).length]).filter(([, n]) => n > 0);
+    const active = list.filter(c => ACTIVE_STATUSES.includes(c.status)).length;
+    const fee = list.filter(c => !['相談中', '中断'].includes(c.status)).reduce((s, c) => s + Number(c.fee || 0), 0);
+    return `<div class="card cat-card" style="--c:${cat.color}">
+      <div class="nowrap">${tag(key)}</div>
+      <div><span class="count">${active}</span> <span class="alert-meta">名 治療進行中</span></div>
+      <div class="stat-list">${counts.map(([s, n]) => `<span>${esc(s)} ${n}</span>`).join('') || '<span>登録なし</span>'}</div>
+      <div class="alert-meta" style="margin-top:6px">契約総額 ${yen(fee)}</div>
+    </div>`;
+  }).join('');
+
+  const alertBox = (title, list, hint) => `<div class="card">
+    <h3>${title} <span class="alert-meta">${list.length}件</span></h3>
+    ${hint ? `<div class="alert-meta" style="margin:-6px 0 6px">${hint}</div>` : ''}
+    ${list.length ? list.slice(0, 8).map(a => `<div class="alert-item" data-open="${esc(a.p.id)}">
+        ${tag(a.c.category)}<div><div class="alert-name">${esc(a.p.name)} <span class="alert-meta">${esc(a.c.title || '')}</span></div>
+        <div class="alert-meta">${esc(a.meta)}</div></div></div>`).join('')
+      + (list.length > 8 ? `<div class="alert-meta" style="padding-top:6px">ほか ${list.length - 8} 件</div>` : '')
+      : '<div class="empty">該当なし</div>'}
+  </div>`;
+
+  $('#view-dashboard').innerHTML = `
+    <div class="kpis">
+      <div class="card kpi"><div class="label">登録患者数</div><div class="value">${DB.patients.length}</div><div class="sub">治療ケース ${DB.cases.length} 件</div></div>
+      <div class="card kpi"><div class="label">治療進行中</div><div class="value">${activeCases.length}</div><div class="sub">相談中 ${consultCases.length} 件</div></div>
+      <div class="card kpi"><div class="label">今月の入金</div><div class="value">${yen(monthIncome)}</div><div class="sub">${t.getMonth() + 1}月</div></div>
+      <div class="card kpi"><div class="label">未収金合計</div><div class="value ${totalOwe ? 'owe' : ''}">${yen(totalOwe)}</div><div class="sub">${alerts.owe.length} 件</div></div>
+    </div>
+    <div class="cat-row">${catCards}</div>
+    <h2>要対応</h2>
+    <div class="alerts">
+      ${alertBox('次回予約が未設定', alerts.noNext, '治療進行中で次回予約がない、または予約日を過ぎている')}
+      ${alertBox('未収金あり', alerts.owe)}
+      ${alertBox('保証期限が近い', alerts.warranty, `${ALERT_DAYS.warranty}日以内に保証期限を迎える`)}
+      ${alertBox('リコール対象', alerts.recall, `メンテナンス・保定中で最終来院から${ALERT_DAYS.noVisit}日以上、予約なし`)}
+      ${alertBox('相談後フォロー', alerts.consult, `相談から${ALERT_DAYS.consultFollow}日以上、未契約`)}
+    </div>`;
+}
+
+function filteredPatients() {
+  const q = normalizeKana(listFilter.q);
+  let rows = DB.patients.map(p => {
+    const cases = casesOf(p.id);
+    const nextDates = cases.map(c => c.nextVisit).filter(d => d && daysFromToday(d) >= 0).sort();
+    return { p, cases, next: nextDates[0] || '', balance: cases.reduce((s, c) => s + balanceFor(c), 0) };
+  });
+  if (q) rows = rows.filter(r => [r.p.name, r.p.kana, r.p.chartNo, r.p.phone].some(v => normalizeKana(v).includes(q)));
+  rows = rows.filter(r => {
+    let cases = r.cases;
+    if (listFilter.category) cases = cases.filter(c => c.category === listFilter.category);
+    if (listFilter.status === 'active') cases = cases.filter(c => ACTIVE_STATUSES.includes(c.status) || c.status === '相談中');
+    else if (listFilter.status) cases = cases.filter(c => c.status === listFilter.status);
+    return (listFilter.category || listFilter.status) ? cases.length > 0 : true;
+  });
+  const sorters = {
+    kana: (a, b) => (a.p.kana || a.p.name).localeCompare(b.p.kana || b.p.name, 'ja'),
+    chartNo: (a, b) => String(a.p.chartNo).localeCompare(String(b.p.chartNo), 'ja', { numeric: true }),
+    next: (a, b) => (a.next || '9999').localeCompare(b.next || '9999'),
+    balance: (a, b) => b.balance - a.balance,
+    updated: (a, b) => String(b.p.updatedAt || '').localeCompare(String(a.p.updatedAt || '')),
+  };
+  return rows.sort(sorters[listFilter.sort] || sorters.kana);
+}
+
+function renderList() {
+  const root = $('#view-list');
+  if (!root.dataset.ready) {
+    root.innerHTML = `
+      <div class="toolbar">
+        <input type="search" id="fQ" placeholder="氏名・フリガナ・カルテ番号・電話番号で検索">
+        <select id="fCat"><option value="">すべての区分</option>${Object.entries(CATEGORIES).map(([k, c]) => `<option value="${k}">${c.label}</option>`).join('')}</select>
+        <select id="fStatus"><option value="active">相談中・治療進行中</option><option value="">すべてのステータス</option>${STATUSES.map(s => `<option>${s}</option>`).join('')}</select>
+        <select id="fSort"><option value="kana">フリガナ順</option><option value="chartNo">カルテ番号順</option><option value="next">次回予約が近い順</option><option value="balance">未収金が多い順</option><option value="updated">更新が新しい順</option></select>
+        <button class="btn" id="csvBtn">CSV出力</button>
+      </div>
+      <div class="card" style="padding:0"><div class="table-wrap"><table>
+        <thead><tr><th>カルテ番号</th><th>氏名</th><th class="hide-sm">年齢</th><th>治療</th><th class="hide-sm">次回予約</th><th class="num">未収金</th></tr></thead>
+        <tbody id="listBody"></tbody></table></div></div>
+      <div class="alert-meta" id="listCount" style="margin-top:8px"></div>`;
+    root.dataset.ready = '1';
+    $('#fQ').addEventListener('input', e => { listFilter.q = e.target.value; renderListBody(); });
+    $('#fCat').addEventListener('change', e => { listFilter.category = e.target.value; renderListBody(); });
+    $('#fStatus').addEventListener('change', e => { listFilter.status = e.target.value; renderListBody(); });
+    $('#fSort').addEventListener('change', e => { listFilter.sort = e.target.value; renderListBody(); });
+    $('#csvBtn').addEventListener('click', exportCsv);
+  }
+  renderListBody();
+}
+
+function renderListBody() {
+  const rows = filteredPatients();
+  $('#listBody').innerHTML = rows.length ? rows.map(({ p, cases, next, balance }) => `
+    <tr data-open="${esc(p.id)}">
+      <td class="nowrap">${esc(p.chartNo || '—')}</td>
+      <td><b>${esc(p.name)}</b><div class="alert-meta">${esc(p.kana)}</div></td>
+      <td class="hide-sm nowrap">${age(p.birthDate) !== '' ? age(p.birthDate) + '歳' : '—'}</td>
+      <td>${cases.map(c => `<div>${tag(c.category)} ${statusBadge(c.status)} <span class="alert-meta">${esc(c.title || '')}</span></div>`).join('') || '<span class="alert-meta">治療未登録</span>'}</td>
+      <td class="hide-sm nowrap">${next ? fmtDate(next) : '<span class="alert-meta">—</span>'}</td>
+      <td class="num nowrap ${balance ? 'owe' : ''}">${balance ? yen(balance) : '—'}</td>
+    </tr>`).join('') : `<tr><td colspan="6" class="empty">該当する患者はいません</td></tr>`;
+  $('#listCount').textContent = `${rows.length} 名を表示（全 ${DB.patients.length} 名）`;
+}
+
+function renderDetail() {
+  const p = patientOf(currentPatientId);
+  const root = $('#view-detail');
+  if (!p) { show('list'); return; }
+  const cases = casesOf(p.id).sort((a, b) => String(b.startDate || b.consultDate || '').localeCompare(String(a.startDate || a.consultDate || '')));
+  const info = (label, v) => `<div><span>${label}</span>${v ? esc(v) : '—'}</div>`;
+
+  root.innerHTML = `
+    <div class="toolbar"><button class="btn link" data-back>← 患者一覧へ戻る</button></div>
+    <div class="card">
+      <div class="detail-head">
+        <div><div class="kana">${esc(p.kana)}</div><h2>${esc(p.name)}</h2>
+          <div class="alert-meta">カルテ番号 ${esc(p.chartNo || '—')}</div></div>
+        <div class="spacer"></div>
+        <button class="btn" data-edit-patient>患者情報を編集</button>
+        <button class="btn primary" data-new-case>＋ 治療を追加</button>
+      </div>
+      <div class="info-grid">
+        ${info('生年月日', p.birthDate ? `${fmtDate(p.birthDate)}（${age(p.birthDate)}歳）` : '')}
+        ${info('性別', p.gender)}
+        ${info('電話番号', p.phone)}
+        ${info('メール', p.email)}
+        ${info('住所', p.address)}
+      </div>
+      ${p.memo ? `<div class="memo">${esc(p.memo)}</div>` : ''}
+    </div>
+    ${cases.length ? cases.map(caseCard).join('') : `<div class="card case-card" style="--c:var(--border)"><div class="empty">治療が登録されていません。「＋ 治療を追加」から登録してください。</div></div>`}`;
+}
+
+function caseCard(c) {
+  const cat = CATEGORIES[c.category] || { color: 'var(--border)' };
+  const paid = paidFor(c.id);
+  const fee = Number(c.fee) || 0;
+  const bal = balanceFor(c);
+  const pct = fee ? Math.min(100, Math.round(paid / fee * 100)) : 0;
+  const pays = DB.payments.filter(y => y.caseId === c.id).sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  const item = (label, v, cls = '') => v ? `<div><span>${label}</span><span class="${cls}" style="display:inline;color:inherit;font-size:14px">${v}</span></div>` : '';
+  const warrantyDays = daysFromToday(c.warrantyUntil);
+  const nextDays = daysFromToday(c.nextVisit);
+
+  const specific = {
+    implant: [item('インプラントシステム', esc(c.implantSystem)), item('埋入本数', c.implantCount ? esc(c.implantCount) + '本' : ''),
+      item('一次手術日', c.surgery1Date && fmtDate(c.surgery1Date)), item('二次手術日', c.surgery2Date && fmtDate(c.surgery2Date)),
+      item('上部構造装着日', c.prosthesisDate && fmtDate(c.prosthesisDate))],
+    ortho: [item('矯正装置', esc(c.orthoAppliance)), item('保定開始日', c.retentionStartDate && fmtDate(c.retentionStartDate)),
+      item('調整料（1回）', c.adjustFee !== '' && c.adjustFee != null ? yen(c.adjustFee) : '')],
+    prosth: [item('補綴物', esc(c.prosthType)), item('材料', esc(c.material)), item('セット日', c.setDate && fmtDate(c.setDate))],
+  }[c.category] || [];
+
+  return `<div class="card case-card" style="--c:${cat.color}">
+    <div class="case-head">
+      ${tag(c.category)} ${statusBadge(c.status)}
+      <span class="title">${esc(c.title || CATEGORIES[c.category]?.label || '')}</span>
+      ${c.sites ? `<span class="alert-meta">部位: ${esc(c.sites)}</span>` : ''}
+      <div class="spacer"></div>
+      <button class="btn small" data-edit-case="${esc(c.id)}">編集</button>
+    </div>
+    <div class="info-grid">
+      ${item('担当医', esc(c.doctor))}
+      ${item('初診相談日', c.consultDate && fmtDate(c.consultDate))}
+      ${item('治療開始日', c.startDate && fmtDate(c.startDate))}
+      ${item('完了予定日', c.plannedEndDate && fmtDate(c.plannedEndDate))}
+      ${item('完了日', c.completedDate && fmtDate(c.completedDate))}
+      ${item('最終来院日', c.lastVisit && fmtDate(c.lastVisit))}
+      ${item('次回予約', c.nextVisit && fmtDate(c.nextVisit) + (nextDays !== null && nextDays < 0 ? '（経過）' : ''), nextDays !== null && nextDays < 0 ? 'warn' : '')}
+      ${item('保証期限', c.warrantyUntil && fmtDate(c.warrantyUntil) + (warrantyDays !== null && warrantyDays < 0 ? '（期限切れ）' : warrantyDays !== null && warrantyDays <= ALERT_DAYS.warranty ? `（あと${warrantyDays}日）` : ''), warrantyDays !== null && warrantyDays <= ALERT_DAYS.warranty ? 'warn' : '')}
+      ${specific.join('')}
+    </div>
+    <div class="money">
+      <div><span>契約金額</span><b>${yen(c.fee)}</b></div>
+      <div><span>支払方法</span><b>${esc(c.paymentMethod || '—')}</b></div>
+      <div><span>入金済</span><b>${yen(paid)}</b>${fee ? `<div class="progress"><i style="width:${pct}%"></i></div>` : ''}</div>
+      <div><span>未収金</span><b class="${bal ? 'owe' : ''}">${yen(bal)}</b></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-top:6px"><b style="font-size:13px">入金履歴</b><div class="spacer"></div>
+      <button class="btn small" data-new-pay="${esc(c.id)}">＋ 入金を記録</button></div>
+    ${pays.length ? `<div class="table-wrap"><table class="pay-table"><thead><tr><th>入金日</th><th class="num">金額</th><th>方法</th><th>メモ</th><th></th></tr></thead><tbody>
+      ${pays.map(y => `<tr><td class="nowrap">${fmtDate(y.date)}</td><td class="num">${yen(y.amount)}</td><td>${esc(y.method)}</td><td>${esc(y.memo)}</td>
+        <td class="nowrap" style="text-align:right"><button class="btn link" data-edit-pay="${esc(y.id)}">編集</button></td></tr>`).join('')}
+    </tbody></table></div>` : '<div class="alert-meta" style="padding:6px 0">入金記録はまだありません</div>'}
+    ${c.memo ? `<div class="memo">${esc(c.memo)}</div>` : ''}
+  </div>`;
+}
+
+/* ───────────────────────── フォーム ───────────────────────── */
+function field(name, label, value, opts = {}) {
+  const { type = 'text', options, required, full, attrs = '' } = opts;
+  const id = 'f_' + name;
+  let input;
+  if (options) {
+    input = `<select id="${id}" name="${name}" ${attrs}><option value=""></option>${options.map(o => `<option ${o === value ? 'selected' : ''}>${esc(o)}</option>`).join('')}${value && !options.includes(value) ? `<option selected>${esc(value)}</option>` : ''}</select>`;
+  } else if (type === 'textarea') {
+    input = `<textarea id="${id}" name="${name}" ${attrs}>${esc(value)}</textarea>`;
+  } else {
+    input = `<input id="${id}" name="${name}" type="${type}" value="${esc(value)}" ${required ? 'required' : ''} ${attrs}>`;
+  }
+  return `<div class="${full ? 'full' : ''}"><label for="${id}">${label}${required ? ' <span class="req">*</span>' : ''}</label>${input}</div>`;
+}
+
+function openModal(html, onSubmit) {
+  $('#modal').innerHTML = `<form id="modalForm" novalidate>${html}</form>`;
+  $('#modalBg').classList.add('open');
+  const form = $('#modalForm');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(form).entries());
+    Object.keys(data).forEach(k => (data[k] = String(data[k]).trim()));
+    if (await onSubmit(data)) closeModal();
+  });
+  form.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', closeModal));
+  const first = form.querySelector('input, select, textarea');
+  if (first) first.focus();
+  return form;
+}
+function closeModal() { $('#modalBg').classList.remove('open'); $('#modal').innerHTML = ''; }
+
+function patientForm(p = {}) {
+  const isNew = !p.id;
+  const form = openModal(`
+    <h2>${isNew ? '新規患者の登録' : '患者情報の編集'}</h2>
+    <div class="form-grid">
+      ${field('chartNo', 'カルテ番号', p.chartNo)}
+      ${field('name', '氏名', p.name, { required: true })}
+      ${field('kana', 'フリガナ', p.kana)}
+      ${field('birthDate', '生年月日', p.birthDate, { type: 'date' })}
+      ${field('gender', '性別', p.gender, { options: ['女性', '男性', 'その他'] })}
+      ${field('phone', '電話番号', p.phone, { type: 'tel' })}
+      ${field('email', 'メール', p.email, { type: 'email' })}
+      ${field('address', '住所', p.address)}
+      ${field('memo', 'メモ（既往歴・注意事項など）', p.memo, { type: 'textarea', full: true })}
+    </div>
+    <div class="modal-actions">
+      ${isNew ? '' : '<button type="button" class="btn danger left" data-delete>患者を削除</button>'}
+      <button type="button" class="btn" data-close>キャンセル</button>
+      <button type="submit" class="btn primary">${isNew ? '登録して治療を追加' : '保存'}</button>
+    </div>`, async (data) => {
+    if (!data.name) { toast('氏名を入力してください', true); return false; }
+    const before = new Set(DB.patients.map(x => x.id));
+    const ok = await run('savePatient', { ...p, ...data });
+    if (ok && isNew) {
+      const created = DB.patients.find(x => !before.has(x.id));
+      if (created) { show('detail', created.id); setTimeout(() => caseForm({ patientId: created.id }), 0); }
+    }
+    return ok;
+  });
+  const del = form.querySelector('[data-delete]');
+  if (del) del.addEventListener('click', async () => {
+    if (!confirm(`${p.name} さんを削除します。治療・入金の記録もすべて削除されます。よろしいですか？`)) return;
+    if (await run('deletePatient', p.id)) { closeModal(); show('list'); toast('削除しました'); }
+  });
+}
+
+function caseForm(c = {}) {
+  const isNew = !c.id;
+  const p = patientOf(c.patientId);
+  const category = c.category || 'implant';
+  const form = openModal(`
+    <h2>${isNew ? '治療の追加' : '治療の編集'} <span class="alert-meta">${esc(p?.name || '')}</span></h2>
+    <div class="form-grid">
+      ${field('category', '区分', CATEGORIES[category].label, { options: Object.values(CATEGORIES).map(x => x.label), required: true })}
+      ${field('status', 'ステータス', c.status || '相談中', { options: STATUSES })}
+      ${field('title', '治療名', c.title, { attrs: 'placeholder="例: 下顎臼歯部インプラント"' })}
+      ${field('sites', '部位', c.sites, { attrs: 'placeholder="例: #36, #37"' })}
+      ${field('doctor', '担当医', c.doctor)}
+      ${field('consultDate', '初診相談日', c.consultDate, { type: 'date' })}
+      ${field('startDate', '治療開始日', c.startDate, { type: 'date' })}
+      ${field('plannedEndDate', '完了予定日', c.plannedEndDate, { type: 'date' })}
+      ${field('completedDate', '完了日', c.completedDate, { type: 'date' })}
+      ${field('lastVisit', '最終来院日', c.lastVisit, { type: 'date' })}
+      ${field('nextVisit', '次回予約日', c.nextVisit, { type: 'date' })}
+      ${field('warrantyUntil', '保証期限', c.warrantyUntil, { type: 'date' })}
+      ${field('fee', '契約金額（税込・円）', c.fee, { type: 'number', attrs: 'min="0" step="1"' })}
+      ${field('paymentMethod', '支払方法', c.paymentMethod, { options: PAYMENT_METHODS })}
+    </div>
+    <fieldset data-cat="implant" style="--c:var(--implant)"><legend>インプラント</legend><div class="form-grid">
+      ${field('implantSystem', 'インプラントシステム', c.implantSystem, { attrs: 'placeholder="例: Straumann BLT"' })}
+      ${field('implantCount', '埋入本数', c.implantCount, { type: 'number', attrs: 'min="0" step="1"' })}
+      ${field('surgery1Date', '一次手術日', c.surgery1Date, { type: 'date' })}
+      ${field('surgery2Date', '二次手術日', c.surgery2Date, { type: 'date' })}
+      ${field('prosthesisDate', '上部構造装着日', c.prosthesisDate, { type: 'date' })}
+    </div></fieldset>
+    <fieldset data-cat="ortho" style="--c:var(--ortho)"><legend>矯正</legend><div class="form-grid">
+      ${field('orthoAppliance', '矯正装置', c.orthoAppliance, { options: ORTHO_APPLIANCES })}
+      ${field('retentionStartDate', '保定開始日', c.retentionStartDate, { type: 'date' })}
+      ${field('adjustFee', '調整料（1回・円）', c.adjustFee, { type: 'number', attrs: 'min="0" step="1"' })}
+    </div></fieldset>
+    <fieldset data-cat="prosth" style="--c:var(--prosth)"><legend>自費補綴</legend><div class="form-grid">
+      ${field('prosthType', '補綴物の種類', c.prosthType, { options: PROSTH_TYPES })}
+      ${field('material', '材料', c.material, { options: MATERIALS })}
+      ${field('setDate', 'セット日', c.setDate, { type: 'date' })}
+    </div></fieldset>
+    <div class="form-grid" style="margin-top:12px">${field('memo', 'メモ（治療計画・経過など）', c.memo, { type: 'textarea', full: true })}</div>
+    <div class="modal-actions">
+      ${isNew ? '' : '<button type="button" class="btn danger left" data-delete>治療を削除</button>'}
+      <button type="button" class="btn" data-close>キャンセル</button>
+      <button type="submit" class="btn primary">保存</button>
+    </div>`, async (data) => {
+    const catKey = Object.keys(CATEGORIES).find(k => CATEGORIES[k].label === data.category);
+    if (!catKey) { toast('区分を選択してください', true); return false; }
+    // 選択した区分以外の固有項目は保存しない
+    form.querySelectorAll('fieldset[data-cat]').forEach(fs => {
+      if (fs.dataset.cat !== catKey) fs.querySelectorAll('[name]').forEach(el => (data[el.name] = ''));
+    });
+    return run('saveCase', { ...c, ...data, category: catKey, patientId: c.patientId });
+  });
+  const syncCat = () => {
+    const key = Object.keys(CATEGORIES).find(k => CATEGORIES[k].label === $('#f_category').value);
+    form.querySelectorAll('fieldset[data-cat]').forEach(fs => (fs.hidden = fs.dataset.cat !== key));
+  };
+  $('#f_category').addEventListener('change', syncCat);
+  syncCat();
+  const del = form.querySelector('[data-delete]');
+  if (del) del.addEventListener('click', async () => {
+    if (!confirm('この治療を削除します。入金記録も削除されます。よろしいですか？')) return;
+    if (await run('deleteCase', c.id)) { closeModal(); toast('削除しました'); }
+  });
+}
+
+function paymentForm(y) {
+  const isNew = !y.id;
+  const c = DB.cases.find(x => x.id === y.caseId);
+  const bal = c ? balanceFor(c) : 0;
+  const form = openModal(`
+    <h2>${isNew ? '入金の記録' : '入金の編集'} <span class="alert-meta">${esc(c?.title || '')}</span></h2>
+    <div class="form-grid">
+      ${field('date', '入金日', y.date || new Date().toLocaleDateString('sv-SE'), { type: 'date', required: true })}
+      ${field('amount', '金額（円）', y.amount ?? (bal || ''), { type: 'number', required: true, attrs: 'min="1" step="1"' })}
+      ${field('method', '入金方法', y.method || '現金', { options: PAY_INPUT_METHODS })}
+      ${field('memo', 'メモ', y.memo, { attrs: 'placeholder="例: 2回目/全3回"' })}
+    </div>
+    ${isNew && bal ? `<div class="alert-meta" style="margin-top:8px">現在の未収金: ${yen(bal)}</div>` : ''}
+    <div class="modal-actions">
+      ${isNew ? '' : '<button type="button" class="btn danger left" data-delete>削除</button>'}
+      <button type="button" class="btn" data-close>キャンセル</button>
+      <button type="submit" class="btn primary">保存</button>
+    </div>`, async (data) => {
+    if (!data.date) { toast('入金日を入力してください', true); return false; }
+    if (!(Number(data.amount) > 0)) { toast('金額を入力してください', true); return false; }
+    return run('savePayment', { ...y, ...data, caseId: y.caseId, patientId: c?.patientId || y.patientId });
+  });
+  const del = form.querySelector('[data-delete]');
+  if (del) del.addEventListener('click', async () => {
+    if (!confirm('この入金記録を削除しますか？')) return;
+    if (await run('deletePayment', y.id)) { closeModal(); toast('削除しました'); }
+  });
+}
+
+/* ───────────────────────── CSV 出力 ───────────────────────── */
+function exportCsv() {
+  const head = ['カルテ番号', '氏名', 'フリガナ', '生年月日', '電話番号', '区分', 'ステータス', '治療名', '部位', '担当医',
+    '治療開始日', '完了日', '最終来院日', '次回予約日', '保証期限', '契約金額', '入金済', '未収金', '支払方法'];
+  const ids = new Set(filteredPatients().map(r => r.p.id));
+  const lines = [head];
+  DB.cases.filter(c => ids.has(c.patientId)).forEach(c => {
+    const p = patientOf(c.patientId);
+    lines.push([p.chartNo, p.name, p.kana, p.birthDate, p.phone, CATEGORIES[c.category]?.label || c.category, c.status, c.title, c.sites, c.doctor,
+      c.startDate, c.completedDate, c.lastVisit, c.nextVisit, c.warrantyUntil, c.fee, paidFor(c.id), balanceFor(c), c.paymentMethod]);
+  });
+  const csv = lines.map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\r\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `自費患者一覧_${new Date().toLocaleDateString('sv-SE')}.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+/* ───────────────────────── イベント ───────────────────────── */
+document.querySelectorAll('nav button').forEach(b => b.addEventListener('click', () => show(b.dataset.view)));
+$('#newPatientBtn').addEventListener('click', () => patientForm());
+$('#modalBg').addEventListener('mousedown', (e) => { if (e.target.id === 'modalBg') closeModal(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && $('#modalBg').classList.contains('open')) closeModal(); });
+
+document.addEventListener('click', (e) => {
+  const t = e.target.closest('[data-open],[data-back],[data-edit-patient],[data-new-case],[data-edit-case],[data-new-pay],[data-edit-pay]');
+  if (!t || t.closest('#modal')) return;
+  if (t.dataset.open) show('detail', t.dataset.open);
+  else if (t.hasAttribute('data-back')) show('list');
+  else if (t.hasAttribute('data-edit-patient')) patientForm(patientOf(currentPatientId));
+  else if (t.hasAttribute('data-new-case')) caseForm({ patientId: currentPatientId });
+  else if (t.dataset.editCase) caseForm(DB.cases.find(c => c.id === t.dataset.editCase));
+  else if (t.dataset.newPay) paymentForm({ caseId: t.dataset.newPay });
+  else if (t.dataset.editPay) paymentForm(DB.payments.find(y => y.id === t.dataset.editPay));
+});
+
+/* ───────────────────────── 起動 ───────────────────────── */
+(async () => {
+  if (!IS_GAS) $('#demoBadge').hidden = false;
+  $('#loading').textContent = '読み込み中…';
+  $('#loading').classList.add('show');
+  try { DB = await api('getAllData'); render(); }
+  catch (e) { toast(e && e.message ? e.message : String(e), true); }
+  finally { $('#loading').classList.remove('show'); $('#loading').textContent = '保存中…'; }
+})();
+</script>
+</body>
+</html>
