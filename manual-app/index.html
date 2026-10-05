@@ -22,6 +22,7 @@
   --warn-bg: #FFE5DF;
   --warn-ink: #A8402E;
   --ok: #5BAE8C;
+  --ok-ink: #2E7A5B;
   --shadow: 0 6px 20px rgba(214, 120, 150, .14);
 
   --c-reception: #FFD9E3; --c-reception-ink: #B5476E;
@@ -43,7 +44,7 @@
   :root:not([data-theme="light"]) {
     --bg: #251A1E; --surface: #32242A; --surface-2: #3D2B32; --ink: #FBEAEF; --ink-soft: #CFAFB8;
     --line: #4E3940; --accent: #F2A0BA; --accent-soft: #5A3442; --accent-ink: #FFB6CC;
-    --warn-bg: #4A2A25; --warn-ink: #FFB4A3; --ok: #7CCBA9; --shadow: 0 6px 20px rgba(0,0,0,.3);
+    --warn-bg: #4A2A25; --warn-ink: #FFB4A3; --ok: #7CCBA9; --ok-ink: #93DDBD; --shadow: 0 6px 20px rgba(0,0,0,.3);
     --c-reception: #4E2C38; --c-reception-ink: #FFB3C9;
     --c-assist: #3A3352;    --c-assist-ink: #C9BBFF;
     --c-steril: #24433A;    --c-steril-ink: #93E0C2;
@@ -58,7 +59,7 @@
 :root[data-theme="dark"] {
   --bg: #251A1E; --surface: #32242A; --surface-2: #3D2B32; --ink: #FBEAEF; --ink-soft: #CFAFB8;
   --line: #4E3940; --accent: #F2A0BA; --accent-soft: #5A3442; --accent-ink: #FFB6CC;
-  --warn-bg: #4A2A25; --warn-ink: #FFB4A3; --ok: #7CCBA9; --shadow: 0 6px 20px rgba(0,0,0,.3);
+  --warn-bg: #4A2A25; --warn-ink: #FFB4A3; --ok: #7CCBA9; --ok-ink: #93DDBD; --shadow: 0 6px 20px rgba(0,0,0,.3);
   --c-reception: #4E2C38; --c-reception-ink: #FFB3C9;
   --c-assist: #3A3352;    --c-assist-ink: #C9BBFF;
   --c-steril: #24433A;    --c-steril-ink: #93E0C2;
@@ -358,6 +359,86 @@ textarea.ed-sum { color: var(--ink-soft); }
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
+/* ---------- Staff / Progress / Admin ---------- */
+.who {
+  display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 12px 0 6px; border-radius: 999px; flex: none;
+  border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); font-size: .86rem; font-weight: 700; max-width: 11em;
+}
+.who:hover { border-color: var(--accent); }
+.who-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 520px) { .who { padding: 0 6px; } .who-name { display: none; } }
+.avatar {
+  width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; flex: none;
+  background: var(--av-bg, var(--accent-soft)); color: var(--av-ink, var(--accent-ink)); font-weight: 700; font-size: .9rem;
+}
+.avatar.lg { width: 52px; height: 52px; font-size: 1.3rem; }
+.avatar.empty { background: var(--surface-2); color: var(--ink-soft); }
+.st { display: inline-flex; align-items: center; gap: 4px; padding: 1px 10px; border-radius: 999px; font-size: .76rem; font-weight: 700; white-space: nowrap; }
+.st::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.st-done { background: color-mix(in srgb, var(--ok) 18%, var(--surface)); color: var(--ok-ink); }
+.st-review { background: var(--warn-bg); color: var(--warn-ink); }
+.st-doing { background: var(--accent-soft); color: var(--accent-ink); }
+.st-none { background: var(--surface-2); color: var(--ink-soft); }
+.stack { display: flex; height: 10px; border-radius: 99px; overflow: hidden; background: var(--surface-2); }
+.stack i { display: block; height: 100%; }
+.stack .s-done { background: var(--ok); }
+.stack .s-review { background: var(--warn-ink); opacity: .75; }
+.stack .s-doing { background: var(--accent); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .78rem; color: var(--ink-soft); }
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+.legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 720px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; }
+.tile-label { font-size: .78rem; color: var(--ink-soft); }
+.tile-value { font-size: 1.7rem; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.tile-value small { font-size: .8rem; font-weight: 500; color: var(--ink-soft); margin-left: 2px; }
+.tile.warn .tile-value { color: var(--warn-ink); }
+.tile.good .tile-value { color: var(--ok-ink); }
+.admin-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.admin-head h1 { font-size: 1.4rem; display: flex; align-items: center; gap: 8px; }
+.admin-head h1 svg { color: var(--accent-ink); }
+.seg-nav { display: flex; gap: 4px; padding: 4px; background: var(--surface-2); border-radius: 999px; overflow-x: auto; scrollbar-width: none; }
+.seg-nav a { flex: 1 0 auto; text-align: center; padding: 8px 14px; border-radius: 999px; color: var(--ink-soft); text-decoration: none; font-size: .88rem; white-space: nowrap; }
+.seg-nav a[aria-current="page"] { background: var(--surface); color: var(--accent-ink); font-weight: 700; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+.demo-note { display: flex; gap: 8px; align-items: flex-start; padding: 10px 14px; border-radius: var(--radius-sm); background: var(--c-open); color: var(--ink); font-size: .84rem; }
+.demo-note svg { color: var(--c-open-ink); margin-top: 2px; }
+.row-stats { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: .78rem; color: var(--ink-soft); font-variant-numeric: tabular-nums; margin-top: 4px; }
+.item .stack { margin-top: 6px; }
+.item-side { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: none; font-size: .76rem; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.rate { font-size: 1.05rem; font-weight: 700; color: var(--ink); }
+.person-head { display: flex; align-items: center; gap: 14px; }
+.person-head h1 { font-size: 1.35rem; }
+.group-title { font-size: .86rem; font-weight: 700; color: var(--ink-soft); margin: 4px 0 8px; display: flex; align-items: center; gap: 6px; }
+.group-title svg { width: 16px; height: 16px; color: var(--cat-ink); }
+.mine-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; display: flex; flex-direction: column; gap: 10px; text-decoration: none; color: var(--ink); }
+.mine-card:hover { border-color: var(--accent); }
+.mine-top { display: flex; align-items: center; gap: 12px; }
+.mine-top .rate { margin-left: auto; font-size: 1.4rem; }
+.staff-pick { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.staff-pick button {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--line);
+  background: var(--surface); text-align: left; min-height: 56px;
+}
+.staff-pick button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.staff-pick b { display: block; font-size: .92rem; line-height: 1.3; }
+.staff-pick small { display: block; font-size: .74rem; color: var(--ink-soft); }
+.team-row { display: grid; grid-template-columns: auto 1fr 1fr auto; gap: 8px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.team-row:last-child { border-bottom: none; }
+.team-row input { min-height: 40px; padding: 6px 10px; }
+@media (max-width: 520px) { .team-row { grid-template-columns: auto 1fr auto; } .team-row .role-in { grid-column: 2 / 3; } }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.panel h2 { font-size: 1rem; }
+.inline-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.inline-form input { flex: 1 1 140px; width: auto; min-height: 40px; padding: 6px 10px; }
+.inline-form .pin-input { flex: 0 0 8em; font-size: 1.1rem; letter-spacing: .4em; }
+.review-banner { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: var(--radius-sm); background: var(--warn-bg); color: var(--ink); font-size: .9rem; }
+.review-banner svg { color: var(--warn-ink); margin-top: 2px; }
+.gate { max-width: 420px; margin: 24px auto 0; display: flex; flex-direction: column; gap: 14px; text-align: center; }
+.gate .gate-icon { width: 64px; height: 64px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-ink); display: grid; place-items: center; margin: 0 auto; }
+.gate .gate-icon svg { width: 30px; height: 30px; }
+.loading { text-align: center; padding: 60px 0; color: var(--ink-soft); }
+
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
 </style>
 </head>
@@ -374,6 +455,7 @@ textarea.ed-sum { color: var(--ink-soft); }
       <label for="q" class="sr-only">マニュアルを検索</label>
       <input id="q" type="search" placeholder="マニュアルを検索" autocomplete="off">
     </div>
+    <button class="who" id="whoBtn" aria-label="使っている人を切り替える"><span class="avatar empty">?</span><span class="who-name">名前を選ぶ</span></button>
     <button class="icon-btn" id="openSettings" aria-label="設定">
       <svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
     </button>
@@ -427,6 +509,11 @@ textarea.ed-sum { color: var(--ink-soft); }
     search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',
     lock: '<rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3M12 14.5v2"/>',
     unlock: '<rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 7.6-1.7M12 14.5v2"/>',
+    users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.2a6.5 6.5 0 0 1 3.5 5.8"/>',
+    chart: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+    refresh: '<path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v4h-4"/>',
+    shield: '<path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-4.5"/>',
+    info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
     copy: '<rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V5.5A1.5 1.5 0 0 0 14.5 4h-9A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8"/>'
   };
   const svg = (name, cls) => `<svg class="i ${cls || ''}" viewBox="0 0 24 24" aria-hidden="true">${ICON[name] || ''}</svg>`;
@@ -641,34 +728,179 @@ textarea.ed-sum { color: var(--ink-soft); }
     }
   ];
 
-  /* ================= 保存（端末ごと） ================= */
-  const KEY = 'mirai-manual-v1';
-  const store = {
-    load() {
-      try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; }
-    },
-    save() {
-      try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* 保存不可の環境では何もしない */ }
+  /* ================= データの置き場所 ================= */
+  // Apps Script（Googleスプレッドシート版）で開いたときはスタッフ全員の共有データ。
+  // それ以外（ファイルを直接開いたとき）は、この端末の中だけで動く「体験モード」。
+  const REMOTE = typeof google !== 'undefined' && google.script && google.script.run;
+  const clone = o => JSON.parse(JSON.stringify(o));
+  const nowISO = () => new Date().toISOString();
+
+  // 体験モード用のサンプル（スプレッドシート版では使いません）
+  const SAMPLE_STAFF = [
+    { id: 's1', name: '佐藤 さくら', role: '歯科衛生士' },
+    { id: 's2', name: '鈴木 ゆい', role: '歯科助手' },
+    { id: 's3', name: '高橋 みなみ', role: '受付' },
+    { id: 's4', name: '田中 あおい', role: '歯科衛生士' },
+    { id: 's5', name: '伊藤 ひなた', role: '受付（新人）' }
+  ];
+  function sampleProgress(manuals, staff) {
+    const level = [0.92, 0.72, 0.55, 0.38, 0.16];
+    const progress = {};
+    staff.forEach((s, si) => {
+      progress[s.id] = {};
+      manuals.forEach((m, mi) => {
+        const r = (((si + 1) * 9301 + (mi + 1) * 49297) % 233280) / 233280;
+        const day = String(5 + (si * 3 + mi * 5) % 25).padStart(2, '0');
+        const at = `2026-09-${day}T10:${String(10 + mi).padStart(2, '0')}:00.000Z`;
+        if (r < level[si]) progress[s.id][m.id] = { done: [], completedAt: at, updatedAt: at, count: 1 };
+        else if (r < level[si] + 0.22) progress[s.id][m.id] = { done: m.steps.map((_, i) => i).slice(0, Math.max(1, Math.floor(m.steps.length / 2))), completedAt: '', updatedAt: at, count: 0 };
+      });
+    });
+    return progress;
+  }
+
+  // 体験モードでは、サーバー（Code.gs）と同じ動きをこの端末の中で再現する
+  const DEMO_KEY = 'mirai-manual-demo-v2';
+  const LocalServer = (() => {
+    let db = null;
+    const persist = () => { try { localStorage.setItem(DEMO_KEY, JSON.stringify(db)); } catch (e) { /* 保存できない環境 */ } };
+    const check = (kind, pin) => { if (db.pins[kind] && db.pins[kind] !== pin) throw new Error('PIN'); };
+    const setRec = (sid, mid, rec) => {
+      if (!rec) { if (db.progress[sid]) delete db.progress[sid][mid]; return; }
+      (db.progress[sid] = db.progress[sid] || {})[mid] = rec;
+    };
+    const api = {
+      getAll() {
+        return { manuals: db.manuals, staff: db.staff, progress: db.progress, hasEditPin: !!db.pins.edit, hasAdminPin: !!db.pins.admin, initialized: true, demo: true };
+      },
+      initialize() { return true; },
+      verifyPin(kind, pin) { return !db.pins[kind] || db.pins[kind] === pin; },
+      setPin(kind, adminPin, next) {
+        check('admin', adminPin);
+        if (next && !/^\d{4}$/.test(next)) throw new Error('FORMAT');
+        db.pins[kind] = next || '';
+        persist();
+        return true;
+      },
+      saveManual(m, updates, editPin) {
+        check('edit', editPin);
+        const i = db.manuals.findIndex(x => x.id === m.id);
+        if (i >= 0) db.manuals[i] = m; else db.manuals.unshift(m);
+        Object.keys(updates || {}).forEach(sid => setRec(sid, m.id, updates[sid]));
+        persist();
+        return true;
+      },
+      deleteManual(id, editPin) {
+        check('edit', editPin);
+        db.manuals = db.manuals.filter(x => x.id !== id);
+        Object.keys(db.progress).forEach(sid => setRec(sid, id, null));
+        persist();
+        return true;
+      },
+      saveProgress(sid, mid, rec) {
+        if (!db.staff.some(s => s.id === sid)) throw new Error('STAFF');
+        setRec(sid, mid, rec);
+        persist();
+        return true;
+      },
+      saveStaff(list, adminPin) {
+        check('admin', adminPin);
+        db.staff = list;
+        Object.keys(db.progress).forEach(sid => { if (!list.some(s => s.id === sid)) delete db.progress[sid]; });
+        persist();
+        return true;
+      },
+      replaceManuals(list, adminPin) {
+        check('admin', adminPin);
+        db.manuals = list;
+        const ids = new Set(list.map(m => m.id));
+        Object.values(db.progress).forEach(p => Object.keys(p).forEach(mid => { if (!ids.has(mid)) delete p[mid]; }));
+        persist();
+        return true;
+      }
+    };
+    return {
+      init() {
+        try { db = JSON.parse(localStorage.getItem(DEMO_KEY)); } catch (e) { db = null; }
+        if (db && Array.isArray(db.manuals)) return;
+        let old = null;
+        try { old = JSON.parse(localStorage.getItem('mirai-manual-v1')); } catch (e) { old = null; }
+        const manuals = old && Array.isArray(old.manuals) ? old.manuals
+          : clone(DEFAULT_MANUALS).map(m => m.id === 'm10' ? { ...m, reviewFrom: '2026-10-01T00:00:00.000Z' } : m);
+        db = { manuals, staff: clone(SAMPLE_STAFF), progress: sampleProgress(manuals, SAMPLE_STAFF), pins: { edit: (old && old.pin) || '', admin: '' } };
+        persist();
+      },
+      call(name, args) { return api[name](...args); }
+    };
+  })();
+
+  function callApi(name, ...args) {
+    if (REMOTE) {
+      return new Promise((resolve, reject) => google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[name](...args));
     }
-  };
-  const saved = store.load();
+    return new Promise((resolve, reject) => {
+      try { const r = LocalServer.call(name, clone(args)); resolve(r === undefined ? null : clone(r)); } catch (e) { reject(e); }
+    });
+  }
+  function apiError(e) {
+    const msg = String((e && e.message) || e);
+    if (msg.includes('PIN')) toast('暗証番号が確認できませんでした。もう一度ロックを解除してください');
+    else if (msg.includes('STAFF')) toast('スタッフが見つかりません。名前を選び直してください');
+    else toast('保存できませんでした。通信状態を確かめて、もう一度お試しください');
+  }
+  const send = (name, ...args) => callApi(name, ...args).catch(apiError);
+
+  /* ================= 端末ごとの設定 ================= */
+  const ME_KEY = 'mirai-manual-me-v2';
+  const personal = (() => {
+    let p = {};
+    try { p = JSON.parse(localStorage.getItem(ME_KEY)) || {}; } catch (e) { p = {}; }
+    if (!p.migrated) {
+      try {
+        const old = JSON.parse(localStorage.getItem('mirai-manual-v1'));
+        if (old) { p.favs = old.favs; p.recent = old.recent; p.largeText = old.largeText; }
+      } catch (e) { /* 旧データなし */ }
+    }
+    return p;
+  })();
   const state = {
-    manuals: Array.isArray(saved.manuals) ? saved.manuals : JSON.parse(JSON.stringify(DEFAULT_MANUALS)),
-    favs: Array.isArray(saved.favs) ? saved.favs : ['m10', 'm8'],
-    recent: Array.isArray(saved.recent) ? saved.recent : ['m1', 'm2'],
-    checks: saved.checks && typeof saved.checks === 'object' ? saved.checks : {},
-    largeText: !!saved.largeText,
-    pin: typeof saved.pin === 'string' ? saved.pin : ''
+    ready: false,
+    manuals: [], staff: [], progress: {}, hasEditPin: false, hasAdminPin: false,
+    favs: Array.isArray(personal.favs) ? personal.favs : ['m10', 'm8'],
+    recent: Array.isArray(personal.recent) ? personal.recent : ['m1', 'm2'],
+    largeText: !!personal.largeText,
+    me: typeof personal.me === 'string' ? personal.me : ''
   };
+  const savePersonal = () => {
+    try { localStorage.setItem(ME_KEY, JSON.stringify({ migrated: true, favs: state.favs, recent: state.recent, largeText: state.largeText, me: state.me })); } catch (e) { /* 保存できない環境 */ }
+  };
+  // 解除したロックは、このページを開いている間だけ覚えておく
+  const session = { editPin: '', adminPin: '', admin: false };
   document.documentElement.classList.toggle('large-text', state.largeText);
+
+  async function loadShared() {
+    const d = await callApi('getAll');
+    state.manuals = d.manuals || [];
+    state.staff = d.staff || [];
+    state.progress = d.progress || {};
+    state.hasEditPin = !!d.hasEditPin;
+    state.hasAdminPin = !!d.hasAdminPin;
+    if (REMOTE && !d.initialized) {
+      await callApi('initialize', clone(DEFAULT_MANUALS));
+      state.manuals = clone(DEFAULT_MANUALS);
+    }
+    if (state.me && !state.staff.some(s => s.id === state.me)) { state.me = ''; savePersonal(); }
+    state.ready = true;
+  }
 
   /* ================= ユーティリティ ================= */
   const $ = (s, el) => (el || document).querySelector(s);
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const getManual = id => state.manuals.find(m => m.id === id);
+  const getStaff = id => state.staff.find(s => s.id === id);
   const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
   const fmtDate = s => { const p = String(s || '').split('-'); return p.length === 3 ? `${+p[0]}年${+p[1]}月${+p[2]}日` : ''; };
-  const doneCount = m => (state.checks[m.id] || []).filter(i => i < m.steps.length).length;
+  const fmtShort = iso => { if (!iso) return ''; const d = new Date(iso); return isNaN(d) ? '' : `${d.getMonth() + 1}月${d.getDate()}日`; };
   const view = $('#view');
 
   let toastTimer;
@@ -677,7 +909,7 @@ textarea.ed-sum { color: var(--ink-soft); }
     t.textContent = msg;
     t.classList.add('show');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
   }
 
   function highlight(text, q) {
@@ -687,9 +919,53 @@ textarea.ed-sum { color: var(--ink-soft); }
     return safe.replace(re, m => `<mark>${m}</mark>`);
   }
 
+  /* ================= 進み具合の計算 ================= */
+  const recOf = (sid, mid) => (sid && state.progress[sid] && state.progress[sid][mid]) || null;
+  const doneOf = (sid, m) => { const r = recOf(sid, m.id); return r ? (r.done || []).filter(i => i < m.steps.length).length : 0; };
+  // 完了 / 要再確認（完了後にマニュアルが改訂された） / 途中 / 未着手
+  function statusOf(sid, m) {
+    const r = recOf(sid, m.id);
+    if (r && r.completedAt) return (m.reviewFrom && r.completedAt < m.reviewFrom) ? 'review' : 'done';
+    return r && doneOf(sid, m) ? 'doing' : 'none';
+  }
+  const STATUS = { done: '完了', review: '要再確認', doing: '途中', none: '未着手' };
+  const stPill = st => `<span class="st st-${st}">${STATUS[st]}</span>`;
+  function staffSummary(sid) {
+    const c = { done: 0, review: 0, doing: 0, none: 0 };
+    let last = '';
+    state.manuals.forEach(m => {
+      c[statusOf(sid, m)]++;
+      const r = recOf(sid, m.id);
+      if (r && r.updatedAt > last) last = r.updatedAt;
+    });
+    const total = state.manuals.length;
+    return { ...c, total, last, rate: total ? Math.round(c.done / total * 100) : 0 };
+  }
+  function manualSummary(m) {
+    const c = { done: 0, review: 0, doing: 0, none: 0 };
+    state.staff.forEach(s => c[statusOf(s.id, m)]++);
+    return { ...c, total: state.staff.length };
+  }
+  function stackHTML(c, total) {
+    if (!total) return '<div class="stack"></div>';
+    const seg = k => c[k] ? `<i class="s-${k}" style="width:${c[k] / total * 100}%"></i>` : '';
+    return `<div class="stack" role="img" aria-label="完了${c.done}・要再確認${c.review}・途中${c.doing}・未着手${c.none}">${seg('done')}${seg('review')}${seg('doing')}</div>`;
+  }
+  const legendHTML = () => `<div class="legend"><span><i style="background:var(--ok)"></i>完了</span><span><i style="background:var(--warn-ink);opacity:.75"></i>要再確認</span><span><i style="background:var(--accent)"></i>途中</span><span><i style="background:var(--surface-2);border:1px solid var(--line)"></i>未着手</span></div>`;
+
+  const AV_TONES = ['reception', 'assist', 'steril', 'open', 'patient', 'rules', 'material'];
+  function avatarHTML(s, cls) {
+    if (!s) return `<span class="avatar empty ${cls || ''}">?</span>`;
+    let h = 0;
+    for (const ch of s.id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    const tone = AV_TONES[h % AV_TONES.length];
+    return `<span class="avatar ${cls || ''}" style="--av-bg: var(--c-${tone}); --av-ink: var(--c-${tone}-ink)">${esc((s.name || '?').trim().charAt(0))}</span>`;
+  }
+
   function itemHTML(m, q) {
     const c = catById(m.cat);
-    const done = doneCount(m);
+    const done = doneOf(state.me, m);
+    const st = state.me ? statusOf(state.me, m) : 'none';
     const pct = m.steps.length ? Math.round(done / m.steps.length * 100) : 0;
     let sub = m.summary;
     if (q) {
@@ -705,6 +981,7 @@ textarea.ed-sum { color: var(--ink-soft); }
           <span>${esc(c.name)}</span>
           <span>${svg('clock')}約${esc(m.minutes || 5)}分</span>
           <span>${m.steps.length}ステップ</span>
+          ${st === 'done' || st === 'review' ? stPill(st) : ''}
           ${done ? `<span><span class="progress-mini"><i style="width:${pct}%"></i></span>${done}/${m.steps.length}</span>` : ''}
         </span>
       </span>
@@ -716,20 +993,47 @@ textarea.ed-sum { color: var(--ink-soft); }
     return `<div class="empty">${svg(icon)}<div>${text}</div></div>`;
   }
 
+  /* ================= 使っている人の選択 ================= */
+  function openPicker(note) {
+    const list = state.staff;
+    openSheet(`
+      <div class="sheet-head"><h2>あなたの名前を選んでください</h2><button class="icon-btn" data-close aria-label="閉じる">${svg('x')}</button></div>
+      <p style="margin:0" class="muted">${esc(note || 'チェックした進み具合は、この名前で記録されます。共用の端末では、使う人が替わるたびに切り替えてください。')}</p>
+      ${list.length ? `<div class="staff-pick">${list.map(s => `
+        <button data-pick="${esc(s.id)}" aria-pressed="${s.id === state.me}">${avatarHTML(s)}<span><b>${esc(s.name)}</b><small>${esc(s.role || '')}</small></span></button>`).join('')}</div>`
+        : `${emptyHTML('users', 'スタッフがまだ登録されていません。<br>管理者ページでスタッフを登録してください')}<a class="btn" href="#admin-team" data-close>${svg('shield')}管理者ページへ</a>`}
+      <div class="actions" style="justify-content:flex-end"><button class="btn" data-close>あとで</button></div>`);
+    overlay.querySelectorAll('[data-pick]').forEach(b => b.addEventListener('click', () => {
+      state.me = b.dataset.pick;
+      savePersonal();
+      closeSheet();
+      toast(`${getStaff(state.me).name}さんに切り替えました`);
+      route(true);
+    }));
+  }
+  $('#whoBtn').addEventListener('click', () => openPicker());
+  function needMe() {
+    if (state.me) return false;
+    openPicker('チェックをつけるには、はじめにあなたの名前を選んでください。');
+    return true;
+  }
+
   /* ================= 画面: ホーム ================= */
   function renderHome() {
     const now = new Date();
     const h = now.getHours();
     const greet = h < 11 ? 'おはようございます' : h < 17 ? 'こんにちは' : 'おつかれさまです';
     const wd = '日月火水木金土'[now.getDay()];
+    const me = getStaff(state.me);
     const favs = state.favs.map(getManual).filter(Boolean);
     const recent = state.recent.map(getManual).filter(Boolean).slice(0, 4);
     const latest = [...state.manuals].sort((a, b) => String(b.updated).localeCompare(String(a.updated))).slice(0, 3);
+    const sum = me ? staffSummary(me.id) : null;
 
     view.innerHTML = `
       <section class="hello">
         <div class="hello-date">${now.getMonth() + 1}月${now.getDate()}日（${wd}）</div>
-        <h1>${greet}</h1>
+        <h1>${me ? esc(me.name.split(/\s/)[0]) + 'さん、' : ''}${greet}</h1>
         <p>迷ったときは、ここで手順を確認しましょう。</p>
         <div class="hello-stats">
           <span class="pill">マニュアル <b>${state.manuals.length}</b> 件</span>
@@ -742,6 +1046,16 @@ textarea.ed-sum { color: var(--ink-soft); }
         <span><strong>緊急時の対応はこちら</strong><span>気分不良・針刺し事故などの手順</span></span>
         ${svg('chev', 'chev')}
       </a>
+
+      <section>
+        <div class="section-head"><h2>あなたの進み具合</h2>${me ? '<a href="#mine">くわしく見る</a>' : ''}</div>
+        ${me ? `<a class="mine-card" href="#mine">
+            <span class="mine-top">${avatarHTML(me)}<span><b>${esc(me.name)}</b><br><span class="muted" style="font-size:.8rem">${esc(me.role || '')}</span></span><span class="rate">${sum.rate}%</span></span>
+            ${stackHTML(sum, sum.total)}
+            <span class="row-stats"><span>完了 ${sum.done}/${sum.total}</span><span>途中 ${sum.doing}</span>${sum.review ? `<span style="color:var(--warn-ink);font-weight:700">要再確認 ${sum.review}</span>` : ''}<span>未着手 ${sum.none}</span></span>
+          </a>`
+          : `<div class="empty">${svg('users')}<div>名前を選ぶと、マニュアルごとの完了状況が記録されます</div><button class="btn primary" id="pickBtn" style="margin-top:10px">名前を選ぶ</button></div>`}
+      </section>
 
       <section>
         <div class="section-head"><h2>カテゴリから探す</h2></div>
@@ -770,13 +1084,14 @@ textarea.ed-sum { color: var(--ink-soft); }
         <div class="list">${latest.map(m => itemHTML(m)).join('')}</div>
       </section>
     `;
+    const pb = $('#pickBtn');
+    if (pb) pb.addEventListener('click', () => openPicker());
   }
 
   /* ================= 画面: 一覧 / カテゴリ ================= */
   let listFilter = 'all';
   function renderList(catId) {
-    if (catId) listFilter = catId;
-    else if (!catId && location.hash === '#all') listFilter = listFilter || 'all';
+    listFilter = catId || 'all';
     const items = state.manuals.filter(m => listFilter === 'all' || m.cat === listFilter);
     const c = listFilter !== 'all' ? catById(listFilter) : null;
     view.innerHTML = `
@@ -793,10 +1108,9 @@ textarea.ed-sum { color: var(--ink-soft); }
       </div>
     `;
     view.querySelectorAll('[data-filter]').forEach(b => b.addEventListener('click', () => {
-      listFilter = b.dataset.filter;
-      const target = listFilter === 'all' ? '#all' : `#cat-${listFilter}`;
-      if (location.hash !== target) history.replaceState(null, '', target);
-      renderList(listFilter === 'all' ? null : listFilter);
+      const f = b.dataset.filter;
+      history.replaceState(null, '', f === 'all' ? '#all' : `#cat-${f}`);
+      renderList(f === 'all' ? null : f);
       setTab();
     }));
   }
@@ -833,9 +1147,11 @@ textarea.ed-sum { color: var(--ink-soft); }
     if (!m) { view.innerHTML = emptyHTML('search', 'マニュアルが見つかりませんでした。<br><a href="#home">ホームへ戻る</a>'); return; }
     if (editing && editing.id === id) return renderEditor();
     state.recent = [id, ...state.recent.filter(x => x !== id)].slice(0, 8);
-    store.save();
+    savePersonal();
     const c = catById(m.cat);
     const isFav = state.favs.includes(id);
+    const st = state.me ? statusOf(state.me, m) : 'none';
+    const rec = recOf(state.me, id);
 
     view.innerHTML = `
       <div style="${catStyle(c.id)};display:flex;flex-direction:column;gap:18px">
@@ -851,6 +1167,7 @@ textarea.ed-sum { color: var(--ink-soft); }
           </div>
           ${(m.tags || []).length ? `<div class="keywords">${m.tags.map(t => `<span>#${esc(t)}</span>`).join('')}</div>` : ''}
         </header>
+        ${st === 'review' ? `<div class="review-banner">${svg('alert')}<span><b>内容が改訂されました。</b>前回の完了（${fmtShort(rec.completedAt)}）のあとに内容が変わっています。もう一度、最後まで確認してください。</span></div>` : ''}
         <div class="actions">
           <button class="btn ${isFav ? 'faved' : ''}" id="favBtn" aria-pressed="${isFav}">${svg('heart')}${isFav ? 'お気に入り済み' : 'お気に入り'}</button>
           <button class="btn" id="resetBtn">${svg('reset')}チェックをリセット</button>
@@ -871,47 +1188,91 @@ textarea.ed-sum { color: var(--ink-soft); }
               </div>
             </li>`).join('')}
         </ol>
-        <div class="complete" id="complete" hidden><strong>すべて完了しました</strong><span class="muted">おつかれさまでした。次の作業も確認しましょう。</span></div>
+        <div class="complete" id="complete" hidden><strong>すべて完了しました</strong><span class="muted" id="completeNote">おつかれさまでした。完了は管理者ページに記録されます。</span></div>
+        ${rec && rec.completedAt && st === 'done' ? `<p class="muted" style="margin:0;font-size:.84rem;text-align:center">${esc(getStaff(state.me).name)}さん：${fmtShort(rec.completedAt)}に完了${rec.count > 1 ? `（${rec.count}回目）` : ''}</p>` : ''}
       </div>`;
 
     const updateProgress = () => {
-      const set = new Set(state.checks[id] || []);
+      const r = recOf(state.me, id);
+      const set = new Set(r ? r.done : []);
       view.querySelectorAll('.step').forEach(li => {
         const on = set.has(+li.dataset.i);
         li.classList.toggle('done', on);
         li.querySelector('.step-check').setAttribute('aria-pressed', on);
       });
-      const n = doneCount(m), total = m.steps.length;
+      const n = doneOf(state.me, m), total = m.steps.length;
       $('#progressFill').style.width = (total ? n / total * 100 : 0) + '%';
-      $('#progressLabel').textContent = `${n} / ${total} 完了`;
+      $('#progressLabel').textContent = state.me ? `${n} / ${total} 完了` : '名前を選ぶと記録できます';
       $('#progress').classList.toggle('done', total > 0 && n === total);
       $('#complete').hidden = !(total > 0 && n === total);
     };
     updateProgress();
 
     view.querySelectorAll('.step-check').forEach(b => b.addEventListener('click', () => {
+      if (needMe()) return;
       const i = +b.closest('.step').dataset.i;
-      const set = new Set(state.checks[id] || []);
+      const prev = recOf(state.me, id) || { done: [], completedAt: '', count: 0 };
+      const set = new Set(prev.done);
       set.has(i) ? set.delete(i) : set.add(i);
-      state.checks[id] = [...set];
-      store.save();
+      const rec2 = { ...prev, done: [...set].sort((a, z) => a - z), updatedAt: nowISO() };
+      const finished = m.steps.every((_, k) => set.has(k));
+      if (finished) { rec2.completedAt = rec2.updatedAt; rec2.count = (prev.count || 0) + 1; }
+      (state.progress[state.me] = state.progress[state.me] || {})[id] = rec2;
       updateProgress();
-      if (doneCount(m) === m.steps.length) toast('すべてのステップが完了しました');
+      send('saveProgress', state.me, id, rec2);
+      if (finished) toast('すべてのステップが完了しました。記録しました');
     }));
     $('#favBtn').addEventListener('click', () => {
       const on = state.favs.includes(id);
       state.favs = on ? state.favs.filter(x => x !== id) : [id, ...state.favs];
-      store.save();
+      savePersonal();
       toast(on ? 'お気に入りから外しました' : 'お気に入りに追加しました');
       renderDetail(id);
     });
-    $('#lockBtn').addEventListener('click', () => askUnlock(id));
     $('#resetBtn').addEventListener('click', () => {
-      delete state.checks[id];
-      store.save();
+      const prev = recOf(state.me, id);
+      if (!prev || !prev.done.length) return toast('リセットするチェックはありません');
+      // 完了の記録は残したまま、チェックだけ外す（毎日のチェックリストとして使えるように）
+      const rec2 = { ...prev, done: [], updatedAt: nowISO() };
+      state.progress[state.me][id] = rec2;
       updateProgress();
+      send('saveProgress', state.me, id, rec2);
       toast('チェックをリセットしました');
     });
+    $('#lockBtn').addEventListener('click', () => askUnlock(id));
+  }
+
+  /* ================= 画面: 自分の進み具合 ================= */
+  function renderPerson(sid, asAdmin) {
+    const s = getStaff(sid);
+    if (!s) { view.innerHTML = emptyHTML('users', asAdmin ? 'スタッフが見つかりません' : '名前を選ぶと、ここに進み具合が表示されます'); return; }
+    const sum = staffSummary(sid);
+    const order = { review: 0, doing: 1, none: 2, done: 3 };
+    view.innerHTML = `
+      <div><a class="back" href="${asAdmin ? '#admin' : '#home'}">${svg('back')}${asAdmin ? 'スタッフ一覧へ戻る' : 'ホームへ戻る'}</a></div>
+      <header class="person-head">${avatarHTML(s, 'lg')}<div><h1>${esc(s.name)}${asAdmin ? '' : 'さんの進み具合'}</h1><span class="muted" style="font-size:.86rem">${esc(s.role || '')}${sum.last ? `・最終記録 ${fmtShort(sum.last)}` : ''}</span></div></header>
+      <div class="tiles">
+        <div class="tile good"><span class="tile-label">完了率</span><span class="tile-value">${sum.rate}<small>%</small></span></div>
+        <div class="tile"><span class="tile-label">完了</span><span class="tile-value">${sum.done}<small>/ ${sum.total}</small></span></div>
+        <div class="tile ${sum.review ? 'warn' : ''}"><span class="tile-label">要再確認</span><span class="tile-value">${sum.review}<small>件</small></span></div>
+        <div class="tile"><span class="tile-label">途中・未着手</span><span class="tile-value">${sum.doing + sum.none}<small>件</small></span></div>
+      </div>
+      ${CATEGORIES.map(c => {
+        const ms = state.manuals.filter(m => m.cat === c.id).sort((a, b) => order[statusOf(sid, a)] - order[statusOf(sid, b)]);
+        if (!ms.length) return '';
+        return `<section style="${catStyle(c.id)}">
+          <div class="group-title">${svg(c.id)}${esc(c.name)}</div>
+          <div class="list">${ms.map(m => {
+            const st = statusOf(sid, m), r = recOf(sid, m.id);
+            const note = st === 'done' ? `${fmtShort(r.completedAt)} 完了` : st === 'review' ? `${fmtShort(r.completedAt)} 完了後に改訂` : st === 'doing' ? `${doneOf(sid, m)} / ${m.steps.length} ステップ` : '';
+            return `<a class="item" href="${asAdmin ? '#admin-m-' + esc(m.id) : '#m-' + esc(m.id)}">
+              <span class="item-icon">${svg(c.id)}</span>
+              <span class="item-body"><span class="item-title">${esc(m.title)}</span><span class="row-stats">${stPill(st)}<span>${note}</span></span></span>
+              ${svg('chev', 'chev')}
+            </a>`;
+          }).join('')}</div>
+        </section>`;
+      }).join('')}`;
   }
 
   /* ================= その場編集（ロック付き） ================= */
@@ -923,7 +1284,7 @@ textarea.ed-sum { color: var(--ink-soft); }
   function toDraft(m) {
     return {
       id: m.id, cat: m.cat, title: m.title, summary: m.summary || '', minutes: m.minutes || 5,
-      author: m.author || '', tagsText: (m.tags || []).join(', '), updated: m.updated,
+      author: m.author || '', tagsText: (m.tags || []).join(', '), updated: m.updated, requireReview: false,
       steps: m.steps.map((s, i) => ({ o: i, t: s.t, kind: s.warn ? 'warn' : s.tip ? 'tip' : 'none', note: s.warn || s.tip || '' }))
     };
   }
@@ -950,7 +1311,7 @@ textarea.ed-sum { color: var(--ink-soft); }
       syncChrome();
       toast('ロックを解除しました');
     };
-    if (state.pin) {
+    if (state.hasEditPin) {
       openSheet(`
         <div class="sheet-head"><h2>暗証番号を入力</h2><button class="icon-btn" data-close aria-label="閉じる">${svg('x')}</button></div>
         <p style="margin:0" class="muted">編集ロックを解除するには、4桁の暗証番号を入力してください。</p>
@@ -962,9 +1323,16 @@ textarea.ed-sum { color: var(--ink-soft); }
           <button class="btn primary" id="pinOk">${svg('unlock')}解除する</button>
         </div>`);
       const input = $('#pinIn');
+      let busy = false;
       const tryPin = () => {
-        if (input.value === state.pin) unlock();
-        else { $('#pinErr').textContent = '暗証番号がちがいます'; input.value = ''; input.focus(); }
+        if (busy) return;
+        busy = true;
+        const pin = input.value;
+        callApi('verifyPin', 'edit', pin).then(ok => {
+          busy = false;
+          if (ok) { session.editPin = pin; unlock(); }
+          else { $('#pinErr').textContent = '暗証番号がちがいます'; input.value = ''; input.focus(); }
+        }, e => { busy = false; apiError(e); });
       };
       $('#pinOk').addEventListener('click', tryPin);
       input.addEventListener('keydown', e => { if (e.key === 'Enter') tryPin(); });
@@ -973,7 +1341,7 @@ textarea.ed-sum { color: var(--ink-soft); }
       openSheet(`
         <div class="sheet-head"><h2>ロックを解除しますか？</h2></div>
         <p style="margin:0">解除すると、この画面でそのまま内容を書き換えられます。「保存してロック」を押すと、自動でロックに戻ります。</p>
-        <p style="margin:0;font-size:.82rem" class="muted">設定で暗証番号を決めておくと、解除のときに入力が必要になります。</p>
+        <p style="margin:0;font-size:.82rem" class="muted">管理者ページで暗証番号を決めておくと、解除のときに入力が必要になります。</p>
         <div class="actions" style="justify-content:flex-end">
           <button class="btn" data-close>やめる</button>
           <button class="btn primary" id="unlockOk">${svg('unlock')}解除して編集する</button>
@@ -994,6 +1362,7 @@ textarea.ed-sum { color: var(--ink-soft); }
       author: d.author.trim(),
       tags: d.tagsText.split(/[,、，]/).map(t => t.trim().replace(/^#/, '')).filter(Boolean),
       updated: today(),
+      reviewFrom: d.requireReview ? nowISO() : ((getManual(d.id) || {}).reviewFrom || ''),
       steps: kept.map(s => {
         const o = { t: s.t.trim() };
         const n = s.note.trim();
@@ -1002,16 +1371,22 @@ textarea.ed-sum { color: var(--ink-soft); }
         return o;
       })
     };
-    if (editing.isNew) {
-      state.manuals.unshift(m);
-    } else {
-      // 並べ替え・削除に合わせて、チェック済みの印も付け替える
-      const old = new Set(state.checks[m.id] || []);
-      const moved = kept.map((s, i) => (s.o !== undefined && old.has(s.o)) ? i : -1).filter(i => i >= 0);
-      if (moved.length) state.checks[m.id] = moved; else delete state.checks[m.id];
-      state.manuals = state.manuals.map(x => x.id === m.id ? m : x);
+    if (!m.reviewFrom) delete m.reviewFrom;
+    // 並べ替え・削除に合わせて、スタッフ全員のチェック済みの印も付け替える
+    const updates = {};
+    if (!editing.isNew) {
+      Object.keys(state.progress).forEach(sid => {
+        const r = state.progress[sid][m.id];
+        if (!r || !(r.done || []).length) return;
+        const old = new Set(r.done);
+        const moved = kept.map((s, i) => (s.o !== undefined && old.has(s.o)) ? i : -1).filter(i => i >= 0);
+        if (moved.join() === r.done.join()) return;
+        updates[sid] = state.progress[sid][m.id] = { ...r, done: moved };
+      });
     }
-    store.save();
+    if (editing.isNew) state.manuals.unshift(m);
+    else state.manuals = state.manuals.map(x => x.id === m.id ? m : x);
+    send('saveManual', m, updates, session.editPin);
     editing = null;
     return m;
   }
@@ -1134,6 +1509,10 @@ textarea.ed-sum { color: var(--ink-soft); }
               </div>
             </li>`).join('')}
         </ol>
+        ${editing.isNew ? '' : `<label class="review-banner" style="cursor:pointer">
+          <input type="checkbox" data-k="requireReview" ${d.requireReview ? 'checked' : ''} style="width:20px;height:20px;min-height:0;margin-top:2px;flex:none">
+          <span><b>スタッフ全員に再確認してもらう</b><br><span class="muted" style="font-size:.82rem">内容が大きく変わったときにチェックします。完了済みのスタッフは「要再確認」になります。</span></span>
+        </label>`}
         <div class="editor-foot">
           <button type="button" class="btn" data-ed="add">${svg('plus')}ステップを追加</button>
           ${editing.isNew ? '' : `<button type="button" class="btn danger" data-ed="delete">${svg('trash')}このマニュアルを削除</button>`}
@@ -1152,7 +1531,8 @@ textarea.ed-sum { color: var(--ink-soft); }
     root.addEventListener('input', e => {
       const el = e.target;
       if (el.tagName === 'TEXTAREA') autosize(el);
-      if (el.dataset.k && el.tagName !== 'SELECT') d[el.dataset.k] = el.value;
+      if (el.dataset.k && el.type === 'checkbox') d[el.dataset.k] = el.checked;
+      else if (el.dataset.k && el.tagName !== 'SELECT') d[el.dataset.k] = el.value;
       const li = el.closest('.step');
       if (li && el.dataset.f && el.dataset.f !== 'kind') d.steps[+li.dataset.i][el.dataset.f] = el.value;
     });
@@ -1197,8 +1577,9 @@ textarea.ed-sum { color: var(--ink-soft); }
       state.manuals = state.manuals.filter(x => x.id !== m.id);
       state.favs = state.favs.filter(x => x !== m.id);
       state.recent = state.recent.filter(x => x !== m.id);
-      delete state.checks[m.id];
-      store.save();
+      Object.values(state.progress).forEach(p => { delete p[m.id]; });
+      savePersonal();
+      send('deleteManual', m.id, session.editPin);
       editing = null;
       closeSheet();
       toast('削除しました');
@@ -1211,7 +1592,7 @@ textarea.ed-sum { color: var(--ink-soft); }
   function openSheet(html) {
     overlay.innerHTML = `<div class="sheet" role="dialog" aria-modal="true">${html}</div>`;
     overlay.hidden = false;
-    const f = overlay.querySelector('button, input, textarea');
+    const f = overlay.querySelector('input, textarea, button:not([data-close])') || overlay.querySelector('button');
     if (f) f.focus();
   }
   function closeSheet() { overlay.hidden = true; overlay.innerHTML = ''; }
@@ -1219,8 +1600,13 @@ textarea.ed-sum { color: var(--ink-soft); }
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !overlay.hidden) closeSheet(); });
 
   function openSettings() {
+    const me = getStaff(state.me);
     openSheet(`
       <div class="sheet-head"><h2>設定</h2><button class="icon-btn" data-close aria-label="閉じる">${svg('x')}</button></div>
+      <div class="setting">
+        <span class="setting-title">使っている人</span>
+        <div style="display:flex;align-items:center;gap:10px">${avatarHTML(me)}<span style="flex:1">${me ? esc(me.name) : '<span class="muted">まだ選ばれていません</span>'}</span><button class="btn sm" id="switchMe">切り替える</button></div>
+      </div>
       <div class="setting">
         <span class="setting-title">文字の大きさ</span>
         <div class="seg" role="group" aria-label="文字の大きさ">
@@ -1229,76 +1615,334 @@ textarea.ed-sum { color: var(--ink-soft); }
         </div>
       </div>
       <div class="setting">
-        <span class="setting-title">編集ロックの暗証番号</span>
-        <span class="muted" style="font-size:.84rem">${state.pin
-          ? '暗証番号が設定されています。外すときは、今の暗証番号を入力してください。'
-          : '4桁の数字を決めておくと、ロックを解除するときに入力が必要になります（誤操作防止用）。'}</span>
-        <label for="pinSet" class="sr-only">${state.pin ? '今の暗証番号' : '新しい暗証番号'}</label>
-        <input id="pinSet" class="pin-input" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="0000">
-        <p class="err" id="pinSetErr"></p>
-        <button class="btn sm ${state.pin ? 'danger' : ''}" id="pinSetBtn" style="align-self:flex-start">${svg(state.pin ? 'unlock' : 'lock')}${state.pin ? '暗証番号を外す' : '暗証番号を設定する'}</button>
+        <span class="setting-title">管理者ページ</span>
+        <span class="muted" style="font-size:.84rem">スタッフの進み具合の確認、スタッフの登録、暗証番号やデータの管理ができます。</span>
+        <a class="btn sm" href="#admin" data-close style="align-self:flex-start">${svg('shield')}管理者ページを開く</a>
       </div>
       <div class="setting">
-        <span class="setting-title">データの書き出し</span>
-        <span class="muted" style="font-size:.84rem">マニュアルはこの端末に保存されています。別の端末に移すときは、下の文字をコピーして、移したい端末の「読み込み」に貼り付けてください。</span>
-        <textarea id="exportBox" readonly></textarea>
+        <span class="setting-title">データの保存先</span>
+        <span class="muted" style="font-size:.84rem">${REMOTE
+          ? 'Googleスプレッドシートに保存され、スタッフ全員で共有されています。'
+          : '体験モードです。この端末の中だけで動いていて、サンプルのスタッフと進み具合が入っています。スタッフ全員で使うには、Googleスプレッドシート版を設置してください（手順は README にあります）。'}</span>
+      </div>`);
+    $('#switchMe').addEventListener('click', () => openPicker());
+    overlay.querySelectorAll('[data-size]').forEach(b => b.addEventListener('click', () => {
+      state.largeText = b.dataset.size === 'large';
+      document.documentElement.classList.toggle('large-text', state.largeText);
+      savePersonal();
+      overlay.querySelectorAll('[data-size]').forEach(x => x.setAttribute('aria-pressed', x === b));
+    }));
+  }
+  $('#openSettings').addEventListener('click', openSettings);
+
+  /* ================= 管理者ページ ================= */
+  const demoNote = () => REMOTE ? '' : `<div class="demo-note">${svg('info')}<span>体験モードのため、サンプルのスタッフと進み具合を表示しています。スプレッドシート版では、登録したスタッフの実際の記録が表示されます。</span></div>`;
+
+  function renderGate(next) {
+    const setup = !state.hasAdminPin;
+    view.innerHTML = `
+      <div class="gate">
+        <span class="gate-icon">${svg('shield')}</span>
+        <h1 style="font-size:1.3rem">管理者ページ</h1>
+        <p class="muted" style="margin:0">${setup
+          ? 'はじめに、管理者用の4桁の暗証番号を決めてください。次回からは、この暗証番号で開きます。'
+          : '管理者用の暗証番号を入力してください。'}</p>
+        <label for="gatePin" class="sr-only">暗証番号</label>
+        <input id="gatePin" class="pin-input" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="${setup ? '新しい暗証番号' : ''}">
+        ${setup ? `<label for="gatePin2" class="sr-only">確認のためもう一度</label>
+        <input id="gatePin2" class="pin-input" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="もう一度">` : ''}
+        <p class="err" id="gateErr"></p>
+        <button class="btn primary" id="gateOk">${svg('unlock')}${setup ? '設定して開く' : '開く'}</button>
+        <a class="back" href="#home" style="align-self:center">${svg('back')}ホームへ戻る</a>
+      </div>`;
+    const pin = $('#gatePin'), err = $('#gateErr');
+    pin.focus();
+    let busy = false;
+    const go = () => {
+      if (busy) return;
+      const v = pin.value;
+      if (!/^\d{4}$/.test(v)) { err.textContent = '4桁の数字を入力してください'; return; }
+      if (setup && v !== $('#gatePin2').value) { err.textContent = '2回の入力が一致しません'; return; }
+      busy = true;
+      const req = setup ? callApi('setPin', 'admin', '', v) : callApi('verifyPin', 'admin', v);
+      req.then(ok => {
+        busy = false;
+        if (!ok) { err.textContent = '暗証番号がちがいます'; pin.value = ''; pin.focus(); return; }
+        if (setup) { state.hasAdminPin = true; toast('管理者の暗証番号を設定しました'); }
+        session.admin = true;
+        session.adminPin = v;
+        next();
+      }, e => { busy = false; apiError(e); });
+    };
+    $('#gateOk').addEventListener('click', go);
+    view.querySelectorAll('.pin-input').forEach(i => i.addEventListener('keydown', e => { if (e.key === 'Enter') go(); }));
+  }
+
+  function adminHead(active) {
+    const tab = (h, label) => `<a href="${h}" ${active === h ? 'aria-current="page"' : ''}>${label}</a>`;
+    return `
+      <div class="admin-head">
+        <h1>${svg('shield')}管理者ページ</h1>
+        <div class="actions">
+          <button class="btn sm" id="adminReload">${svg('refresh')}最新にする</button>
+          <button class="btn sm" id="adminExit">${svg('lock')}管理者ページを閉じる</button>
+        </div>
+      </div>
+      ${demoNote()}
+      <nav class="seg-nav" aria-label="管理メニュー">${tab('#admin', 'スタッフ別')}${tab('#admin-manuals', 'マニュアル別')}${tab('#admin-team', '登録・設定')}</nav>`;
+  }
+  function bindAdminHead() {
+    $('#adminExit').addEventListener('click', () => {
+      session.admin = false;
+      session.adminPin = '';
+      toast('管理者ページを閉じました');
+      location.hash = '#home';
+    });
+    $('#adminReload').addEventListener('click', () => {
+      loadShared().then(() => { route(true); toast('最新の記録を読み込みました'); }, apiError);
+    });
+  }
+
+  function renderAdminStaff() {
+    const total = state.staff.length * state.manuals.length;
+    const sums = state.staff.map(s => ({ s, sum: staffSummary(s.id) }));
+    const done = sums.reduce((a, x) => a + x.sum.done, 0);
+    const review = sums.reduce((a, x) => a + x.sum.review, 0);
+    const weekAgo = new Date(Date.now() - 7 * 864e5).toISOString();
+    let week = 0;
+    Object.values(state.progress).forEach(p => Object.keys(p).forEach(mid => { if (getManual(mid) && p[mid].completedAt > weekAgo) week++; }));
+    sums.sort((a, b) => a.sum.rate - b.sum.rate || b.sum.review - a.sum.review);
+
+    view.innerHTML = `
+      ${adminHead('#admin')}
+      <div class="tiles">
+        <div class="tile"><span class="tile-label">スタッフ</span><span class="tile-value">${state.staff.length}<small>人</small></span></div>
+        <div class="tile good"><span class="tile-label">全体の完了率</span><span class="tile-value">${total ? Math.round(done / total * 100) : 0}<small>%</small></span></div>
+        <div class="tile ${review ? 'warn' : ''}"><span class="tile-label">要再確認</span><span class="tile-value">${review}<small>件</small></span></div>
+        <div class="tile"><span class="tile-label">この7日間の完了</span><span class="tile-value">${week}<small>件</small></span></div>
+      </div>
+      <section>
+        <div class="section-head"><h2>スタッフ別の進み具合</h2><span class="muted" style="font-size:.8rem">完了率の低い順</span></div>
+        <div style="margin-bottom:10px">${legendHTML()}</div>
+        ${sums.length ? `<div class="list">${sums.map(({ s, sum }) => `
+          <a class="item" href="#admin-s-${esc(s.id)}">
+            ${avatarHTML(s)}
+            <span class="item-body">
+              <span class="item-title">${esc(s.name)} <span class="muted" style="font-weight:400;font-size:.8rem">${esc(s.role || '')}</span></span>
+              ${stackHTML(sum, sum.total)}
+              <span class="row-stats"><span>完了 ${sum.done}/${sum.total}</span><span>途中 ${sum.doing}</span>${sum.review ? `<span style="color:var(--warn-ink);font-weight:700">要再確認 ${sum.review}</span>` : ''}<span>未着手 ${sum.none}</span></span>
+            </span>
+            <span class="item-side"><span class="rate">${sum.rate}%</span><span>${sum.last ? '最終 ' + fmtShort(sum.last) : '記録なし'}</span></span>
+          </a>`).join('')}</div>`
+          : `${emptyHTML('users', 'スタッフがまだ登録されていません')}<a class="btn" href="#admin-team" style="margin-top:10px">${svg('plus')}スタッフを登録する</a>`}
+      </section>`;
+    bindAdminHead();
+  }
+
+  function renderAdminManuals() {
+    const rows = state.manuals.map(m => ({ m, sum: manualSummary(m) }));
+    rows.sort((a, b) => (a.sum.done / (a.sum.total || 1)) - (b.sum.done / (b.sum.total || 1)));
+    view.innerHTML = `
+      ${adminHead('#admin-manuals')}
+      <section>
+        <div class="section-head"><h2>マニュアル別の完了状況</h2><span class="muted" style="font-size:.8rem">完了した人が少ない順</span></div>
+        <div style="margin-bottom:10px">${legendHTML()}</div>
+        <div class="list">${rows.map(({ m, sum }) => {
+          const c = catById(m.cat);
+          return `<a class="item" href="#admin-m-${esc(m.id)}" style="${catStyle(c.id)}">
+            <span class="item-icon">${svg(c.id)}</span>
+            <span class="item-body">
+              <span class="item-title">${esc(m.title)}</span>
+              ${stackHTML(sum, sum.total)}
+              <span class="row-stats"><span>${esc(c.name)}</span>${sum.review ? `<span style="color:var(--warn-ink);font-weight:700">要再確認 ${sum.review}人</span>` : ''}<span>途中 ${sum.doing}人</span><span>未着手 ${sum.none}人</span></span>
+            </span>
+            <span class="item-side"><span class="rate">${sum.done}<span class="muted" style="font-size:.8rem;font-weight:400">/${sum.total}人</span></span><span>完了</span></span>
+          </a>`;
+        }).join('')}</div>
+      </section>`;
+    bindAdminHead();
+  }
+
+  function renderAdminManual(id) {
+    const m = getManual(id);
+    if (!m) { view.innerHTML = emptyHTML('search', 'マニュアルが見つかりませんでした。<br><a href="#admin-manuals">一覧へ戻る</a>'); return; }
+    const c = catById(m.cat);
+    const order = { review: 0, doing: 1, none: 2, done: 3 };
+    const people = state.staff.map(s => ({ s, st: statusOf(s.id, m), r: recOf(s.id, m.id) })).sort((a, b) => order[a.st] - order[b.st]);
+    const sum = manualSummary(m);
+    view.innerHTML = `
+      <div><a class="back" href="#admin-manuals">${svg('back')}マニュアル別へ戻る</a></div>
+      <header class="detail-head" style="${catStyle(c.id)}">
+        <span class="tag">${svg(c.id)}${esc(c.name)}</span>
+        <h1>${esc(m.title)}</h1>
+        <div class="meta-row"><span>${svg('cal')}${fmtDate(m.updated)} 更新</span><span>${m.steps.length}ステップ</span>${m.reviewFrom ? `<span>${svg('alert')}${fmtShort(m.reviewFrom)}に再確認を依頼</span>` : ''}</div>
+      </header>
+      <div class="tiles">
+        <div class="tile good"><span class="tile-label">完了</span><span class="tile-value">${sum.done}<small>/ ${sum.total}人</small></span></div>
+        <div class="tile ${sum.review ? 'warn' : ''}"><span class="tile-label">要再確認</span><span class="tile-value">${sum.review}<small>人</small></span></div>
+        <div class="tile"><span class="tile-label">途中</span><span class="tile-value">${sum.doing}<small>人</small></span></div>
+        <div class="tile"><span class="tile-label">未着手</span><span class="tile-value">${sum.none}<small>人</small></span></div>
+      </div>
+      <div class="list">${people.map(({ s, st, r }) => `
+        <a class="item" href="#admin-s-${esc(s.id)}">
+          ${avatarHTML(s)}
+          <span class="item-body"><span class="item-title">${esc(s.name)}</span><span class="row-stats">${stPill(st)}<span>${
+            st === 'done' ? `${fmtShort(r.completedAt)} 完了${r.count > 1 ? `（${r.count}回）` : ''}`
+            : st === 'review' ? `${fmtShort(r.completedAt)} 完了（改訂前）`
+            : st === 'doing' ? `${doneOf(s.id, m)} / ${m.steps.length} ステップ・${fmtShort(r.updatedAt)}`
+            : 'まだ開いていません'}</span></span></span>
+          ${svg('chev', 'chev')}
+        </a>`).join('') || emptyHTML('users', 'スタッフがまだ登録されていません')}</div>
+      <a class="btn" href="#m-${esc(m.id)}" style="align-self:flex-start">マニュアルを開く</a>`;
+  }
+
+  function renderAdminTeam() {
+    view.innerHTML = `
+      ${adminHead('#admin-team')}
+      <section class="panel">
+        <h2>スタッフの登録</h2>
+        <span class="muted" style="font-size:.84rem">名前と役割は、入力欄から出ると自動で保存されます。</span>
+        <div id="teamList">${state.staff.map(s => `
+          <div class="team-row" data-id="${esc(s.id)}">
+            ${avatarHTML(s)}
+            <label class="sr-only" for="tn-${esc(s.id)}">名前</label>
+            <input id="tn-${esc(s.id)}" type="text" data-f="name" value="${esc(s.name)}" maxlength="20">
+            <label class="sr-only" for="tr-${esc(s.id)}">役割</label>
+            <input id="tr-${esc(s.id)}" class="role-in" type="text" data-f="role" value="${esc(s.role || '')}" placeholder="役割（例：受付）" maxlength="20">
+            <button class="icon-btn" data-del aria-label="${esc(s.name)}さんを削除">${svg('trash')}</button>
+          </div>`).join('') || '<p class="muted" style="margin:0">まだ登録されていません。下から追加してください。</p>'}</div>
+        <div class="inline-form">
+          <label class="sr-only" for="newName">名前</label>
+          <input id="newName" type="text" placeholder="名前（例：山田 はな）" maxlength="20">
+          <label class="sr-only" for="newRole">役割</label>
+          <input id="newRole" type="text" placeholder="役割（例：歯科衛生士）" maxlength="20">
+          <button class="btn sm primary" id="addStaff">${svg('plus')}追加する</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>編集ロックの暗証番号</h2>
+        <span class="muted" style="font-size:.84rem">${state.hasEditPin
+          ? '設定されています。スタッフがマニュアルの編集ロックを解除するとき、この暗証番号が必要です。変えるときは、いったん外してから設定し直してください。'
+          : '設定されていません。今は確認画面だけでロックを解除できます。4桁の数字を決めると、解除に暗証番号が必要になります。'}</span>
+        <div class="inline-form">
+          ${state.hasEditPin ? '' : '<label class="sr-only" for="editPinNew">新しい暗証番号</label><input id="editPinNew" class="pin-input" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="0000">'}
+          <button class="btn sm ${state.hasEditPin ? 'danger' : ''}" id="editPinBtn">${svg(state.hasEditPin ? 'unlock' : 'lock')}${state.hasEditPin ? '暗証番号を外す' : '設定する'}</button>
+        </div>
+        <p class="err" id="editPinErr"></p>
+      </section>
+
+      <section class="panel">
+        <h2>管理者の暗証番号</h2>
+        <div class="inline-form">
+          <label class="sr-only" for="adminPinNew">新しい暗証番号</label>
+          <input id="adminPinNew" class="pin-input" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="新しい">
+          <button class="btn sm" id="adminPinBtn">変更する</button>
+        </div>
+        <p class="err" id="adminPinErr"></p>
+      </section>
+
+      <section class="panel">
+        <h2>マニュアルのデータ</h2>
+        <span class="muted" style="font-size:.84rem">バックアップや別の場所への移動に使います。下の文字をコピーして保管し、戻すときは「読み込み」に貼り付けます。</span>
+        <label class="sr-only" for="exportBox">書き出したデータ</label>
+        <textarea id="exportBox" readonly style="font-family:ui-monospace,Menlo,monospace;font-size:.74rem;min-height:90px"></textarea>
         <button class="btn sm" id="copyExport" style="align-self:flex-start">${svg('copy')}コピーする</button>
-      </div>
-      <div class="setting">
-        <span class="setting-title">データの読み込み</span>
-        <label for="importBox" class="sr-only">読み込むデータ</label>
-        <textarea id="importBox" placeholder="書き出したデータをここに貼り付け"></textarea>
+        <label class="sr-only" for="importBox">読み込むデータ</label>
+        <textarea id="importBox" placeholder="書き出したデータをここに貼り付け" style="font-family:ui-monospace,Menlo,monospace;font-size:.74rem;min-height:70px"></textarea>
         <div class="actions">
           <button class="btn sm" id="doImport">読み込む</button>
           <label class="btn sm" for="importFile">ファイルから選ぶ</label>
           <input type="file" id="importFile" accept=".json,application/json" hidden>
+          <button class="btn sm danger" id="resetAll">${svg('reset')}サンプルに戻す</button>
         </div>
-      </div>
-      <div class="setting">
-        <span class="setting-title">初期状態に戻す</span>
-        <span class="muted" style="font-size:.84rem">追加・編集したマニュアルを消して、サンプルのマニュアルに戻します。</span>
-        <button class="btn sm danger" id="resetAll" style="align-self:flex-start">${svg('reset')}初期状態に戻す</button>
-      </div>`);
+      </section>`;
+    bindAdminHead();
 
-    $('#exportBox').value = JSON.stringify({ app: 'mirai-manual', version: 1, manuals: state.manuals }, null, 1);
-    overlay.querySelectorAll('[data-size]').forEach(b => b.addEventListener('click', () => {
-      state.largeText = b.dataset.size === 'large';
-      document.documentElement.classList.toggle('large-text', state.largeText);
-      store.save();
-      overlay.querySelectorAll('[data-size]').forEach(x => x.setAttribute('aria-pressed', x === b));
+    // スタッフ
+    const saveStaff = msg => send('saveStaff', clone(state.staff), session.adminPin).then(ok => { if (ok) toast(msg); });
+    view.querySelectorAll('.team-row input').forEach(inp => inp.addEventListener('change', () => {
+      const s = getStaff(inp.closest('.team-row').dataset.id);
+      const v = inp.value.trim();
+      if (inp.dataset.f === 'name' && !v) { inp.value = s.name; return toast('名前を入力してください'); }
+      s[inp.dataset.f] = v;
+      saveStaff('保存しました');
     }));
-    $('#pinSetBtn').addEventListener('click', () => {
-      const v = $('#pinSet').value;
-      if (state.pin) {
-        if (v !== state.pin) { $('#pinSetErr').textContent = '暗証番号がちがいます'; return; }
-        state.pin = '';
-        toast('暗証番号を外しました');
-      } else {
-        if (!/^\d{4}$/.test(v)) { $('#pinSetErr').textContent = '4桁の数字を入力してください'; return; }
-        state.pin = v;
-        toast('暗証番号を設定しました');
-      }
-      store.save();
-      openSettings();
+    view.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => {
+      const s = getStaff(b.closest('.team-row').dataset.id);
+      openSheet(`
+        <div class="sheet-head"><h2>${esc(s.name)}さんを削除しますか？</h2></div>
+        <p style="margin:0">登録と、これまでの進み具合の記録が消えます。この操作は取り消せません。</p>
+        <div class="actions" style="justify-content:flex-end">
+          <button class="btn" data-close>やめる</button>
+          <button class="btn danger" id="delStaffOk">${svg('trash')}削除する</button>
+        </div>`);
+      $('#delStaffOk').addEventListener('click', () => {
+        state.staff = state.staff.filter(x => x.id !== s.id);
+        delete state.progress[s.id];
+        if (state.me === s.id) { state.me = ''; savePersonal(); }
+        closeSheet();
+        saveStaff('削除しました');
+        renderAdminTeam();
+        syncChrome();
+      });
+    }));
+    $('#addStaff').addEventListener('click', () => {
+      const name = $('#newName').value.trim();
+      if (!name) { toast('名前を入力してください'); $('#newName').focus(); return; }
+      state.staff.push({ id: 's' + Date.now().toString(36), name, role: $('#newRole').value.trim() });
+      saveStaff(`${name}さんを追加しました`);
+      renderAdminTeam();
+      $('#newName').focus();
     });
+
+    // 暗証番号
+    const pinErr = (id, msg) => { $(id).textContent = msg; };
+    const setEditPin = v => callApi('setPin', 'edit', session.adminPin, v).then(() => {
+      state.hasEditPin = !!v;
+      session.editPin = v;
+      toast(v ? '編集ロックの暗証番号を設定しました' : '編集ロックの暗証番号を外しました');
+      renderAdminTeam();
+    }, apiError);
+    $('#editPinBtn').addEventListener('click', () => {
+      if (state.hasEditPin) return setEditPin('');
+      const v = $('#editPinNew').value;
+      if (!/^\d{4}$/.test(v)) return pinErr('#editPinErr', '4桁の数字を入力してください');
+      setEditPin(v);
+    });
+    $('#adminPinBtn').addEventListener('click', () => {
+      const v = $('#adminPinNew').value;
+      if (!/^\d{4}$/.test(v)) return pinErr('#adminPinErr', '4桁の数字を入力してください');
+      callApi('setPin', 'admin', session.adminPin, v).then(() => {
+        session.adminPin = v;
+        $('#adminPinNew').value = '';
+        pinErr('#adminPinErr', '');
+        toast('管理者の暗証番号を変更しました');
+      }, apiError);
+    });
+
+    // データ
+    $('#exportBox').value = JSON.stringify({ app: 'mirai-manual', version: 2, manuals: state.manuals }, null, 1);
     $('#copyExport').addEventListener('click', () => {
       const box = $('#exportBox');
       const fallback = () => { box.focus(); box.select(); toast('選択しました。コピーしてください'); };
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(box.value).then(() => toast('コピーしました'), fallback);
-      } else fallback();
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(box.value).then(() => toast('コピーしました'), fallback);
+      else fallback();
     });
+    const replaceAll = (list, msg) => {
+      state.manuals = list;
+      const ids = new Set(list.map(m => m.id));
+      Object.values(state.progress).forEach(p => Object.keys(p).forEach(mid => { if (!ids.has(mid)) delete p[mid]; }));
+      editing = null;
+      send('replaceManuals', clone(list), session.adminPin).then(ok => { if (ok) toast(msg); });
+      renderAdminTeam();
+    };
     const importText = text => {
       try {
         const data = JSON.parse(text);
         const list = Array.isArray(data) ? data : data.manuals;
         if (!Array.isArray(list) || !list.every(m => m && m.id && m.title && Array.isArray(m.steps))) throw new Error('bad');
-        state.manuals = list;
-        editing = null;
-        store.save();
-        closeSheet();
-        toast(`${list.length}件のマニュアルを読み込みました`);
-        route();
+        replaceAll(list, `${list.length}件のマニュアルを読み込みました`);
       } catch (err) {
         toast('読み込めませんでした。書き出したデータをそのまま貼り付けてください');
       }
@@ -1313,23 +1957,11 @@ textarea.ed-sum { color: var(--ink-soft); }
     });
     $('#resetAll').addEventListener('click', () => {
       const b = $('#resetAll');
-      if (b.dataset.armed) {
-        state.manuals = JSON.parse(JSON.stringify(DEFAULT_MANUALS));
-        state.checks = {};
-        editing = null;
-        state.favs = state.favs.filter(getManual);
-        state.recent = state.recent.filter(getManual);
-        store.save();
-        closeSheet();
-        toast('初期状態に戻しました');
-        route();
-      } else {
-        b.dataset.armed = '1';
-        b.innerHTML = `${svg('alert')}もう一度押すと戻します`;
-      }
+      if (b.dataset.armed) return replaceAll(clone(DEFAULT_MANUALS), 'サンプルのマニュアルに戻しました');
+      b.dataset.armed = '1';
+      b.innerHTML = `${svg('alert')}もう一度押すと、全マニュアルを置き換えます`;
     });
   }
-  $('#openSettings').addEventListener('click', openSettings);
 
   /* ================= ルーティング ================= */
   const q = $('#q');
@@ -1353,14 +1985,17 @@ textarea.ed-sum { color: var(--ink-soft); }
     });
   }
 
-  // 編集中は検索を止め、タブの表示をそろえる
+  // 編集中は検索を止め、ヘッダーの表示をそろえる
   function syncChrome() {
     q.disabled = !!editing;
     q.placeholder = editing ? '編集中は検索できません' : 'マニュアルを検索';
+    const me = getStaff(state.me);
+    $('#whoBtn').innerHTML = `${avatarHTML(me)}<span class="who-name">${me ? esc(me.name) : '名前を選ぶ'}</span>`;
     setTab();
   }
 
-  function route() {
+  function route(keepScroll) {
+    if (!state.ready) return;
     if (editing && location.hash !== editHash()) {
       if (isDirty()) {
         const target = location.hash || '#home';
@@ -1372,18 +2007,43 @@ textarea.ed-sum { color: var(--ink-soft); }
     }
     const h = location.hash.slice(1) || 'home';
     if (q.value && !h.startsWith('m-')) q.value = '';
+    const admin = fn => session.admin ? fn() : renderGate(() => route());
     if (h.startsWith('m-')) { q.value = ''; renderDetail(h.slice(2)); }
     else if (h.startsWith('cat-')) renderList(h.slice(4));
-    else if (h === 'all') { listFilter = 'all'; renderList(null); }
+    else if (h === 'all') renderList(null);
     else if (h === 'fav') renderFav();
+    else if (h === 'mine') renderPerson(state.me, false);
     else if (h === 'new') { if (!editing) newManual(); renderEditor(); }
     else if (h.startsWith('edit-')) { history.replaceState(null, '', '#m-' + h.slice(5)); renderDetail(h.slice(5)); }
+    else if (h === 'admin') admin(renderAdminStaff);
+    else if (h === 'admin-manuals') admin(renderAdminManuals);
+    else if (h === 'admin-team') admin(renderAdminTeam);
+    else if (h.startsWith('admin-s-')) admin(() => renderPerson(h.slice(8), true));
+    else if (h.startsWith('admin-m-')) admin(() => renderAdminManual(h.slice(8)));
     else renderHome();
     syncChrome();
-    window.scrollTo(0, 0);
+    if (!keepScroll) window.scrollTo(0, 0);
   }
-  window.addEventListener('hashchange', route);
-  route();
+  window.addEventListener('hashchange', () => route());
+
+  // ほかのスタッフの記録を取り込む（スプレッドシート版で、画面に戻ってきたとき）
+  document.addEventListener('visibilitychange', () => {
+    if (!REMOTE || document.hidden || editing || !overlay.hidden || !state.ready) return;
+    loadShared().then(() => route(true), () => { /* 次の機会に再取得 */ });
+  });
+
+  function boot() {
+    view.innerHTML = '<div class="loading">読み込んでいます…</div>';
+    if (!REMOTE) LocalServer.init();
+    loadShared().then(() => {
+      route();
+      if (!state.me && state.staff.length && !location.hash.startsWith('#admin')) openPicker();
+    }, () => {
+      view.innerHTML = `${emptyHTML('alert', 'データを読み込めませんでした。<br>通信状態を確かめてから、もう一度お試しください')}<button class="btn" id="retry" style="align-self:center">${svg('refresh')}もう一度読み込む</button>`;
+      $('#retry').addEventListener('click', boot);
+    });
+  }
+  boot();
 })();
 </script>
 </body>
