@@ -439,6 +439,23 @@ textarea.ed-sum { color: var(--ink-soft); }
 .gate .gate-icon svg { width: 30px; height: 30px; }
 .loading { text-align: center; padding: 60px 0; color: var(--ink-soft); }
 
+body.signed-out .tabbar, body.signed-out .search, body.signed-out #whoBtn, body.signed-out #openSettings { display: none; }
+body.signed-out .brand-text { display: block; }
+body.signed-out .topbar-inner { justify-content: center; }
+.admin-login { text-align: left; border-top: 1px solid var(--line); padding-top: 12px; margin-top: 6px; }
+.admin-login summary { cursor: pointer; color: var(--accent-ink); font-size: .9rem; text-align: center; }
+.devices { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: .86rem; }
+.devices li { display: flex; align-items: center; gap: 8px; }
+.devices li .muted { margin-left: auto; font-size: .78rem; }
+.checklist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; font-size: .9rem; }
+.checklist li { display: flex; gap: 8px; align-items: flex-start; }
+.checklist li svg { color: var(--warn-ink); margin-top: 3px; }
+.checklist li.ok svg { color: var(--ok-ink); }
+.howto { margin: 0; padding-left: 1.3em; display: flex; flex-direction: column; gap: 6px; font-size: .88rem; }
+.panel h2 { display: flex; align-items: center; gap: 6px; }
+.panel h2 svg { color: var(--accent-ink); }
+.team-row { grid-template-columns: auto 1fr auto; }
+@media (max-width: 520px) { .team-row { grid-template-columns: auto 1fr auto; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
 </style>
 </head>
@@ -455,7 +472,7 @@ textarea.ed-sum { color: var(--ink-soft); }
       <label for="q" class="sr-only">マニュアルを検索</label>
       <input id="q" type="search" placeholder="マニュアルを検索" autocomplete="off">
     </div>
-    <button class="who" id="whoBtn" aria-label="使っている人を切り替える"><span class="avatar empty">?</span><span class="who-name">名前を選ぶ</span></button>
+    <button class="who" id="whoBtn" aria-label="ログイン中の人"><span class="avatar empty">?</span><span class="who-name"></span></button>
     <button class="icon-btn" id="openSettings" aria-label="設定">
       <svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
     </button>
@@ -737,21 +754,23 @@ textarea.ed-sum { color: var(--ink-soft); }
 
   // 体験モード用のサンプル（スプレッドシート版では使いません）
   const SAMPLE_STAFF = [
-    { id: 's1', name: '佐藤 さくら', role: '歯科衛生士' },
-    { id: 's2', name: '鈴木 ゆい', role: '歯科助手' },
-    { id: 's3', name: '高橋 みなみ', role: '受付' },
-    { id: 's4', name: '田中 あおい', role: '歯科衛生士' },
-    { id: 's5', name: '伊藤 ひなた', role: '受付（新人）' }
+    { id: 's1', name: '佐藤 さくら', role: '歯科衛生士', code: '111111' },
+    { id: 's2', name: '鈴木 ゆい', role: '歯科助手', code: '222222' },
+    { id: 's3', name: '高橋 みなみ', role: '受付', code: '333333' },
+    { id: 's4', name: '田中 あおい', role: '歯科衛生士', code: '444444' },
+    { id: 's5', name: '伊藤 ひなた', role: '受付（新人）', code: '555555' },
+    { id: 's6', name: '渡辺 まい', role: '歯科助手', code: '', active: false, retiredAt: '2026-08-31T09:00:00.000Z' }
   ];
   function sampleProgress(manuals, staff) {
-    const level = [0.92, 0.72, 0.55, 0.38, 0.16];
+    const level = [0.92, 0.72, 0.55, 0.38, 0.16, 0.6];
     const progress = {};
     staff.forEach((s, si) => {
       progress[s.id] = {};
       manuals.forEach((m, mi) => {
         const r = (((si + 1) * 9301 + (mi + 1) * 49297) % 233280) / 233280;
         const day = String(5 + (si * 3 + mi * 5) % 25).padStart(2, '0');
-        const at = `2026-09-${day}T10:${String(10 + mi).padStart(2, '0')}:00.000Z`;
+        const month = s.active === false ? '08' : '09';
+        const at = `2026-${month}-${day}T10:${String(10 + mi).padStart(2, '0')}:00.000Z`;
         if (r < level[si]) progress[s.id][m.id] = { done: [], completedAt: at, updatedAt: at, count: 1 };
         else if (r < level[si] + 0.22) progress[s.id][m.id] = { done: m.steps.map((_, i) => i).slice(0, Math.max(1, Math.floor(m.steps.length / 2))), completedAt: '', updatedAt: at, count: 0 };
       });
@@ -760,58 +779,178 @@ textarea.ed-sum { color: var(--ink-soft); }
   }
 
   // 体験モードでは、サーバー（Code.gs）と同じ動きをこの端末の中で再現する
-  const DEMO_KEY = 'mirai-manual-demo-v2';
+  const DEMO_KEY = 'mirai-manual-demo-v3';
   const LocalServer = (() => {
     let db = null;
+    let fails = [];
+    const STAFF_IDLE = 120 * 864e5, ADMIN_TTL = 12 * 3600e3;
     const persist = () => { try { localStorage.setItem(DEMO_KEY, JSON.stringify(db)); } catch (e) { /* 保存できない環境 */ } };
+    const rnd = () => Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+    const iso = () => new Date().toISOString();
+    const newCode = () => { let c; do { c = String(Math.floor(100000 + Math.random() * 900000)); } while (db.staff.some(s => s.code === c)); return c; };
+    const pub = s => ({ id: s.id, name: s.name, role: s.role || '' });
+    const dropSessions = test => { db.sessions = db.sessions.filter(x => !test(x)); };
+    const openSession = (staffId, device) => { const token = rnd(); db.sessions.push({ token, staffId, device: String(device || ''), createdAt: iso(), lastSeen: iso() }); persist(); return { token }; };
+    const throttle = () => { const now = Date.now(); fails = fails.filter(t => now - t < 600e3); if (fails.length >= 20) throw new Error('LIMIT'); };
     const check = (kind, pin) => { if (db.pins[kind] && db.pins[kind] !== pin) throw new Error('PIN'); };
-    const setRec = (sid, mid, rec) => {
-      if (!rec) { if (db.progress[sid]) delete db.progress[sid][mid]; return; }
-      (db.progress[sid] = db.progress[sid] || {})[mid] = rec;
-    };
+    function resolve(token) {
+      const s = db.sessions.find(x => x.token === token);
+      if (!s) throw new Error('AUTH');
+      const now = Date.now();
+      if (s.staffId === '__admin') {
+        if (now - Date.parse(s.createdAt) > ADMIN_TTL) { dropSessions(x => x === s); persist(); throw new Error('AUTH'); }
+        return { admin: true };
+      }
+      const st = db.staff.find(x => x.id === s.staffId && x.active !== false);
+      if (!st || now - Date.parse(s.lastSeen) > STAFF_IDLE) { dropSessions(x => x === s); persist(); throw new Error('AUTH'); }
+      s.lastSeen = iso();
+      return { admin: false, staff: st };
+    }
+    function requireAdmin(token) {
+      let r;
+      try { r = resolve(token); } catch (e) { throw new Error('ADMINAUTH'); }
+      if (!r.admin) throw new Error('ADMINAUTH');
+    }
+    const staffById = id => { const s = db.staff.find(x => x.id === id); if (!s) throw new Error('STAFF'); return s; };
+    function remap(mid, map) {
+      if (!map) return;
+      Object.values(db.progress).forEach(p => {
+        const r = p[mid];
+        if (!r || !(r.done || []).length) return;
+        const old = new Set(r.done);
+        r.done = map.map((o, i) => (o >= 0 && old.has(o)) ? i : -1).filter(i => i >= 0);
+      });
+    }
     const api = {
-      getAll() {
-        return { manuals: db.manuals, staff: db.staff, progress: db.progress, hasEditPin: !!db.pins.edit, hasAdminPin: !!db.pins.admin, initialized: true, demo: true };
-      },
+      status() { return { hasAdminPin: !!db.pins.admin, initialized: true, demo: true }; },
       initialize() { return true; },
-      verifyPin(kind, pin) { return !db.pins[kind] || db.pins[kind] === pin; },
-      setPin(kind, adminPin, next) {
-        check('admin', adminPin);
-        if (next && !/^\d{4}$/.test(next)) throw new Error('FORMAT');
-        db.pins[kind] = next || '';
-        persist();
-        return true;
+      login(code, device) {
+        throttle();
+        const st = db.staff.find(s => s.active !== false && s.code && s.code === String(code));
+        if (!st) { fails.push(Date.now()); throw new Error('LOGIN'); }
+        return openSession(st.id, device);
       },
-      saveManual(m, updates, editPin) {
-        check('edit', editPin);
+      adminLogin(pin, device) {
+        throttle();
+        if (!db.pins.admin) throw new Error('NOADMIN');
+        if (db.pins.admin !== String(pin)) { fails.push(Date.now()); throw new Error('PIN'); }
+        return openSession('__admin', device);
+      },
+      adminSetup(pin, device) {
+        if (db.pins.admin) throw new Error('PIN');
+        if (!/^\d{4}$/.test(String(pin))) throw new Error('FORMAT');
+        db.pins.admin = String(pin);
+        return openSession('__admin', device);
+      },
+      logout(token) { dropSessions(x => x.token === token); persist(); return true; },
+      ping(token) { resolve(token); persist(); return true; },
+      getAll(token) {
+        const r = resolve(token);
+        persist();
+        return {
+          role: r.admin ? 'admin' : 'staff', me: r.admin ? null : pub(r.staff), manuals: db.manuals,
+          progress: r.admin ? db.progress : { [r.staff.id]: db.progress[r.staff.id] || {} },
+          hasEditPin: !!db.pins.edit, hasAdminPin: !!db.pins.admin, initialized: true, demo: true
+        };
+      },
+      verifyPin(token, kind, pin) { resolve(token); return !db.pins[kind] || db.pins[kind] === pin; },
+      saveManual(token, m, map, editPin) {
+        if (!resolve(token).admin) check('edit', editPin);
         const i = db.manuals.findIndex(x => x.id === m.id);
         if (i >= 0) db.manuals[i] = m; else db.manuals.unshift(m);
-        Object.keys(updates || {}).forEach(sid => setRec(sid, m.id, updates[sid]));
+        remap(m.id, map);
         persist();
         return true;
       },
-      deleteManual(id, editPin) {
-        check('edit', editPin);
+      deleteManual(token, id, editPin) {
+        if (!resolve(token).admin) check('edit', editPin);
         db.manuals = db.manuals.filter(x => x.id !== id);
-        Object.keys(db.progress).forEach(sid => setRec(sid, id, null));
+        Object.values(db.progress).forEach(p => { delete p[id]; });
         persist();
         return true;
       },
-      saveProgress(sid, mid, rec) {
-        if (!db.staff.some(s => s.id === sid)) throw new Error('STAFF');
-        setRec(sid, mid, rec);
+      saveProgress(token, mid, rec) {
+        const r = resolve(token);
+        if (r.admin) throw new Error('STAFF');
+        (db.progress[r.staff.id] = db.progress[r.staff.id] || {})[mid] = rec;
         persist();
         return true;
       },
-      saveStaff(list, adminPin) {
-        check('admin', adminPin);
-        db.staff = list;
-        Object.keys(db.progress).forEach(sid => { if (!list.some(s => s.id === sid)) delete db.progress[sid]; });
+      adminData(token) {
+        requireAdmin(token);
+        return {
+          staff: db.staff.map(s => ({
+            ...pub(s), active: s.active !== false, retiredAt: s.retiredAt || '',
+            sessions: db.sessions.filter(x => x.staffId === s.id).map(x => ({ device: x.device, lastSeen: x.lastSeen }))
+          })),
+          progress: db.progress
+        };
+      },
+      addStaff(token, name, role) {
+        requireAdmin(token);
+        if (!String(name || '').trim()) throw new Error('FORMAT');
+        const s = { id: 's' + rnd().slice(0, 8), name: String(name).trim(), role: String(role || '').trim(), active: true, retiredAt: '', code: newCode() };
+        db.staff.push(s);
+        persist();
+        return { id: s.id, code: s.code };
+      },
+      updateStaff(token, id, name, role) {
+        requireAdmin(token);
+        if (!String(name || '').trim()) throw new Error('FORMAT');
+        const s = staffById(id);
+        s.name = String(name).trim();
+        s.role = String(role || '').trim();
         persist();
         return true;
       },
-      replaceManuals(list, adminPin) {
-        check('admin', adminPin);
+      retireStaff(token, id) {
+        requireAdmin(token);
+        const s = staffById(id);
+        const closed = db.sessions.filter(x => x.staffId === id).length;
+        s.active = false; s.retiredAt = iso(); s.code = '';
+        dropSessions(x => x.staffId === id);
+        persist();
+        return { closed };
+      },
+      reinstateStaff(token, id) {
+        requireAdmin(token);
+        const s = staffById(id);
+        s.active = true; s.retiredAt = ''; s.code = newCode();
+        persist();
+        return { code: s.code };
+      },
+      reissueCode(token, id) {
+        requireAdmin(token);
+        const s = staffById(id);
+        if (s.active === false) throw new Error('STAFF');
+        s.code = newCode();
+        dropSessions(x => x.staffId === id);
+        persist();
+        return { code: s.code };
+      },
+      logoutStaff(token, id) { requireAdmin(token); dropSessions(x => x.staffId === id); persist(); return true; },
+      deleteStaff(token, id) {
+        requireAdmin(token);
+        db.staff = db.staff.filter(x => x.id !== id);
+        delete db.progress[id];
+        dropSessions(x => x.staffId === id);
+        persist();
+        return true;
+      },
+      revokeAll(token) { requireAdmin(token); dropSessions(x => x.staffId !== '__admin'); persist(); return true; },
+      setPin(token, kind, next) {
+        requireAdmin(token);
+        if (next && !/^\d{4}$/.test(String(next))) throw new Error('FORMAT');
+        if (kind === 'admin') {
+          if (!next) throw new Error('FORMAT');
+          dropSessions(x => x.staffId === '__admin' && x.token !== token);
+        }
+        db.pins[kind] = next ? String(next) : '';
+        persist();
+        return true;
+      },
+      replaceManuals(token, list) {
+        requireAdmin(token);
         db.manuals = list;
         const ids = new Set(list.map(m => m.id));
         Object.values(db.progress).forEach(p => Object.keys(p).forEach(mid => { if (!ids.has(mid)) delete p[mid]; }));
@@ -822,12 +961,13 @@ textarea.ed-sum { color: var(--ink-soft); }
     return {
       init() {
         try { db = JSON.parse(localStorage.getItem(DEMO_KEY)); } catch (e) { db = null; }
-        if (db && Array.isArray(db.manuals)) return;
+        if (db && Array.isArray(db.manuals) && Array.isArray(db.sessions)) return;
         let old = null;
-        try { old = JSON.parse(localStorage.getItem('mirai-manual-v1')); } catch (e) { old = null; }
+        try { old = JSON.parse(localStorage.getItem('mirai-manual-demo-v2')) || JSON.parse(localStorage.getItem('mirai-manual-v1')); } catch (e) { old = null; }
         const manuals = old && Array.isArray(old.manuals) ? old.manuals
           : clone(DEFAULT_MANUALS).map(m => m.id === 'm10' ? { ...m, reviewFrom: '2026-10-01T00:00:00.000Z' } : m);
-        db = { manuals, staff: clone(SAMPLE_STAFF), progress: sampleProgress(manuals, SAMPLE_STAFF), pins: { edit: (old && old.pin) || '', admin: '' } };
+        const staff = clone(SAMPLE_STAFF).map(s => ({ active: true, retiredAt: '', ...s }));
+        db = { manuals, staff, progress: sampleProgress(manuals, SAMPLE_STAFF), sessions: [], pins: { edit: '', admin: '' } };
         persist();
       },
       call(name, args) { return api[name](...args); }
@@ -842,16 +982,26 @@ textarea.ed-sum { color: var(--ink-soft); }
       try { const r = LocalServer.call(name, clone(args)); resolve(r === undefined ? null : clone(r)); } catch (e) { reject(e); }
     });
   }
+  const errText = e => String((e && e.message) || e);
   function apiError(e) {
-    const msg = String((e && e.message) || e);
-    if (msg.includes('PIN')) toast('暗証番号が確認できませんでした。もう一度ロックを解除してください');
-    else if (msg.includes('STAFF')) toast('スタッフが見つかりません。名前を選び直してください');
+    const msg = errText(e);
+    if (msg.includes('ADMINAUTH')) {
+      session.adminToken = '';
+      saveAdminToken();
+      toast('管理者の確認が切れました。もう一度暗証番号を入力してください');
+      if (location.hash.startsWith('#admin')) route(); else location.hash = '#admin';
+    }
+    else if (msg.includes('AUTH')) lockOut('ログインの有効期限が切れたか、管理者によって利用が停止されました。');
+    else if (msg.includes('PIN')) toast('暗証番号が確認できませんでした。もう一度ロックを解除してください');
+    else if (msg.includes('LIMIT')) toast('失敗が続いたため、しばらくログインできません。10分ほど待ってからお試しください');
+    else if (msg.includes('STAFF')) toast('スタッフが見つかりません。画面を最新にしてください');
     else toast('保存できませんでした。通信状態を確かめて、もう一度お試しください');
   }
   const send = (name, ...args) => callApi(name, ...args).catch(apiError);
 
-  /* ================= 端末ごとの設定 ================= */
+  /* ================= 端末ごとの設定・ログイン ================= */
   const ME_KEY = 'mirai-manual-me-v2';
+  const ADMIN_KEY = 'mirai-manual-admin';
   const personal = (() => {
     let p = {};
     try { p = JSON.parse(localStorage.getItem(ME_KEY)) || {}; } catch (e) { p = {}; }
@@ -864,40 +1014,159 @@ textarea.ed-sum { color: var(--ink-soft); }
     return p;
   })();
   const state = {
-    ready: false,
+    ready: false, role: '', me: '', meInfo: null, adminLoaded: false,
     manuals: [], staff: [], progress: {}, hasEditPin: false, hasAdminPin: false,
     favs: Array.isArray(personal.favs) ? personal.favs : ['m10', 'm8'],
     recent: Array.isArray(personal.recent) ? personal.recent : ['m1', 'm2'],
     largeText: !!personal.largeText,
-    me: typeof personal.me === 'string' ? personal.me : ''
+    token: typeof personal.token === 'string' ? personal.token : ''
   };
   const savePersonal = () => {
-    try { localStorage.setItem(ME_KEY, JSON.stringify({ migrated: true, favs: state.favs, recent: state.recent, largeText: state.largeText, me: state.me })); } catch (e) { /* 保存できない環境 */ }
+    try { localStorage.setItem(ME_KEY, JSON.stringify({ migrated: true, favs: state.favs, recent: state.recent, largeText: state.largeText, token: state.token })); } catch (e) { /* 保存できない環境 */ }
   };
-  // 解除したロックは、このページを開いている間だけ覚えておく
-  const session = { editPin: '', adminPin: '', admin: false };
+  // 管理者の確認と編集ロックの解除は、このページ（タブ）を開いている間だけ覚えておく
+  const session = { editPin: '', adminToken: '' };
+  try { session.adminToken = sessionStorage.getItem(ADMIN_KEY) || ''; } catch (e) { /* 使えない環境 */ }
+  const saveAdminToken = () => {
+    try { if (session.adminToken) sessionStorage.setItem(ADMIN_KEY, session.adminToken); else sessionStorage.removeItem(ADMIN_KEY); } catch (e) { /* 使えない環境 */ }
+  };
+  const tok = () => state.token || session.adminToken;
   document.documentElement.classList.toggle('large-text', state.largeText);
 
+  function deviceLabel() {
+    const u = navigator.userAgent;
+    const os = /iPad/.test(u) ? 'iPad' : /iPhone/.test(u) ? 'iPhone' : /Android/.test(u) ? 'Android' : /Mac/.test(u) ? 'Mac' : /Windows/.test(u) ? 'Windows' : 'その他の端末';
+    const br = /Edg\//.test(u) ? 'Edge' : /Chrome\//.test(u) ? 'Chrome' : /Firefox\//.test(u) ? 'Firefox' : /Safari\//.test(u) ? 'Safari' : '';
+    return br ? `${os}・${br}` : os;
+  }
+
   async function loadShared() {
-    const d = await callApi('getAll');
+    const d = await callApi('getAll', tok());
+    state.role = d.role;
+    state.meInfo = d.me || null;
+    state.me = d.me ? d.me.id : '';
+    state.staff = d.me ? [d.me] : [];
     state.manuals = d.manuals || [];
-    state.staff = d.staff || [];
     state.progress = d.progress || {};
     state.hasEditPin = !!d.hasEditPin;
     state.hasAdminPin = !!d.hasAdminPin;
+    state.adminLoaded = false;
     if (REMOTE && !d.initialized) {
       await callApi('initialize', clone(DEFAULT_MANUALS));
       state.manuals = clone(DEFAULT_MANUALS);
     }
-    if (state.me && !state.staff.some(s => s.id === state.me)) { state.me = ''; savePersonal(); }
     state.ready = true;
+  }
+  async function loadAdmin() {
+    const d = await callApi('adminData', session.adminToken);
+    state.staff = d.staff || [];
+    state.progress = d.progress || {};
+    state.adminLoaded = true;
+  }
+
+  // 利用停止・期限切れ・ログアウト：画面の中身を消してログイン画面へ
+  function lockOut(msg) {
+    state.token = '';
+    savePersonal();
+    session.adminToken = '';
+    session.editPin = '';
+    saveAdminToken();
+    editing = null;
+    Object.assign(state, { ready: false, role: '', me: '', meInfo: null, adminLoaded: false, manuals: [], staff: [], progress: {} });
+    closeSheet();
+    renderLogin(msg);
+  }
+  function logoutNow() {
+    [state.token, session.adminToken].filter(Boolean).forEach(t => callApi('logout', t).catch(() => { /* 期限切れでも続行 */ }));
+    lockOut('');
+    toast('ログアウトしました');
+  }
+  const setSignedOut = on => document.body.classList.toggle('signed-out', on);
+
+  function renderLogin(msg) {
+    setSignedOut(true);
+    view.innerHTML = `
+      <div class="gate">
+        <span class="gate-icon">${svg('lock')}</span>
+        <h1 style="font-size:1.3rem">みらい歯科 院内マニュアル</h1>
+        ${msg ? `<div class="review-banner" style="text-align:left">${svg('alert')}<span>${esc(msg)}</span></div>` : ''}
+        <p class="muted" style="margin:0">管理者から受け取った、6桁のログインコードを入力してください。</p>
+        <label for="loginCode" class="sr-only">ログインコード</label>
+        <input id="loginCode" class="pin-input" type="password" inputmode="numeric" maxlength="6" autocomplete="off">
+        <p class="err" id="loginErr"></p>
+        <button class="btn primary" id="loginOk">${svg('unlock')}ログイン</button>
+        ${REMOTE ? '' : `<div class="demo-note" style="text-align:left">${svg('info')}<span>体験モード用のコード：${SAMPLE_STAFF.filter(s => s.code).map(s => `${esc(s.name)} <b>${s.code}</b>`).join('、')}</span></div>`}
+        <details class="admin-login">
+          <summary>管理者の方はこちら</summary>
+          <div id="adminLoginBox" style="display:flex;flex-direction:column;gap:10px;margin-top:10px"><span class="muted">確認しています…</span></div>
+        </details>
+      </div>`;
+    const code = $('#loginCode'), err = $('#loginErr');
+    code.focus();
+    let busy = false;
+    const go = () => {
+      if (busy) return;
+      if (!/^\d{6}$/.test(code.value)) { err.textContent = '6桁の数字を入力してください'; return; }
+      busy = true;
+      callApi('login', code.value, deviceLabel()).then(r => {
+        state.token = r.token;
+        savePersonal();
+        toast('ログインしました');
+        boot();
+      }, e => {
+        busy = false;
+        const m = errText(e);
+        err.textContent = m.includes('LIMIT') ? '失敗が続いたため、しばらくログインできません。10分ほど待ってからお試しください' : 'ログインコードがちがうか、利用が停止されています';
+        code.value = '';
+        code.focus();
+      });
+    };
+    $('#loginOk').addEventListener('click', go);
+    code.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
+
+    $('.admin-login').addEventListener('toggle', function onToggle() {
+      if (!this.open || this.dataset.loaded) return;
+      this.dataset.loaded = '1';
+      callApi('status').then(st => {
+        const setup = !st.hasAdminPin;
+        $('#adminLoginBox').innerHTML = `
+          <span class="muted" style="font-size:.84rem">${setup ? 'はじめに、管理者用の4桁の暗証番号を決めてください。' : '管理者用の4桁の暗証番号を入力してください。'}</span>
+          <label for="aPin" class="sr-only">暗証番号</label>
+          <input id="aPin" class="pin-input" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="${setup ? '新しい暗証番号' : ''}">
+          ${setup ? '<label for="aPin2" class="sr-only">もう一度</label><input id="aPin2" class="pin-input" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="もう一度">' : ''}
+          <p class="err" id="aErr"></p>
+          <button class="btn" id="aOk">${svg('shield')}${setup ? '設定して管理者ページを開く' : '管理者ページを開く'}</button>`;
+        const pin = $('#aPin'), aErr = $('#aErr');
+        let aBusy = false;
+        const goAdmin = () => {
+          if (aBusy) return;
+          if (!/^\d{4}$/.test(pin.value)) { aErr.textContent = '4桁の数字を入力してください'; return; }
+          if (setup && pin.value !== $('#aPin2').value) { aErr.textContent = '2回の入力が一致しません'; return; }
+          aBusy = true;
+          callApi(setup ? 'adminSetup' : 'adminLogin', pin.value, deviceLabel()).then(r => {
+            session.adminToken = r.token;
+            saveAdminToken();
+            history.replaceState(null, '', '#admin');
+            boot();
+          }, e => {
+            aBusy = false;
+            aErr.textContent = errText(e).includes('LIMIT') ? '失敗が続いたため、しばらく開けません' : '暗証番号がちがいます';
+            pin.value = '';
+            pin.focus();
+          });
+        };
+        $('#aOk').addEventListener('click', goAdmin);
+        $('#adminLoginBox').querySelectorAll('input').forEach(i => i.addEventListener('keydown', e => { if (e.key === 'Enter') goAdmin(); }));
+      }, () => { $('#adminLoginBox').innerHTML = '<span class="err">通信できませんでした。もう一度お試しください。</span>'; });
+    });
   }
 
   /* ================= ユーティリティ ================= */
   const $ = (s, el) => (el || document).querySelector(s);
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const getManual = id => state.manuals.find(m => m.id === id);
-  const getStaff = id => state.staff.find(s => s.id === id);
+  const getStaff = id => state.staff.find(s => s.id === id) || (state.meInfo && state.meInfo.id === id ? state.meInfo : null);
+  const activeStaff = () => state.staff.filter(s => s.active !== false);
   const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
   const fmtDate = s => { const p = String(s || '').split('-'); return p.length === 3 ? `${+p[0]}年${+p[1]}月${+p[2]}日` : ''; };
   const fmtShort = iso => { if (!iso) return ''; const d = new Date(iso); return isNaN(d) ? '' : `${d.getMonth() + 1}月${d.getDate()}日`; };
@@ -943,8 +1212,9 @@ textarea.ed-sum { color: var(--ink-soft); }
   }
   function manualSummary(m) {
     const c = { done: 0, review: 0, doing: 0, none: 0 };
-    state.staff.forEach(s => c[statusOf(s.id, m)]++);
-    return { ...c, total: state.staff.length };
+    const list = activeStaff();
+    list.forEach(s => c[statusOf(s.id, m)]++);
+    return { ...c, total: list.length };
   }
   function stackHTML(c, total) {
     if (!total) return '<div class="stack"></div>';
@@ -993,28 +1263,24 @@ textarea.ed-sum { color: var(--ink-soft); }
     return `<div class="empty">${svg(icon)}<div>${text}</div></div>`;
   }
 
-  /* ================= 使っている人の選択 ================= */
-  function openPicker(note) {
-    const list = state.staff;
+  /* ================= ログイン中の人 ================= */
+  function openAccount() {
+    const me = state.meInfo;
     openSheet(`
-      <div class="sheet-head"><h2>あなたの名前を選んでください</h2><button class="icon-btn" data-close aria-label="閉じる">${svg('x')}</button></div>
-      <p style="margin:0" class="muted">${esc(note || 'チェックした進み具合は、この名前で記録されます。共用の端末では、使う人が替わるたびに切り替えてください。')}</p>
-      ${list.length ? `<div class="staff-pick">${list.map(s => `
-        <button data-pick="${esc(s.id)}" aria-pressed="${s.id === state.me}">${avatarHTML(s)}<span><b>${esc(s.name)}</b><small>${esc(s.role || '')}</small></span></button>`).join('')}</div>`
-        : `${emptyHTML('users', 'スタッフがまだ登録されていません。<br>管理者ページでスタッフを登録してください')}<a class="btn" href="#admin-team" data-close>${svg('shield')}管理者ページへ</a>`}
-      <div class="actions" style="justify-content:flex-end"><button class="btn" data-close>あとで</button></div>`);
-    overlay.querySelectorAll('[data-pick]').forEach(b => b.addEventListener('click', () => {
-      state.me = b.dataset.pick;
-      savePersonal();
-      closeSheet();
-      toast(`${getStaff(state.me).name}さんに切り替えました`);
-      route(true);
-    }));
+      <div class="sheet-head"><h2>ログイン中</h2><button class="icon-btn" data-close aria-label="閉じる">${svg('x')}</button></div>
+      <div style="display:flex;align-items:center;gap:12px">${me ? avatarHTML(me, 'lg') : `<span class="avatar lg">${svg('shield')}</span>`}
+        <div><b>${me ? esc(me.name) : '管理者'}</b><br><span class="muted" style="font-size:.84rem">${me ? esc(me.role || '') : 'スタッフとしてはログインしていません'}</span></div></div>
+      <p class="muted" style="margin:0;font-size:.84rem">共用の端末では、使い終わったらログアウトしてください。次の人は、自分のログインコードでログインします。</p>
+      <div class="actions" style="justify-content:flex-end">
+        <button class="btn" data-close>閉じる</button>
+        <button class="btn primary" id="logoutBtn">${svg('lock')}ログアウト</button>
+      </div>`);
+    $('#logoutBtn').addEventListener('click', logoutNow);
   }
-  $('#whoBtn').addEventListener('click', () => openPicker());
+  $('#whoBtn').addEventListener('click', openAccount);
   function needMe() {
     if (state.me) return false;
-    openPicker('チェックをつけるには、はじめにあなたの名前を選んでください。');
+    toast('管理者としてログイン中は、進み具合は記録されません');
     return true;
   }
 
@@ -1054,7 +1320,7 @@ textarea.ed-sum { color: var(--ink-soft); }
             ${stackHTML(sum, sum.total)}
             <span class="row-stats"><span>完了 ${sum.done}/${sum.total}</span><span>途中 ${sum.doing}</span>${sum.review ? `<span style="color:var(--warn-ink);font-weight:700">要再確認 ${sum.review}</span>` : ''}<span>未着手 ${sum.none}</span></span>
           </a>`
-          : `<div class="empty">${svg('users')}<div>名前を選ぶと、マニュアルごとの完了状況が記録されます</div><button class="btn primary" id="pickBtn" style="margin-top:10px">名前を選ぶ</button></div>`}
+          : `<div class="empty">${svg('shield')}<div>管理者としてログインしています。進み具合は記録されません</div><a class="btn primary" href="#admin" style="margin-top:10px">管理者ページへ</a></div>`}
       </section>
 
       <section>
@@ -1084,8 +1350,6 @@ textarea.ed-sum { color: var(--ink-soft); }
         <div class="list">${latest.map(m => itemHTML(m)).join('')}</div>
       </section>
     `;
-    const pb = $('#pickBtn');
-    if (pb) pb.addEventListener('click', () => openPicker());
   }
 
   /* ================= 画面: 一覧 / カテゴリ ================= */
@@ -1202,7 +1466,7 @@ textarea.ed-sum { color: var(--ink-soft); }
       });
       const n = doneOf(state.me, m), total = m.steps.length;
       $('#progressFill').style.width = (total ? n / total * 100 : 0) + '%';
-      $('#progressLabel').textContent = state.me ? `${n} / ${total} 完了` : '名前を選ぶと記録できます';
+      $('#progressLabel').textContent = state.me ? `${n} / ${total} 完了` : '管理者としてログイン中（記録されません）';
       $('#progress').classList.toggle('done', total > 0 && n === total);
       $('#complete').hidden = !(total > 0 && n === total);
     };
@@ -1219,7 +1483,7 @@ textarea.ed-sum { color: var(--ink-soft); }
       if (finished) { rec2.completedAt = rec2.updatedAt; rec2.count = (prev.count || 0) + 1; }
       (state.progress[state.me] = state.progress[state.me] || {})[id] = rec2;
       updateProgress();
-      send('saveProgress', state.me, id, rec2);
+      send('saveProgress', tok(), id, rec2);
       if (finished) toast('すべてのステップが完了しました。記録しました');
     }));
     $('#favBtn').addEventListener('click', () => {
@@ -1236,7 +1500,7 @@ textarea.ed-sum { color: var(--ink-soft); }
       const rec2 = { ...prev, done: [], updatedAt: nowISO() };
       state.progress[state.me][id] = rec2;
       updateProgress();
-      send('saveProgress', state.me, id, rec2);
+      send('saveProgress', tok(), id, rec2);
       toast('チェックをリセットしました');
     });
     $('#lockBtn').addEventListener('click', () => askUnlock(id));
@@ -1245,12 +1509,12 @@ textarea.ed-sum { color: var(--ink-soft); }
   /* ================= 画面: 自分の進み具合 ================= */
   function renderPerson(sid, asAdmin) {
     const s = getStaff(sid);
-    if (!s) { view.innerHTML = emptyHTML('users', asAdmin ? 'スタッフが見つかりません' : '名前を選ぶと、ここに進み具合が表示されます'); return; }
+    if (!s) { view.innerHTML = emptyHTML('users', asAdmin ? 'スタッフが見つかりません' : '管理者としてログイン中は、進み具合は記録されません'); return; }
     const sum = staffSummary(sid);
     const order = { review: 0, doing: 1, none: 2, done: 3 };
     view.innerHTML = `
       <div><a class="back" href="${asAdmin ? '#admin' : '#home'}">${svg('back')}${asAdmin ? 'スタッフ一覧へ戻る' : 'ホームへ戻る'}</a></div>
-      <header class="person-head">${avatarHTML(s, 'lg')}<div><h1>${esc(s.name)}${asAdmin ? '' : 'さんの進み具合'}</h1><span class="muted" style="font-size:.86rem">${esc(s.role || '')}${sum.last ? `・最終記録 ${fmtShort(sum.last)}` : ''}</span></div></header>
+      <header class="person-head">${avatarHTML(s, 'lg')}<div><h1>${esc(s.name)}${asAdmin ? '' : 'さんの進み具合'}</h1><span class="muted" style="font-size:.86rem">${s.active === false ? `<span class="st st-review">退職 ${fmtShort(s.retiredAt)}</span> ` : ''}${esc(s.role || '')}${sum.last ? `・最終記録 ${fmtShort(sum.last)}` : ''}</span></div></header>
       <div class="tiles">
         <div class="tile good"><span class="tile-label">完了率</span><span class="tile-value">${sum.rate}<small>%</small></span></div>
         <div class="tile"><span class="tile-label">完了</span><span class="tile-value">${sum.done}<small>/ ${sum.total}</small></span></div>
@@ -1311,7 +1575,7 @@ textarea.ed-sum { color: var(--ink-soft); }
       syncChrome();
       toast('ロックを解除しました');
     };
-    if (state.hasEditPin) {
+    if (state.hasEditPin && state.role !== 'admin') {
       openSheet(`
         <div class="sheet-head"><h2>暗証番号を入力</h2><button class="icon-btn" data-close aria-label="閉じる">${svg('x')}</button></div>
         <p style="margin:0" class="muted">編集ロックを解除するには、4桁の暗証番号を入力してください。</p>
@@ -1328,7 +1592,7 @@ textarea.ed-sum { color: var(--ink-soft); }
         if (busy) return;
         busy = true;
         const pin = input.value;
-        callApi('verifyPin', 'edit', pin).then(ok => {
+        callApi('verifyPin', tok(), 'edit', pin).then(ok => {
           busy = false;
           if (ok) { session.editPin = pin; unlock(); }
           else { $('#pinErr').textContent = '暗証番号がちがいます'; input.value = ''; input.focus(); }
@@ -1386,7 +1650,7 @@ textarea.ed-sum { color: var(--ink-soft); }
     }
     if (editing.isNew) state.manuals.unshift(m);
     else state.manuals = state.manuals.map(x => x.id === m.id ? m : x);
-    send('saveManual', m, updates, session.editPin);
+    send('saveManual', tok(), m, editing.isNew ? null : kept.map(s => s.o === undefined ? -1 : s.o), session.editPin);
     editing = null;
     return m;
   }
@@ -1579,7 +1843,7 @@ textarea.ed-sum { color: var(--ink-soft); }
       state.recent = state.recent.filter(x => x !== m.id);
       Object.values(state.progress).forEach(p => { delete p[m.id]; });
       savePersonal();
-      send('deleteManual', m.id, session.editPin);
+      send('deleteManual', tok(), m.id, session.editPin);
       editing = null;
       closeSheet();
       toast('削除しました');
@@ -1599,13 +1863,22 @@ textarea.ed-sum { color: var(--ink-soft); }
   overlay.addEventListener('click', e => { if (e.target === overlay || e.target.closest('[data-close]')) closeSheet(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !overlay.hidden) closeSheet(); });
 
+  // 押し間違いを防ぐため、2回押して実行するボタン
+  function armed(btn, label, fn) {
+    btn.addEventListener('click', () => {
+      if (btn.dataset.armed) return fn();
+      btn.dataset.armed = '1';
+      btn.innerHTML = `${svg('alert')}${label}`;
+    });
+  }
+
   function openSettings() {
-    const me = getStaff(state.me);
+    const me = state.meInfo;
     openSheet(`
       <div class="sheet-head"><h2>設定</h2><button class="icon-btn" data-close aria-label="閉じる">${svg('x')}</button></div>
       <div class="setting">
-        <span class="setting-title">使っている人</span>
-        <div style="display:flex;align-items:center;gap:10px">${avatarHTML(me)}<span style="flex:1">${me ? esc(me.name) : '<span class="muted">まだ選ばれていません</span>'}</span><button class="btn sm" id="switchMe">切り替える</button></div>
+        <span class="setting-title">ログイン中</span>
+        <div style="display:flex;align-items:center;gap:10px">${me ? avatarHTML(me) : `<span class="avatar">${svg('shield')}</span>`}<span style="flex:1">${me ? esc(me.name) : '管理者'}</span><button class="btn sm" id="setLogout">${svg('lock')}ログアウト</button></div>
       </div>
       <div class="setting">
         <span class="setting-title">文字の大きさ</span>
@@ -1616,7 +1889,7 @@ textarea.ed-sum { color: var(--ink-soft); }
       </div>
       <div class="setting">
         <span class="setting-title">管理者ページ</span>
-        <span class="muted" style="font-size:.84rem">スタッフの進み具合の確認、スタッフの登録、暗証番号やデータの管理ができます。</span>
+        <span class="muted" style="font-size:.84rem">スタッフの進み具合の確認、スタッフの登録・退職の手続き、暗証番号やデータの管理ができます。</span>
         <a class="btn sm" href="#admin" data-close style="align-self:flex-start">${svg('shield')}管理者ページを開く</a>
       </div>
       <div class="setting">
@@ -1625,7 +1898,7 @@ textarea.ed-sum { color: var(--ink-soft); }
           ? 'Googleスプレッドシートに保存され、スタッフ全員で共有されています。'
           : '体験モードです。この端末の中だけで動いていて、サンプルのスタッフと進み具合が入っています。スタッフ全員で使うには、Googleスプレッドシート版を設置してください（手順は README にあります）。'}</span>
       </div>`);
-    $('#switchMe').addEventListener('click', () => openPicker());
+    $('#setLogout').addEventListener('click', logoutNow);
     overlay.querySelectorAll('[data-size]').forEach(b => b.addEventListener('click', () => {
       state.largeText = b.dataset.size === 'large';
       document.documentElement.classList.toggle('large-text', state.largeText);
@@ -1664,15 +1937,18 @@ textarea.ed-sum { color: var(--ink-soft); }
       if (!/^\d{4}$/.test(v)) { err.textContent = '4桁の数字を入力してください'; return; }
       if (setup && v !== $('#gatePin2').value) { err.textContent = '2回の入力が一致しません'; return; }
       busy = true;
-      const req = setup ? callApi('setPin', 'admin', '', v) : callApi('verifyPin', 'admin', v);
-      req.then(ok => {
+      callApi(setup ? 'adminSetup' : 'adminLogin', v, deviceLabel()).then(r => {
         busy = false;
-        if (!ok) { err.textContent = '暗証番号がちがいます'; pin.value = ''; pin.focus(); return; }
         if (setup) { state.hasAdminPin = true; toast('管理者の暗証番号を設定しました'); }
-        session.admin = true;
-        session.adminPin = v;
+        session.adminToken = r.token;
+        saveAdminToken();
         next();
-      }, e => { busy = false; apiError(e); });
+      }, e => {
+        busy = false;
+        err.textContent = errText(e).includes('LIMIT') ? '失敗が続いたため、しばらく開けません。10分ほど待ってください' : '暗証番号がちがいます';
+        pin.value = '';
+        pin.focus();
+      });
     };
     $('#gateOk').addEventListener('click', go);
     view.querySelectorAll('.pin-input').forEach(i => i.addEventListener('keydown', e => { if (e.key === 'Enter') go(); }));
@@ -1689,34 +1965,38 @@ textarea.ed-sum { color: var(--ink-soft); }
         </div>
       </div>
       ${demoNote()}
-      <nav class="seg-nav" aria-label="管理メニュー">${tab('#admin', 'スタッフ別')}${tab('#admin-manuals', 'マニュアル別')}${tab('#admin-team', '登録・設定')}</nav>`;
+      <nav class="seg-nav" aria-label="管理メニュー">${tab('#admin', 'スタッフ別')}${tab('#admin-manuals', 'マニュアル別')}${tab('#admin-team', 'スタッフ管理')}</nav>`;
   }
   function bindAdminHead() {
     $('#adminExit').addEventListener('click', () => {
-      session.admin = false;
-      session.adminPin = '';
+      callApi('logout', session.adminToken).catch(() => { /* 期限切れでも続行 */ });
+      session.adminToken = '';
+      saveAdminToken();
+      if (!state.token) return lockOut('');
       toast('管理者ページを閉じました');
-      location.hash = '#home';
+      loadShared().then(() => { location.hash = '#home'; route(); }, apiError);
     });
     $('#adminReload').addEventListener('click', () => {
-      loadShared().then(() => { route(true); toast('最新の記録を読み込みました'); }, apiError);
+      loadShared().then(loadAdmin).then(() => { route(true); toast('最新の記録を読み込みました'); }, apiError);
     });
   }
 
   function renderAdminStaff() {
-    const total = state.staff.length * state.manuals.length;
-    const sums = state.staff.map(s => ({ s, sum: staffSummary(s.id) }));
+    const active = activeStaff();
+    const total = active.length * state.manuals.length;
+    const sums = active.map(s => ({ s, sum: staffSummary(s.id) }));
     const done = sums.reduce((a, x) => a + x.sum.done, 0);
     const review = sums.reduce((a, x) => a + x.sum.review, 0);
     const weekAgo = new Date(Date.now() - 7 * 864e5).toISOString();
     let week = 0;
-    Object.values(state.progress).forEach(p => Object.keys(p).forEach(mid => { if (getManual(mid) && p[mid].completedAt > weekAgo) week++; }));
+    active.forEach(s => Object.keys(state.progress[s.id] || {}).forEach(mid => { if (getManual(mid) && state.progress[s.id][mid].completedAt > weekAgo) week++; }));
     sums.sort((a, b) => a.sum.rate - b.sum.rate || b.sum.review - a.sum.review);
+    const retired = state.staff.length - active.length;
 
     view.innerHTML = `
       ${adminHead('#admin')}
       <div class="tiles">
-        <div class="tile"><span class="tile-label">スタッフ</span><span class="tile-value">${state.staff.length}<small>人</small></span></div>
+        <div class="tile"><span class="tile-label">スタッフ${retired ? `（退職 ${retired}人は除く）` : ''}</span><span class="tile-value">${active.length}<small>人</small></span></div>
         <div class="tile good"><span class="tile-label">全体の完了率</span><span class="tile-value">${total ? Math.round(done / total * 100) : 0}<small>%</small></span></div>
         <div class="tile ${review ? 'warn' : ''}"><span class="tile-label">要再確認</span><span class="tile-value">${review}<small>件</small></span></div>
         <div class="tile"><span class="tile-label">この7日間の完了</span><span class="tile-value">${week}<small>件</small></span></div>
@@ -1768,7 +2048,7 @@ textarea.ed-sum { color: var(--ink-soft); }
     if (!m) { view.innerHTML = emptyHTML('search', 'マニュアルが見つかりませんでした。<br><a href="#admin-manuals">一覧へ戻る</a>'); return; }
     const c = catById(m.cat);
     const order = { review: 0, doing: 1, none: 2, done: 3 };
-    const people = state.staff.map(s => ({ s, st: statusOf(s.id, m), r: recOf(s.id, m.id) })).sort((a, b) => order[a.st] - order[b.st]);
+    const people = activeStaff().map(s => ({ s, st: statusOf(s.id, m), r: recOf(s.id, m.id) })).sort((a, b) => order[a.st] - order[b.st]);
     const sum = manualSummary(m);
     view.innerHTML = `
       <div><a class="back" href="#admin-manuals">${svg('back')}マニュアル別へ戻る</a></div>
@@ -1796,50 +2076,182 @@ textarea.ed-sum { color: var(--ink-soft); }
       <a class="btn" href="#m-${esc(m.id)}" style="align-self:flex-start">マニュアルを開く</a>`;
   }
 
+  /* ---------- 登録・セキュリティ ---------- */
+  // 管理者の操作を送り、最新の状態を読み直して画面を描き直す
+  function adminDo(name, args, msg) {
+    return callApi(name, session.adminToken, ...args).then(r => loadAdmin().then(() => {
+      if (msg) toast(msg);
+      route(true);
+      return r;
+    }), e => { apiError(e); return null; });
+  }
+
+  function showCode(s, code, title) {
+    openSheet(`
+      <div class="sheet-head"><h2>${esc(title)}</h2></div>
+      <p style="margin:0">${esc(s.name)}さんのログインコードです。本人だけに伝えてください。</p>
+      <div class="pin-input" style="padding:14px;border-radius:var(--radius);background:var(--accent-soft);font-weight:700" id="codeShow">${esc(code)}</div>
+      <p class="muted" style="margin:0;font-size:.84rem">この画面を閉じると、もう一度表示することはできません。忘れたときは「ログインコードを再発行」してください。</p>
+      <div class="actions" style="justify-content:flex-end">
+        <button class="btn" id="copyCode">${svg('copy')}コピー</button>
+        <button class="btn primary" data-close>伝えました</button>
+      </div>`);
+    $('#copyCode').addEventListener('click', () => {
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(code).then(() => toast('コピーしました'), () => toast('コピーできませんでした。書き写してください'));
+      else toast('コピーできませんでした。書き写してください');
+    });
+  }
+
+  function devicesHTML(s) {
+    const list = s.sessions || [];
+    if (!list.length) return '<span class="muted" style="font-size:.84rem">ログイン中の端末はありません</span>';
+    return `<ul class="devices">${list.map(d => `<li>${svg('user')}<span>${esc(d.device || '端末')}</span><span class="muted">最終 ${fmtShort(d.lastSeen)}</span></li>`).join('')}</ul>`;
+  }
+
+  function openStaffSheet(id) {
+    const s = getStaff(id);
+    if (!s) return;
+    if (s.active === false) {
+      openSheet(`
+        <div class="sheet-head"><h2>${esc(s.name)}さん</h2><button class="icon-btn" data-close aria-label="閉じる">${svg('x')}</button></div>
+        <p style="margin:0"><span class="st st-review">退職 ${fmtShort(s.retiredAt)}</span></p>
+        <p class="muted" style="margin:0;font-size:.86rem">ログインコードは無効になっていて、このアプリを開くことはできません。これまでの進み具合の記録は残っています。</p>
+        <div class="actions">
+          <a class="btn sm" href="#admin-s-${esc(s.id)}" data-close>記録を見る</a>
+          <button class="btn sm" id="stReinstate">${svg('reset')}再登録する（新しいコードを発行）</button>
+          <button class="btn sm danger" id="stDelete">${svg('trash')}記録ごと削除</button>
+        </div>`);
+      $('#stReinstate').addEventListener('click', () => adminDo('reinstateStaff', [s.id], '').then(r => { if (r) showCode(s, r.code, '再登録しました'); }));
+      armed($('#stDelete'), 'もう一度押すと削除します（取り消せません）', () => { closeSheet(); adminDo('deleteStaff', [s.id], '削除しました'); });
+      return;
+    }
+    openSheet(`
+      <div class="sheet-head"><h2>${esc(s.name)}さん</h2><button class="icon-btn" data-close aria-label="閉じる">${svg('x')}</button></div>
+      <div class="inline-form">
+        <label class="sr-only" for="stName">名前</label>
+        <input id="stName" type="text" value="${esc(s.name)}" maxlength="20">
+        <label class="sr-only" for="stRole">役割</label>
+        <input id="stRole" type="text" value="${esc(s.role || '')}" placeholder="役割" maxlength="20">
+        <button class="btn sm" id="stSave">保存</button>
+      </div>
+      <div class="setting">
+        <span class="setting-title">ログイン中の端末</span>
+        ${devicesHTML(s)}
+        <div class="actions">
+          <button class="btn sm" id="stReissue">${svg('reset')}ログインコードを再発行</button>
+          <button class="btn sm" id="stLogout" ${(s.sessions || []).length ? '' : 'disabled'}>${svg('lock')}端末をすべてログアウト</button>
+        </div>
+        <span class="muted" style="font-size:.78rem">再発行すると、今のコードは使えなくなり、ログイン中の端末もログアウトされます。</span>
+      </div>
+      <div class="setting">
+        <span class="setting-title" style="color:var(--warn-ink)">退職・利用停止</span>
+        <span class="muted" style="font-size:.84rem">退職にすると、この人のログインコードはすぐに使えなくなります。ログイン中の端末も、数分以内に画面が閉じてログイン画面に戻ります。これまでの記録は残ります。</span>
+        <button class="btn sm danger" id="stRetire" style="align-self:flex-start">${svg('lock')}退職にする（利用を停止）</button>
+      </div>`);
+    $('#stSave').addEventListener('click', () => {
+      const name = $('#stName').value.trim();
+      if (!name) return toast('名前を入力してください');
+      closeSheet();
+      adminDo('updateStaff', [s.id, name, $('#stRole').value.trim()], '保存しました');
+    });
+    $('#stReissue').addEventListener('click', () => adminDo('reissueCode', [s.id], '').then(r => {
+      if (!r) return;
+      if (s.id === state.me) { state.token = ''; savePersonal(); }
+      showCode(s, r.code, 'ログインコードを再発行しました');
+    }));
+    $('#stLogout').addEventListener('click', () => {
+      if (s.id === state.me) { state.token = ''; savePersonal(); }
+      closeSheet();
+      adminDo('logoutStaff', [s.id], `${s.name}さんの端末をログアウトしました`);
+    });
+    armed($('#stRetire'), 'もう一度押すと退職にします', () => adminDo('retireStaff', [s.id], '').then(r => {
+      if (!r) return;
+      if (s.id === state.me) { state.token = ''; savePersonal(); state.me = ''; state.meInfo = null; }
+      openSheet(`
+        <div class="sheet-head"><h2>${esc(s.name)}さんを退職にしました</h2></div>
+        <ul class="checklist">
+          <li class="ok">${svg('check')}<span>ログインコードを無効にしました</span></li>
+          <li class="ok">${svg('check')}<span>ログイン中だった端末 ${r.closed}台をログアウトしました</span></li>
+          <li>${svg('alert')}<span>${esc(s.name)}さんが<b>管理者や編集ロックの暗証番号</b>を知っていた場合は、変更してください</span></li>
+          <li>${svg('alert')}<span>医院の共用端末のパスコードや、Googleアカウントの共有も見直しましょう</span></li>
+        </ul>
+        <div class="actions" style="justify-content:flex-end">
+          <button class="btn" data-close>閉じる</button>
+          <button class="btn primary" id="toPins">暗証番号を変更する</button>
+        </div>`);
+      $('#toPins').addEventListener('click', () => { closeSheet(); const el = $('#pinPanel'); if (el) el.scrollIntoView({ behavior: 'smooth' }); });
+    }));
+  }
+
   function renderAdminTeam() {
+    const active = activeStaff();
+    const retired = state.staff.filter(s => s.active === false);
     view.innerHTML = `
       ${adminHead('#admin-team')}
       <section class="panel">
-        <h2>スタッフの登録</h2>
-        <span class="muted" style="font-size:.84rem">名前と役割は、入力欄から出ると自動で保存されます。</span>
-        <div id="teamList">${state.staff.map(s => `
-          <div class="team-row" data-id="${esc(s.id)}">
+        <h2>スタッフ</h2>
+        <span class="muted" style="font-size:.84rem">スタッフは、ここで発行する6桁のログインコードでログインします。辞めるときは「管理」から退職の手続きをしてください。</span>
+        <div>${active.map(s => `
+          <div class="team-row">
             ${avatarHTML(s)}
-            <label class="sr-only" for="tn-${esc(s.id)}">名前</label>
-            <input id="tn-${esc(s.id)}" type="text" data-f="name" value="${esc(s.name)}" maxlength="20">
-            <label class="sr-only" for="tr-${esc(s.id)}">役割</label>
-            <input id="tr-${esc(s.id)}" class="role-in" type="text" data-f="role" value="${esc(s.role || '')}" placeholder="役割（例：受付）" maxlength="20">
-            <button class="icon-btn" data-del aria-label="${esc(s.name)}さんを削除">${svg('trash')}</button>
+            <span style="min-width:0"><b>${esc(s.name)}</b> <span class="muted" style="font-size:.8rem">${esc(s.role || '')}</span><br>
+              <span class="muted" style="font-size:.76rem">${(s.sessions || []).length ? `ログイン中 ${s.sessions.length}台・最終 ${fmtShort(s.sessions.map(x => x.lastSeen).sort().pop())}` : 'ログイン中の端末なし'}</span></span>
+            <button class="btn sm" data-manage="${esc(s.id)}">管理</button>
           </div>`).join('') || '<p class="muted" style="margin:0">まだ登録されていません。下から追加してください。</p>'}</div>
         <div class="inline-form">
           <label class="sr-only" for="newName">名前</label>
           <input id="newName" type="text" placeholder="名前（例：山田 はな）" maxlength="20">
           <label class="sr-only" for="newRole">役割</label>
           <input id="newRole" type="text" placeholder="役割（例：歯科衛生士）" maxlength="20">
-          <button class="btn sm primary" id="addStaff">${svg('plus')}追加する</button>
+          <button class="btn sm primary" id="addStaff">${svg('plus')}追加してコードを発行</button>
         </div>
       </section>
 
-      <section class="panel">
-        <h2>編集ロックの暗証番号</h2>
-        <span class="muted" style="font-size:.84rem">${state.hasEditPin
-          ? '設定されています。スタッフがマニュアルの編集ロックを解除するとき、この暗証番号が必要です。変えるときは、いったん外してから設定し直してください。'
-          : '設定されていません。今は確認画面だけでロックを解除できます。4桁の数字を決めると、解除に暗証番号が必要になります。'}</span>
-        <div class="inline-form">
-          ${state.hasEditPin ? '' : '<label class="sr-only" for="editPinNew">新しい暗証番号</label><input id="editPinNew" class="pin-input" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="0000">'}
-          <button class="btn sm ${state.hasEditPin ? 'danger' : ''}" id="editPinBtn">${svg(state.hasEditPin ? 'unlock' : 'lock')}${state.hasEditPin ? '暗証番号を外す' : '設定する'}</button>
-        </div>
-        <p class="err" id="editPinErr"></p>
-      </section>
+      ${retired.length ? `<section class="panel">
+        <h2>退職したスタッフ</h2>
+        <span class="muted" style="font-size:.84rem">ログインできません。進み具合の集計にも含まれません。</span>
+        <div>${retired.map(s => `
+          <div class="team-row">
+            ${avatarHTML(s)}
+            <span style="min-width:0"><b>${esc(s.name)}</b> <span class="muted" style="font-size:.8rem">${esc(s.role || '')}</span><br><span class="st st-review">退職 ${fmtShort(s.retiredAt)}</span></span>
+            <button class="btn sm" data-manage="${esc(s.id)}">管理</button>
+          </div>`).join('')}</div>
+      </section>` : ''}
 
       <section class="panel">
+        <h2>${svg('shield')} スタッフが辞めるときは</h2>
+        <ol class="howto">
+          <li>上の一覧で「管理」→「退職にする」を押します。ログインコードが使えなくなり、その人の端末は数分以内にログイン画面に戻ります。</li>
+          <li>その人が管理者や編集ロックの暗証番号を知っていた場合は、下で変更します。管理者の暗証番号を変えると、ほかの端末の管理者ページも閉じられます。</li>
+          <li>ログインコードを誰かに教えていた心配があるときは「全員をログアウト」を押し、必要ならコードを再発行します。</li>
+        </ol>
+        <button class="btn sm danger" id="revokeAll" style="align-self:flex-start">${svg('lock')}全員の端末をログアウト</button>
+        <span class="muted" style="font-size:.78rem">スタッフ全員が、もう一度ログインコードを入力することになります。</span>
+      </section>
+
+      <section class="panel" id="pinPanel">
         <h2>管理者の暗証番号</h2>
+        <span class="muted" style="font-size:.84rem">変更すると、この端末以外で開いている管理者ページはすべて閉じられます。</span>
         <div class="inline-form">
           <label class="sr-only" for="adminPinNew">新しい暗証番号</label>
           <input id="adminPinNew" class="pin-input" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="新しい">
           <button class="btn sm" id="adminPinBtn">変更する</button>
         </div>
         <p class="err" id="adminPinErr"></p>
+      </section>
+
+      <section class="panel">
+        <h2>編集ロックの暗証番号</h2>
+        <span class="muted" style="font-size:.84rem">${state.hasEditPin
+          ? '設定されています。スタッフがマニュアルの編集ロックを解除するとき、この暗証番号が必要です。変えるときは、新しい番号を入れて「変更する」を押します。'
+          : '設定されていません。今は確認画面だけでロックを解除できます。4桁の数字を決めると、解除に暗証番号が必要になります。'}</span>
+        <div class="inline-form">
+          <label class="sr-only" for="editPinNew">新しい暗証番号</label>
+          <input id="editPinNew" class="pin-input" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="新しい">
+          <button class="btn sm" id="editPinBtn">${svg('lock')}${state.hasEditPin ? '変更する' : '設定する'}</button>
+          ${state.hasEditPin ? `<button class="btn sm danger" id="editPinOff">${svg('unlock')}外す</button>` : ''}
+        </div>
+        <p class="err" id="editPinErr"></p>
       </section>
 
       <section class="panel">
@@ -1859,67 +2271,29 @@ textarea.ed-sum { color: var(--ink-soft); }
       </section>`;
     bindAdminHead();
 
-    // スタッフ
-    const saveStaff = msg => send('saveStaff', clone(state.staff), session.adminPin).then(ok => { if (ok) toast(msg); });
-    view.querySelectorAll('.team-row input').forEach(inp => inp.addEventListener('change', () => {
-      const s = getStaff(inp.closest('.team-row').dataset.id);
-      const v = inp.value.trim();
-      if (inp.dataset.f === 'name' && !v) { inp.value = s.name; return toast('名前を入力してください'); }
-      s[inp.dataset.f] = v;
-      saveStaff('保存しました');
-    }));
-    view.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => {
-      const s = getStaff(b.closest('.team-row').dataset.id);
-      openSheet(`
-        <div class="sheet-head"><h2>${esc(s.name)}さんを削除しますか？</h2></div>
-        <p style="margin:0">登録と、これまでの進み具合の記録が消えます。この操作は取り消せません。</p>
-        <div class="actions" style="justify-content:flex-end">
-          <button class="btn" data-close>やめる</button>
-          <button class="btn danger" id="delStaffOk">${svg('trash')}削除する</button>
-        </div>`);
-      $('#delStaffOk').addEventListener('click', () => {
-        state.staff = state.staff.filter(x => x.id !== s.id);
-        delete state.progress[s.id];
-        if (state.me === s.id) { state.me = ''; savePersonal(); }
-        closeSheet();
-        saveStaff('削除しました');
-        renderAdminTeam();
-        syncChrome();
-      });
-    }));
+    view.querySelectorAll('[data-manage]').forEach(b => b.addEventListener('click', () => openStaffSheet(b.dataset.manage)));
     $('#addStaff').addEventListener('click', () => {
       const name = $('#newName').value.trim();
       if (!name) { toast('名前を入力してください'); $('#newName').focus(); return; }
-      state.staff.push({ id: 's' + Date.now().toString(36), name, role: $('#newRole').value.trim() });
-      saveStaff(`${name}さんを追加しました`);
-      renderAdminTeam();
-      $('#newName').focus();
+      adminDo('addStaff', [name, $('#newRole').value.trim()], '').then(r => { if (r) showCode({ name }, r.code, `${name}さんを追加しました`); });
+    });
+    armed($('#revokeAll'), 'もう一度押すと全員をログアウトします', () => {
+      adminDo('revokeAll', [], '全員の端末をログアウトしました').then(r => { if (r && state.token) { state.token = ''; savePersonal(); } });
     });
 
     // 暗証番号
-    const pinErr = (id, msg) => { $(id).textContent = msg; };
-    const setEditPin = v => callApi('setPin', 'edit', session.adminPin, v).then(() => {
-      state.hasEditPin = !!v;
-      session.editPin = v;
-      toast(v ? '編集ロックの暗証番号を設定しました' : '編集ロックの暗証番号を外しました');
-      renderAdminTeam();
-    }, apiError);
-    $('#editPinBtn').addEventListener('click', () => {
-      if (state.hasEditPin) return setEditPin('');
-      const v = $('#editPinNew').value;
-      if (!/^\d{4}$/.test(v)) return pinErr('#editPinErr', '4桁の数字を入力してください');
-      setEditPin(v);
-    });
     $('#adminPinBtn').addEventListener('click', () => {
       const v = $('#adminPinNew').value;
-      if (!/^\d{4}$/.test(v)) return pinErr('#adminPinErr', '4桁の数字を入力してください');
-      callApi('setPin', 'admin', session.adminPin, v).then(() => {
-        session.adminPin = v;
-        $('#adminPinNew').value = '';
-        pinErr('#adminPinErr', '');
-        toast('管理者の暗証番号を変更しました');
-      }, apiError);
+      if (!/^\d{4}$/.test(v)) { $('#adminPinErr').textContent = '4桁の数字を入力してください'; return; }
+      adminDo('setPin', ['admin', v], '管理者の暗証番号を変更しました');
     });
+    $('#editPinBtn').addEventListener('click', () => {
+      const v = $('#editPinNew').value;
+      if (!/^\d{4}$/.test(v)) { $('#editPinErr').textContent = '4桁の数字を入力してください'; return; }
+      adminDo('setPin', ['edit', v], '編集ロックの暗証番号を設定しました').then(r => { if (r) { state.hasEditPin = true; session.editPin = v; route(true); } });
+    });
+    const off = $('#editPinOff');
+    if (off) off.addEventListener('click', () => adminDo('setPin', ['edit', ''], '編集ロックの暗証番号を外しました').then(r => { if (r) { state.hasEditPin = false; route(true); } }));
 
     // データ
     $('#exportBox').value = JSON.stringify({ app: 'mirai-manual', version: 2, manuals: state.manuals }, null, 1);
@@ -1930,12 +2304,8 @@ textarea.ed-sum { color: var(--ink-soft); }
       else fallback();
     });
     const replaceAll = (list, msg) => {
-      state.manuals = list;
-      const ids = new Set(list.map(m => m.id));
-      Object.values(state.progress).forEach(p => Object.keys(p).forEach(mid => { if (!ids.has(mid)) delete p[mid]; }));
       editing = null;
-      send('replaceManuals', clone(list), session.adminPin).then(ok => { if (ok) toast(msg); });
-      renderAdminTeam();
+      callApi('replaceManuals', session.adminToken, clone(list)).then(() => loadShared()).then(loadAdmin).then(() => { toast(msg); route(true); }, apiError);
     };
     const importText = text => {
       try {
@@ -1955,12 +2325,7 @@ textarea.ed-sum { color: var(--ink-soft); }
       r.onload = () => importText(r.result);
       r.readAsText(file);
     });
-    $('#resetAll').addEventListener('click', () => {
-      const b = $('#resetAll');
-      if (b.dataset.armed) return replaceAll(clone(DEFAULT_MANUALS), 'サンプルのマニュアルに戻しました');
-      b.dataset.armed = '1';
-      b.innerHTML = `${svg('alert')}もう一度押すと、全マニュアルを置き換えます`;
-    });
+    armed($('#resetAll'), 'もう一度押すと、全マニュアルを置き換えます', () => replaceAll(clone(DEFAULT_MANUALS), 'サンプルのマニュアルに戻しました'));
   }
 
   /* ================= ルーティング ================= */
@@ -1989,8 +2354,9 @@ textarea.ed-sum { color: var(--ink-soft); }
   function syncChrome() {
     q.disabled = !!editing;
     q.placeholder = editing ? '編集中は検索できません' : 'マニュアルを検索';
-    const me = getStaff(state.me);
-    $('#whoBtn').innerHTML = `${avatarHTML(me)}<span class="who-name">${me ? esc(me.name) : '名前を選ぶ'}</span>`;
+    const me = state.meInfo;
+    $('#whoBtn').innerHTML = me ? `${avatarHTML(me)}<span class="who-name">${esc(me.name)}</span>`
+      : `<span class="avatar">${svg('shield')}</span><span class="who-name">管理者</span>`;
     setTab();
   }
 
@@ -2007,7 +2373,14 @@ textarea.ed-sum { color: var(--ink-soft); }
     }
     const h = location.hash.slice(1) || 'home';
     if (q.value && !h.startsWith('m-')) q.value = '';
-    const admin = fn => session.admin ? fn() : renderGate(() => route());
+    const admin = fn => {
+      if (!session.adminToken) return renderGate(() => route());
+      if (!state.adminLoaded) {
+        view.innerHTML = '<div class="loading">読み込んでいます…</div>';
+        return loadAdmin().then(() => route(keepScroll), apiError);
+      }
+      fn();
+    };
     if (h.startsWith('m-')) { q.value = ''; renderDetail(h.slice(2)); }
     else if (h.startsWith('cat-')) renderList(h.slice(4));
     else if (h === 'all') renderList(null);
@@ -2026,19 +2399,28 @@ textarea.ed-sum { color: var(--ink-soft); }
   }
   window.addEventListener('hashchange', () => route());
 
-  // ほかのスタッフの記録を取り込む（スプレッドシート版で、画面に戻ってきたとき）
+  // 利用停止や期限切れを、開きっぱなしの画面にもすぐ反映する
+  const checkAccess = () => {
+    if (!state.ready || document.hidden) return;
+    callApi('ping', tok()).catch(e => { if (errText(e).includes('AUTH')) apiError(e); });
+  };
+  setInterval(checkAccess, 2 * 60 * 1000);
   document.addEventListener('visibilitychange', () => {
-    if (!REMOTE || document.hidden || editing || !overlay.hidden || !state.ready) return;
-    loadShared().then(() => route(true), () => { /* 次の機会に再取得 */ });
+    if (document.hidden || !state.ready) return;
+    if (!REMOTE || editing || !overlay.hidden) return checkAccess();
+    // ほかのスタッフの記録を取り込む（スプレッドシート版で、画面に戻ってきたとき）
+    loadShared().then(() => route(true), e => { if (errText(e).includes('AUTH')) apiError(e); });
   });
 
   function boot() {
     view.innerHTML = '<div class="loading">読み込んでいます…</div>';
     if (!REMOTE) LocalServer.init();
+    if (!tok()) return renderLogin('');
     loadShared().then(() => {
+      setSignedOut(false);
       route();
-      if (!state.me && state.staff.length && !location.hash.startsWith('#admin')) openPicker();
-    }, () => {
+    }, e => {
+      if (errText(e).includes('AUTH')) return lockOut('ログインの有効期限が切れたか、管理者によって利用が停止されました。');
       view.innerHTML = `${emptyHTML('alert', 'データを読み込めませんでした。<br>通信状態を確かめてから、もう一度お試しください')}<button class="btn" id="retry" style="align-self:center">${svg('refresh')}もう一度読み込む</button>`;
       $('#retry').addEventListener('click', boot);
     });
