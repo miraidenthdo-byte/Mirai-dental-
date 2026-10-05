@@ -1,0 +1,1191 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>みらい歯科 院内マニュアル</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700&family=Yusei+Magic&display=swap">
+<style>
+/* Layout: 上部に検索バー、中央に1カラムのコンテンツ（最大960px）、下部にタブバー。カードは役割があるものだけに使う */
+:root {
+  --bg: #FFF6F8;
+  --surface: #FFFFFF;
+  --surface-2: #FFEEF3;
+  --ink: #4A3036;
+  --ink-soft: #85666E;
+  --line: #F5D7E0;
+  --accent: #F7A8C0;
+  --accent-soft: #FFDCE6;
+  --accent-ink: #B23F66;
+  --warn-bg: #FFE5DF;
+  --warn-ink: #A8402E;
+  --ok: #5BAE8C;
+  --shadow: 0 6px 20px rgba(214, 120, 150, .14);
+
+  --c-reception: #FFD9E3; --c-reception-ink: #B5476E;
+  --c-assist: #E8E0FB;    --c-assist-ink: #6A55B0;
+  --c-steril: #D6F1E7;    --c-steril-ink: #2F8466;
+  --c-emergency: #FFDCD5; --c-emergency-ink: #B4442F;
+  --c-open: #FFF1CC;      --c-open-ink: #9A7414;
+  --c-patient: #FFE5D3;   --c-patient-ink: #B0602A;
+  --c-rules: #DAEDFB;     --c-rules-ink: #2F6E9E;
+  --c-material: #F4E2F6;  --c-material-ink: #924A9C;
+
+  --font-display: "Yusei Magic", "Zen Maru Gothic", "Hiragino Maru Gothic ProN", "Hiragino Sans", sans-serif;
+  --font-body: "Zen Maru Gothic", "Hiragino Maru Gothic ProN", "Hiragino Sans", "Noto Sans JP", "Meiryo", sans-serif;
+
+  --radius: 18px;
+  --radius-sm: 12px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #251A1E; --surface: #32242A; --surface-2: #3D2B32; --ink: #FBEAEF; --ink-soft: #CFAFB8;
+    --line: #4E3940; --accent: #F2A0BA; --accent-soft: #5A3442; --accent-ink: #FFB6CC;
+    --warn-bg: #4A2A25; --warn-ink: #FFB4A3; --ok: #7CCBA9; --shadow: 0 6px 20px rgba(0,0,0,.3);
+    --c-reception: #4E2C38; --c-reception-ink: #FFB3C9;
+    --c-assist: #3A3352;    --c-assist-ink: #C9BBFF;
+    --c-steril: #24433A;    --c-steril-ink: #93E0C2;
+    --c-emergency: #4E2C26; --c-emergency-ink: #FFB2A2;
+    --c-open: #463A1E;      --c-open-ink: #F3D27A;
+    --c-patient: #4A3326;   --c-patient-ink: #FFC39C;
+    --c-rules: #233B4E;     --c-rules-ink: #9FCFF5;
+    --c-material: #452D4A;  --c-material-ink: #EAB3F2;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #251A1E; --surface: #32242A; --surface-2: #3D2B32; --ink: #FBEAEF; --ink-soft: #CFAFB8;
+  --line: #4E3940; --accent: #F2A0BA; --accent-soft: #5A3442; --accent-ink: #FFB6CC;
+  --warn-bg: #4A2A25; --warn-ink: #FFB4A3; --ok: #7CCBA9; --shadow: 0 6px 20px rgba(0,0,0,.3);
+  --c-reception: #4E2C38; --c-reception-ink: #FFB3C9;
+  --c-assist: #3A3352;    --c-assist-ink: #C9BBFF;
+  --c-steril: #24433A;    --c-steril-ink: #93E0C2;
+  --c-emergency: #4E2C26; --c-emergency-ink: #FFB2A2;
+  --c-open: #463A1E;      --c-open-ink: #F3D27A;
+  --c-patient: #4A3326;   --c-patient-ink: #FFC39C;
+  --c-rules: #233B4E;     --c-rules-ink: #9FCFF5;
+  --c-material: #452D4A;  --c-material-ink: #EAB3F2;
+  color-scheme: dark;
+}
+html.large-text { font-size: 112.5%; }
+html, body { margin: 0; }
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 1rem;
+  line-height: 1.75;
+  -webkit-font-smoothing: antialiased;
+  padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
+h1, h2, h3 { text-wrap: balance; line-height: 1.4; margin: 0; }
+svg.i { width: 1.25em; height: 1.25em; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+[hidden] { display: none !important; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---------- Top bar ---------- */
+.topbar {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+.topbar-inner { max-width: 960px; margin: 0 auto; padding: 10px 16px; display: flex; align-items: center; gap: 12px; }
+.brand { display: flex; align-items: center; gap: 8px; text-decoration: none; color: var(--ink); flex: none; }
+.brand-mark { width: 38px; height: 38px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-ink); display: grid; place-items: center; }
+.brand-mark svg { width: 22px; height: 22px; }
+.brand-text { font-family: var(--font-display); font-size: 1.15rem; line-height: 1.1; }
+.brand-text small { display: block; font-family: var(--font-body); font-size: .68rem; color: var(--ink-soft); letter-spacing: .08em; }
+.search { flex: 1; min-width: 0; position: relative; }
+.search input {
+  width: 100%; height: 44px; border-radius: 999px; border: 1.5px solid var(--line);
+  background: var(--surface); padding: 0 16px 0 42px; font-size: .95rem;
+}
+.search input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+.search svg { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--ink-soft); }
+.icon-btn {
+  width: 44px; height: 44px; border-radius: 50%; border: none; background: transparent; color: var(--ink-soft);
+  display: grid; place-items: center; flex: none;
+}
+.icon-btn:hover { background: var(--surface-2); color: var(--accent-ink); }
+@media (max-width: 520px) { .brand-text { display: none; } }
+
+/* ---------- Main ---------- */
+main { max-width: 960px; margin: 0 auto; padding: 20px 16px 32px; display: flex; flex-direction: column; gap: 28px; }
+.section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.section-head h2 { font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+.section-head h2::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); flex: none; }
+.section-head a, .link-btn { color: var(--accent-ink); font-size: .88rem; text-decoration: none; background: none; border: none; padding: 0; }
+.muted { color: var(--ink-soft); }
+
+/* Greeting */
+.hello {
+  position: relative; overflow: hidden;
+  background: var(--surface-2);
+  border-radius: 24px; padding: 22px 22px 20px;
+}
+.hello::after {
+  content: ""; position: absolute; right: -40px; top: -40px; width: 180px; height: 180px; border-radius: 50%;
+  background: radial-gradient(circle at 40% 40%, var(--accent-soft), transparent 70%);
+  pointer-events: none;
+}
+.hello-date { font-size: .85rem; color: var(--ink-soft); letter-spacing: .04em; }
+.hello h1 { font-family: var(--font-display); font-weight: 400; font-size: clamp(1.5rem, 4.5vw, 2rem); margin: 4px 0 6px; color: var(--ink); }
+.hello p { margin: 0; color: var(--ink-soft); font-size: .92rem; position: relative; z-index: 1; }
+.hello-stats { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; position: relative; z-index: 1; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; background: var(--surface); font-size: .82rem; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.pill b { color: var(--accent-ink); font-weight: 700; }
+
+/* Emergency banner */
+.sos {
+  display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-radius: var(--radius);
+  background: var(--c-emergency); color: var(--c-emergency-ink); text-decoration: none; border: 1.5px solid color-mix(in srgb, var(--c-emergency-ink) 25%, transparent);
+}
+.sos-icon { width: 44px; height: 44px; border-radius: 50%; background: var(--surface); display: grid; place-items: center; flex: none; }
+.sos-icon svg { width: 24px; height: 24px; }
+.sos strong { display: block; font-size: 1rem; }
+.sos span { font-size: .84rem; opacity: .9; }
+.sos .chev { margin-left: auto; }
+
+/* Category grid */
+.cat-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 720px) { .cat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.cat {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 16px; border-radius: var(--radius);
+  background: var(--cat-bg); color: var(--ink); text-decoration: none; border: none; text-align: left;
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.cat:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+.cat-icon { width: 42px; height: 42px; border-radius: 14px; background: var(--surface); color: var(--cat-ink); display: grid; place-items: center; }
+.cat-icon svg { width: 24px; height: 24px; }
+.cat-name { font-weight: 700; font-size: .98rem; line-height: 1.3; }
+.cat-count { font-size: .78rem; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+
+/* Manual list */
+.list { display: flex; flex-direction: column; gap: 10px; }
+.item {
+  display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: var(--radius);
+  background: var(--surface); border: 1px solid var(--line); text-decoration: none; color: var(--ink);
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.item:hover { border-color: var(--accent); box-shadow: var(--shadow); }
+.item-icon { width: 44px; height: 44px; border-radius: 14px; background: var(--cat-bg); color: var(--cat-ink); display: grid; place-items: center; flex: none; }
+.item-body { flex: 1; min-width: 0; }
+.item-title { font-weight: 700; font-size: 1rem; line-height: 1.45; }
+.item-sub { font-size: .84rem; color: var(--ink-soft); display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+.item-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: .76rem; color: var(--ink-soft); margin-top: 2px; font-variant-numeric: tabular-nums; }
+.item-meta span { display: inline-flex; align-items: center; gap: 4px; }
+.item-meta svg { width: 14px; height: 14px; }
+.item .chev { color: var(--ink-soft); }
+.progress-mini { width: 54px; height: 6px; border-radius: 99px; background: var(--surface-2); overflow: hidden; display: inline-block; vertical-align: middle; }
+.progress-mini i { display: block; height: 100%; background: var(--ok); border-radius: inherit; }
+mark { background: var(--accent-soft); color: var(--ink); border-radius: 4px; padding: 0 2px; }
+
+.chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+.chips::-webkit-scrollbar { display: none; }
+.chip {
+  flex: none; border: 1.5px solid var(--line); background: var(--surface); border-radius: 999px; padding: 6px 14px; font-size: .86rem;
+  color: var(--ink-soft); white-space: nowrap;
+}
+.chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
+
+.empty {
+  text-align: center; padding: 28px 20px; border-radius: var(--radius); border: 2px dashed var(--line); color: var(--ink-soft); font-size: .92rem;
+}
+.empty svg { width: 34px; height: 34px; color: var(--accent); margin-bottom: 6px; }
+
+/* ---------- Detail ---------- */
+.back { display: inline-flex; align-items: center; gap: 4px; color: var(--ink-soft); background: none; border: none; padding: 6px 8px 6px 0; font-size: .92rem; text-decoration: none; }
+.back:hover { color: var(--accent-ink); }
+.detail-head { display: flex; flex-direction: column; gap: 10px; }
+.tag { display: inline-flex; align-items: center; gap: 6px; padding: 3px 12px; border-radius: 999px; background: var(--cat-bg); color: var(--cat-ink); font-size: .82rem; font-weight: 700; align-self: flex-start; }
+.tag svg { width: 16px; height: 16px; }
+.detail-head h1 { font-size: clamp(1.4rem, 4vw, 1.85rem); font-weight: 700; }
+.detail-head .summary { margin: 0; color: var(--ink-soft); max-width: 65ch; }
+.meta-row { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: .84rem; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.meta-row span { display: inline-flex; align-items: center; gap: 5px; }
+.meta-row svg { width: 16px; height: 16px; }
+.keywords { display: flex; flex-wrap: wrap; gap: 6px; }
+.keywords span { font-size: .78rem; padding: 2px 10px; border-radius: 999px; background: var(--surface-2); color: var(--ink-soft); }
+
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 0 18px; border-radius: 999px;
+  border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); font-size: .92rem; font-weight: 500; text-decoration: none;
+}
+.btn:hover { border-color: var(--accent); color: var(--accent-ink); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #3E2229; font-weight: 700; }
+.btn.primary:hover { filter: brightness(1.04); color: #3E2229; }
+.btn.danger { color: var(--warn-ink); border-color: color-mix(in srgb, var(--warn-ink) 35%, transparent); }
+.btn.faved { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-ink); }
+.btn.faved svg { fill: currentColor; }
+.btn.sm { min-height: 36px; padding: 0 12px; font-size: .84rem; }
+
+.progress {
+  position: sticky; top: calc(env(safe-area-inset-top, 0px) + 65px); z-index: 10;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 16px;
+  display: flex; align-items: center; gap: 14px; box-shadow: var(--shadow);
+}
+.progress-bar { flex: 1; height: 10px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+.progress-bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--ok)); border-radius: inherit; transition: width .3s ease; }
+.progress-label { font-size: .86rem; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.progress.done .progress-label { color: var(--ok); }
+
+.steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; counter-reset: step; }
+.step {
+  display: grid; grid-template-columns: auto 1fr; gap: 14px; padding: 16px; border-radius: var(--radius);
+  background: var(--surface); border: 1.5px solid var(--line); transition: background .2s ease, border-color .2s ease;
+}
+.step-check {
+  width: 44px; height: 44px; border-radius: 50%; border: 2px solid var(--accent); background: var(--surface); color: var(--accent-ink);
+  display: grid; place-items: center; font-weight: 700; font-size: 1.05rem; font-variant-numeric: tabular-nums; padding: 0;
+}
+.step-check svg { display: none; width: 22px; height: 22px; stroke-width: 2.6; }
+.step.done { background: color-mix(in srgb, var(--ok) 9%, var(--surface)); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
+.step.done .step-check { background: var(--ok); border-color: var(--ok); color: #fff; }
+.step.done .step-check span { display: none; }
+.step.done .step-check svg { display: block; }
+.step.done .step-text { color: var(--ink-soft); }
+.step-body { min-width: 0; display: flex; flex-direction: column; gap: 8px; padding-top: 7px; }
+.step-text { margin: 0; font-size: 1rem; white-space: pre-wrap; }
+.note { display: flex; gap: 8px; padding: 10px 12px; border-radius: var(--radius-sm); font-size: .88rem; line-height: 1.65; }
+.note svg { margin-top: 2px; }
+.note b { flex: none; }
+.note.tip { background: var(--accent-soft); color: var(--ink); }
+.note.tip svg, .note.tip b { color: var(--accent-ink); }
+.note.warn { background: var(--warn-bg); color: var(--ink); }
+.note.warn svg, .note.warn b { color: var(--warn-ink); }
+.complete {
+  text-align: center; padding: 22px; border-radius: var(--radius); background: color-mix(in srgb, var(--ok) 12%, var(--surface));
+  color: var(--ink);
+}
+.complete strong { font-family: var(--font-display); font-weight: 400; font-size: 1.3rem; display: block; color: var(--ok); }
+
+/* ---------- Form ---------- */
+.form { display: flex; flex-direction: column; gap: 18px; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field label, .field .label { font-weight: 700; font-size: .9rem; }
+.field .hint { font-size: .78rem; color: var(--ink-soft); }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 520px) { .row2 { grid-template-columns: 1fr; } }
+input[type="text"], input[type="number"], select, textarea {
+  width: 100%; border: 1.5px solid var(--line); background: var(--surface); border-radius: var(--radius-sm); padding: 10px 12px; min-height: 44px;
+}
+textarea { resize: vertical; min-height: 72px; line-height: 1.6; }
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+.step-edit { padding: 14px; border-radius: var(--radius); background: var(--surface-2); display: flex; flex-direction: column; gap: 10px; }
+.step-edit-head { display: flex; align-items: center; gap: 8px; }
+.step-edit-head .num { width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: #3E2229; display: grid; place-items: center; font-weight: 700; font-size: .88rem; }
+.step-edit-head .tools { margin-left: auto; display: flex; gap: 2px; }
+.step-edit-head .tools button { width: 36px; height: 36px; }
+.note-row { display: grid; grid-template-columns: 140px 1fr; gap: 8px; }
+@media (max-width: 520px) { .note-row { grid-template-columns: 1fr; } }
+.form-foot { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; padding-top: 6px; }
+
+/* ---------- Tab bar ---------- */
+.tabbar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+  background: var(--surface); border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.tabbar-inner { max-width: 560px; margin: 0 auto; display: grid; grid-template-columns: repeat(4, 1fr); padding: 0 8px; }
+.tab {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 9px 4px 10px; text-decoration: none; color: var(--ink-soft); font-size: .72rem;
+  position: relative;
+}
+.tab svg { width: 24px; height: 24px; }
+.tab[aria-current="page"] { color: var(--accent-ink); font-weight: 700; }
+.tab[aria-current="page"]::before { content: ""; position: absolute; top: 0; width: 28px; height: 3px; border-radius: 0 0 4px 4px; background: var(--accent); }
+.tab.add .plus { width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: #3E2229; display: grid; place-items: center; margin-top: -2px; }
+.tab.add .plus svg { width: 20px; height: 20px; stroke-width: 2.4; }
+
+/* ---------- Sheet / Toast ---------- */
+.overlay { position: fixed; inset: 0; z-index: 50; background: rgba(60, 30, 40, .35); display: flex; align-items: flex-end; justify-content: center; padding: 16px; }
+@media (min-width: 640px) { .overlay { align-items: center; } }
+.sheet {
+  width: 100%; max-width: 520px; max-height: 86vh; overflow-y: auto; background: var(--surface); border-radius: 24px; padding: 22px 20px;
+  display: flex; flex-direction: column; gap: 16px; box-shadow: 0 20px 50px rgba(0,0,0,.2);
+  margin-bottom: env(safe-area-inset-bottom, 0px);
+}
+.sheet h2 { font-size: 1.15rem; }
+.sheet-head { display: flex; align-items: center; justify-content: space-between; }
+.setting { display: flex; flex-direction: column; gap: 8px; padding-top: 14px; border-top: 1px solid var(--line); }
+.setting-title { font-weight: 700; font-size: .92rem; }
+.seg { display: inline-flex; background: var(--surface-2); border-radius: 999px; padding: 4px; gap: 4px; align-self: flex-start; }
+.seg button { border: none; background: transparent; border-radius: 999px; padding: 6px 16px; color: var(--ink-soft); font-size: .88rem; min-height: 36px; }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--accent-ink); font-weight: 700; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+.sheet textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .76rem; min-height: 120px; }
+.toast {
+  position: fixed; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%) translateY(10px); z-index: 60;
+  background: var(--ink); color: var(--bg); padding: 10px 20px; border-radius: 999px; font-size: .9rem; opacity: 0; pointer-events: none;
+  transition: opacity .2s ease, transform .2s ease; white-space: nowrap;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="#home" aria-label="ホームへ">
+      <span class="brand-mark"><svg class="i" viewBox="0 0 24 24"><path d="M8 3c-2.5 0-4 2-4 4.5 0 2 .8 3.5 1.3 5.5.6 2.6 1 6 2.7 6 1.6 0 1.6-4 3-4h2c1.4 0 1.4 4 3 4 1.7 0 2.1-3.4 2.7-6 .5-2 1.3-3.5 1.3-5.5C20 5 18.5 3 16 3c-1.6 0-2.6.8-4 .8S9.6 3 8 3z"/></svg></span>
+      <span class="brand-text">みらい歯科<small>院内マニュアル</small></span>
+    </a>
+    <div class="search">
+      <svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      <label for="q" class="sr-only">マニュアルを検索</label>
+      <input id="q" type="search" placeholder="マニュアルを検索（例：滅菌）" autocomplete="off">
+    </div>
+    <button class="icon-btn" id="openSettings" aria-label="設定">
+      <svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
+  </div>
+</header>
+
+<main id="view" tabindex="-1"></main>
+
+<nav class="tabbar" aria-label="メインメニュー">
+  <div class="tabbar-inner">
+    <a class="tab" href="#home" data-tab="home"><svg class="i" viewBox="0 0 24 24"><path d="M3 10.5L12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>ホーム</a>
+    <a class="tab" href="#all" data-tab="all"><svg class="i" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/></svg>一覧</a>
+    <a class="tab" href="#fav" data-tab="fav"><svg class="i" viewBox="0 0 24 24"><path d="M12 20s-7.5-4.6-9-9.3A4.8 4.8 0 0 1 12 6.6a4.8 4.8 0 0 1 9 4.1C19.5 15.4 12 20 12 20z"/></svg>お気に入り</a>
+    <a class="tab add" href="#new" data-tab="new"><span class="plus"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>追加</a>
+  </div>
+</nav>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div id="overlay" class="overlay" hidden></div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ================= アイコン ================= */
+  const ICON = {
+    reception: '<path d="M5 17h14M7 17v-3a5 5 0 0 1 10 0v3M12 9V7M10 7h4M4 20h16"/>',
+    assist: '<path d="M8 3c-2.5 0-4 2-4 4.5 0 2 .8 3.5 1.3 5.5.6 2.6 1 6 2.7 6 1.6 0 1.6-4 3-4h2c1.4 0 1.4 4 3 4 1.7 0 2.1-3.4 2.7-6 .5-2 1.3-3.5 1.3-5.5C20 5 18.5 3 16 3c-1.6 0-2.6.8-4 .8S9.6 3 8 3z"/>',
+    steril: '<path d="M12 3l1.8 4.7 4.7 1.8-4.7 1.8L12 16l-1.8-4.7-4.7-1.8 4.7-1.8zM18 15l.8 2.2 2.2.8-2.2.8L18 21l-.8-2.2-2.2-.8 2.2-.8z"/>',
+    emergency: '<path d="M12 20s-7.5-4.6-9-9.3A4.8 4.8 0 0 1 12 6.6a4.8 4.8 0 0 1 9 4.1C19.5 15.4 12 20 12 20z"/><path d="M7 12h3l1.5-2.5L13 14l1.2-2H17"/>',
+    open: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>',
+    patient: '<circle cx="12" cy="12" r="9"/><path d="M8.5 14.5c1.8 2 5.2 2 7 0M9 9.5h.01M15 9.5h.01"/>',
+    rules: '<path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3zM5 17a3 3 0 0 1 3-3h11M9 8h6"/>',
+    material: '<path d="M3.5 7.5L12 3l8.5 4.5v9L12 21l-8.5-4.5zM3.5 7.5L12 12l8.5-4.5M12 12v9"/>',
+    chev: '<path d="M9 6l6 6-6 6"/>',
+    back: '<path d="M15 6l-6 6 6 6"/>',
+    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    pen: '<path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4"/>',
+    heart: '<path d="M12 20s-7.5-4.6-9-9.3A4.8 4.8 0 0 1 12 6.6a4.8 4.8 0 0 1 9 4.1C19.5 15.4 12 20 12 20z"/>',
+    check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+    reset: '<path d="M4 12a8 8 0 1 0 2.3-5.7M4 4v4h4"/>',
+    trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+    up: '<path d="M6 15l6-6 6 6"/>',
+    down: '<path d="M6 9l6 6 6-6"/>',
+    x: '<path d="M6 6l12 12M18 6L6 18"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    bulb: '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/>',
+    alert: '<path d="M12 3.5L2.5 20h19zM12 10v4.5M12 17.5h.01"/>',
+    user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+    cal: '<rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
+    search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',
+    copy: '<rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V5.5A1.5 1.5 0 0 0 14.5 4h-9A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8"/>'
+  };
+  const svg = (name, cls) => `<svg class="i ${cls || ''}" viewBox="0 0 24 24" aria-hidden="true">${ICON[name] || ''}</svg>`;
+
+  /* ================= カテゴリ ================= */
+  const CATEGORIES = [
+    { id: 'reception', name: '受付・会計', desc: '電話・受付・会計まわり' },
+    { id: 'assist',    name: '診療補助',   desc: 'チェアサイドでの介助' },
+    { id: 'steril',    name: '滅菌・消毒', desc: '感染対策と器具の処理' },
+    { id: 'emergency', name: '緊急時対応', desc: 'もしものときの手順' },
+    { id: 'open',      name: '開院・閉院', desc: '朝と夜のルーティン' },
+    { id: 'patient',   name: '患者さま対応', desc: '声かけ・接遇のコツ' },
+    { id: 'material',  name: '器具・材料', desc: '在庫と取り扱い' },
+    { id: 'rules',     name: '院内ルール', desc: '個人情報・身だしなみ' }
+  ];
+  const catById = id => CATEGORIES.find(c => c.id === id) || CATEGORIES[0];
+  const catStyle = id => `--cat-bg: var(--c-${id}); --cat-ink: var(--c-${id}-ink);`;
+
+  /* ================= 初期マニュアル（サンプル） ================= */
+  const DEFAULT_MANUALS = [
+    {
+      id: 'm1', cat: 'open', title: '朝の開院準備', minutes: 20, updated: '2026-09-28', author: '受付チーム',
+      summary: '診療開始30分前からの準備の流れです。上から順番にチェックしていきましょう。',
+      tags: ['朝', '開院', 'ルーティン'],
+      steps: [
+        { t: '入口の鍵を開け、セキュリティを解除する。照明・空調をつける。' },
+        { t: 'コンプレッサー・バキュームの電源を入れる。', tip: '異音やエラー表示がないか、音と表示を必ず確認します。' },
+        { t: '各ユニットの電源を入れ、給水ラインを2分間フラッシングする。', tip: '休み明けの朝は長めにフラッシングしてください。' },
+        { t: 'オートクレーブの水量と前日の滅菌記録を確認する。' },
+        { t: '本日の予約表を印刷し、初診・急患枠・特記事項（アレルギー等）に印をつける。' },
+        { t: '受付のレジ金を確認し、つり銭準備金を数えて記録する。' },
+        { t: '待合室・トイレの清掃状態と、消毒液・ペーパー類の補充を確認する。' },
+        { t: '朝礼で本日の予約数と注意事項を共有する。' }
+      ]
+    },
+    {
+      id: 'm2', cat: 'reception', title: '電話予約の受け方', minutes: 5, updated: '2026-09-20', author: '受付チーム',
+      summary: '新規・再診どちらの電話にも対応できる基本の流れです。',
+      tags: ['電話', '予約', '新患'],
+      steps: [
+        { t: '3コール以内に出て「お電話ありがとうございます。みらい歯科、担当の〇〇です」と名乗る。' },
+        { t: '診察券番号またはお名前・生年月日を伺い、カルテを検索する。', tip: '新規の方はお名前（フリガナ）・生年月日・電話番号を先に控えます。' },
+        { t: '症状・ご希望（痛み、検診、クリーニングなど）を伺う。' },
+        { t: '痛みや腫れがある場合は、急患枠の空き状況を優先して確認する。', warn: '顔の大きな腫れ、出血が止まらない、外傷の場合は歯科医師に必ず相談してください。' },
+        { t: '日時を2〜3候補ご提案し、決定したら予約システムに入力する。' },
+        { t: '日時・持ち物（保険証、お薬手帳）を復唱して確認する。' },
+        { t: '「お気をつけてお越しください」とあいさつし、相手が切ってから受話器を置く。' }
+      ]
+    },
+    {
+      id: 'm3', cat: 'reception', title: '初診患者さまの受付', minutes: 10, updated: '2026-09-15', author: '受付チーム',
+      summary: 'はじめての方を安心してお迎えするための受付手順です。',
+      tags: ['初診', '問診票', '保険証'],
+      steps: [
+        { t: '笑顔で目を見てあいさつし、予約のお名前を確認する。' },
+        { t: '保険証（マイナ保険証）を確認し、資格確認を行う。' },
+        { t: '問診票をお渡しし、記入方法を説明する。', tip: '「わからないところは空欄で大丈夫です」と一言添えると安心されます。' },
+        { t: '回収した問診票で、既往歴・服用薬・アレルギーをチェックする。', warn: '血液をサラサラにする薬、骨粗しょう症の薬、アレルギーの記載は必ず担当者に口頭でも伝えます。' },
+        { t: '診察券を作成し、カルテを登録する。' },
+        { t: 'おおよその待ち時間をお伝えし、待合室へご案内する。' }
+      ]
+    },
+    {
+      id: 'm4', cat: 'reception', title: '会計と次回予約', minutes: 5, updated: '2026-08-30', author: '受付チーム',
+      summary: '診療後のお会計から次回予約までの流れです。',
+      tags: ['会計', '次回予約', 'レジ'],
+      steps: [
+        { t: '担当者から次回の処置内容と必要な時間を確認する。' },
+        { t: '金額をお伝えし、お預かり金額を声に出して確認する。' },
+        { t: '領収書・明細書をお渡しする。' },
+        { t: '次回予約の候補をご提案し、予約カードに記入してお渡しする。' },
+        { t: '処方がある場合はお薬の説明書と一緒にお渡しする。', tip: '麻酔をした方には「感覚が戻るまでお食事はお控えください」とお伝えします。' }
+      ]
+    },
+    {
+      id: 'm5', cat: 'assist', title: 'ユニットの準備と片付け', minutes: 8, updated: '2026-09-25', author: '衛生士チーム',
+      summary: '患者さまごとに行う、ユニット周りの準備と片付けの手順です。',
+      tags: ['ユニット', 'チェアサイド', '準備'],
+      steps: [
+        { t: '手指衛生を行い、新しいグローブを装着する。' },
+        { t: 'ライトハンドル・テーブル・ブラケットにバリアフィルムを貼る。' },
+        { t: 'エプロン・コップ・基本セット（ミラー、探針、ピンセット）を準備する。', tip: '基本セットは患者さまの前で開封すると安心感につながります。' },
+        { t: 'カルテを見て処置内容を確認し、必要な器具・材料を追加する。' },
+        { t: '診療後、使用済み器具をトレーごと回収し、鋭利な物は専用容器へ捨てる。', warn: '針やメスはリキャップせず、そのまま針捨て容器へ。' },
+        { t: 'バリアフィルムを外し、触れた部分を清拭消毒する。' },
+        { t: 'バキュームに水を吸引させてラインを洗浄し、チェアを初期位置に戻す。' }
+      ]
+    },
+    {
+      id: 'm6', cat: 'assist', title: 'バキューム操作の基本', minutes: 3, updated: '2026-07-18', author: '衛生士チーム',
+      summary: '患者さまが楽に受けられる、吸引のポジションとコツです。',
+      tags: ['バキューム', '吸引', 'アシスト'],
+      steps: [
+        { t: 'ペングリップまたはパームグリップでバキュームを持つ。' },
+        { t: '先端は処置歯の舌側（または頬側）、少し後方に置く。', tip: 'タービンの注水が当たる位置の「すぐそば」が基本です。' },
+        { t: '舌や頬を軽く排除して、術者の視野を確保する。' },
+        { t: '咽頭部・軟口蓋に当てないよう注意する。', warn: '奥に当てると嘔吐反射を起こしやすくなります。' },
+        { t: '処置の区切りで「お水を吸いますね」と声をかけ、口腔内を吸引する。' }
+      ]
+    },
+    {
+      id: 'm7', cat: 'assist', title: 'アルジネート印象材の練和', minutes: 5, updated: '2026-08-12', author: '衛生士チーム',
+      summary: '気泡の少ない印象を採るための練和手順です。',
+      tags: ['印象', 'アルジネート', '練和'],
+      steps: [
+        { t: '患者さまの歯列に合うトレーを選び、試適する。' },
+        { t: '粉と水を指定の比率で計量する。', tip: '粉は容器を振ってほぐしてから、すり切りで量ります。' },
+        { t: 'ラバーボウルに水→粉の順で入れ、スパチュラで押しつぶすように練和する（目安30秒前後）。' },
+        { t: 'なめらかになったらトレーに気泡が入らないよう盛り、術者に渡す。' },
+        { t: '撤去後は流水で洗い、消毒してから石膏を注ぐ。', warn: '印象体は乾燥・変形しやすいので、すぐに処理します。' }
+      ]
+    },
+    {
+      id: 'm8', cat: 'steril', title: '器具の洗浄から滅菌まで', minutes: 30, updated: '2026-09-30', author: '感染対策委員',
+      summary: '使用済み器具を安全に再使用できる状態にするまでの流れです。',
+      tags: ['滅菌', 'オートクレーブ', '洗浄', '感染対策'],
+      steps: [
+        { t: '厚手のグローブ・マスク・ゴーグル・エプロンを装着する。', warn: '素手で使用済み器具に触れないでください。' },
+        { t: '器具を一次洗浄（予備洗浄）し、血液や汚れを落とす。' },
+        { t: '超音波洗浄機またはウォッシャーディスインフェクターで洗浄する。' },
+        { t: 'よくすすぎ、十分に乾燥させる。' },
+        { t: '滅菌バッグに入れ、日付と内容を記入して封をする。', tip: '化学的インジケーターが入っているか確認しましょう。' },
+        { t: 'オートクレーブに詰め込みすぎないよう並べ、機種指定のプログラムで滅菌する。' },
+        { t: '終了後、インジケーターの変色を確認し、滅菌記録に記入する。' },
+        { t: '乾燥・冷却してから清潔な保管棚へ。古い日付のものを手前に置く。' }
+      ]
+    },
+    {
+      id: 'm9', cat: 'steril', title: '診療後のユニット清拭', minutes: 5, updated: '2026-09-02', author: '感染対策委員',
+      summary: '次の患者さまを迎える前に行う清拭のポイントです。',
+      tags: ['清拭', '消毒', 'ユニット'],
+      steps: [
+        { t: 'グローブを交換し、消毒用クロスを用意する。' },
+        { t: 'ライトハンドル、ブラケット、スイッチ類を清拭する。' },
+        { t: 'チェアのヘッドレスト・アームレストを清拭する。' },
+        { t: 'スピットンを流水で洗い、排水口のゴミを取り除く。' },
+        { t: 'ハンドピースを外し、所定の手順で処理に回す。', tip: '清拭は「きれいな所から汚れた所へ」一方向に拭くのが基本です。' }
+      ]
+    },
+    {
+      id: 'm10', cat: 'emergency', title: '患者さまの気分が悪くなったとき', minutes: 3, updated: '2026-10-01', author: '院長',
+      summary: '治療中に顔色が悪い、冷や汗、気分不良を訴えたときの初期対応です。',
+      tags: ['気分不良', '迷走神経反射', '急変', 'AED'],
+      steps: [
+        { t: 'すぐに処置を中断し、口腔内の器具・綿などを取り除く。' },
+        { t: '大きな声で歯科医師とスタッフを呼ぶ。', warn: 'ひとりで対応しないこと。必ず応援を呼びます。' },
+        { t: 'チェアを倒して水平位にし、衣服をゆるめる。', tip: '足を少し高くすると楽になることが多いです。' },
+        { t: '名前を呼んで意識を確認し、呼吸・脈拍・血圧を測る。' },
+        { t: '歯科医師の指示に従い、酸素投与などを準備する。' },
+        { t: '意識がない・呼吸がおかしい場合は119番通報し、AEDを持ってくる。', warn: 'AEDの場所：受付カウンター横（院内に合わせて書き換えてください）' },
+        { t: '経過（時刻・バイタル・行った対応）を記録する。' }
+      ]
+    },
+    {
+      id: 'm11', cat: 'emergency', title: '針刺し・切創事故が起きたとき', minutes: 5, updated: '2026-09-10', author: '感染対策委員',
+      summary: '使用済みの針や器具でけがをしたときの対応です。あわてずに行いましょう。',
+      tags: ['針刺し', '切創', '感染', '報告'],
+      steps: [
+        { t: 'すぐに作業を中断し、傷口を流水と石けんで十分に洗い流す。' },
+        { t: '院長または感染対策担当にすぐ報告する。', warn: '「これくらいなら」と自己判断しないでください。' },
+        { t: '患者さまの感染症情報（問診・検査結果）を確認する。' },
+        { t: '必要に応じて、指定の医療機関を速やかに受診する。', tip: '受診先と連絡先は事前に院内の掲示を確認しておきましょう。' },
+        { t: '事故報告書に日時・状況・器具・対応を記入する。' }
+      ]
+    },
+    {
+      id: 'm12', cat: 'open', title: '閉院時の点検', minutes: 15, updated: '2026-09-28', author: '受付チーム',
+      summary: '一日の終わりに行う片付けと戸締まりのチェックです。',
+      tags: ['閉院', '戸締まり', '夜'],
+      steps: [
+        { t: '全ユニットの給水ラインをフラッシングし、電源を切る。' },
+        { t: 'バキュームラインに洗浄剤を流し、コンプレッサー・バキュームの電源を切る。' },
+        { t: 'レジ締めを行い、売上と現金を照合して記録する。' },
+        { t: '翌日の予約を確認し、必要な技工物が届いているかチェックする。' },
+        { t: '医療廃棄物の容器が満杯になっていないか確認する。' },
+        { t: '窓・裏口の施錠、照明・空調オフを確認し、セキュリティをセットする。' }
+      ]
+    },
+    {
+      id: 'm13', cat: 'patient', title: '小さなお子さまへの声かけ', minutes: 3, updated: '2026-08-05', author: '衛生士チーム',
+      summary: 'こわがらせない言葉選びと、褒めるタイミングのコツです。',
+      tags: ['小児', '声かけ', '接遇'],
+      steps: [
+        { t: 'しゃがんで目線を合わせ、名前を呼んであいさつする。' },
+        { t: '器具は「お水のシャワー」「掃除機さん」など、こわくない言葉で紹介する。' },
+        { t: '「痛くないよ」ではなく「痛かったら左手を挙げてね」と合図を決める。', tip: '約束を守れたら、すぐに具体的に褒めましょう。' },
+        { t: '保護者の方にも、今日やったことと次回の内容を伝える。' }
+      ]
+    },
+    {
+      id: 'm14', cat: 'material', title: '材料の在庫チェックと発注', minutes: 15, updated: '2026-09-18', author: '受付チーム',
+      summary: '毎週金曜日に行う在庫確認と発注の手順です。',
+      tags: ['在庫', '発注', '金曜日'],
+      steps: [
+        { t: '在庫表を印刷し、棚ごとに数を数えて記入する。' },
+        { t: '使用期限が近いものに付箋を貼り、手前に移動する。', warn: '期限切れの材料は使用せず、院長に報告します。' },
+        { t: '定数を下回った品目を発注リストに書き出す。' },
+        { t: '院長の確認後、業者へ発注し、発注日を記録する。' }
+      ]
+    },
+    {
+      id: 'm15', cat: 'rules', title: '個人情報の取り扱い', minutes: 5, updated: '2026-06-01', author: '院長',
+      summary: 'カルテや予約情報を守るための基本ルールです。',
+      tags: ['個人情報', 'カルテ', 'ルール'],
+      steps: [
+        { t: '待合室では患者さまの病名・処置内容を口にしない。' },
+        { t: 'カルテや予約表を受付カウンターに出しっぱなしにしない。' },
+        { t: 'パソコンは離席時に必ずロックする。' },
+        { t: '患者さまの情報を個人のスマートフォンで撮影・送信しない。', warn: 'SNSへの投稿は、写り込みも含めて禁止です。' },
+        { t: 'ご家族からの問い合わせは、ご本人の同意を確認してから対応する。' }
+      ]
+    }
+  ];
+
+  /* ================= 保存（端末ごと） ================= */
+  const KEY = 'mirai-manual-v1';
+  const store = {
+    load() {
+      try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; }
+    },
+    save() {
+      try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* 保存不可の環境では何もしない */ }
+    }
+  };
+  const saved = store.load();
+  const state = {
+    manuals: Array.isArray(saved.manuals) ? saved.manuals : JSON.parse(JSON.stringify(DEFAULT_MANUALS)),
+    favs: Array.isArray(saved.favs) ? saved.favs : ['m10', 'm8'],
+    recent: Array.isArray(saved.recent) ? saved.recent : ['m1', 'm2'],
+    checks: saved.checks && typeof saved.checks === 'object' ? saved.checks : {},
+    largeText: !!saved.largeText
+  };
+  document.documentElement.classList.toggle('large-text', state.largeText);
+
+  /* ================= ユーティリティ ================= */
+  const $ = (s, el) => (el || document).querySelector(s);
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const getManual = id => state.manuals.find(m => m.id === id);
+  const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+  const fmtDate = s => { const p = String(s || '').split('-'); return p.length === 3 ? `${+p[0]}年${+p[1]}月${+p[2]}日` : ''; };
+  const doneCount = m => (state.checks[m.id] || []).filter(i => i < m.steps.length).length;
+  const view = $('#view');
+
+  let toastTimer;
+  function toast(msg) {
+    const t = $('#toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+  }
+
+  function highlight(text, q) {
+    const safe = esc(text);
+    if (!q) return safe;
+    const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+    return safe.replace(re, m => `<mark>${m}</mark>`);
+  }
+
+  function itemHTML(m, q) {
+    const c = catById(m.cat);
+    const done = doneCount(m);
+    const pct = m.steps.length ? Math.round(done / m.steps.length * 100) : 0;
+    let sub = m.summary;
+    if (q) {
+      const hit = m.steps.find(s => (s.t + (s.tip || '') + (s.warn || '')).toLowerCase().includes(q.toLowerCase()));
+      if (hit && !m.title.toLowerCase().includes(q.toLowerCase())) sub = hit.t;
+    }
+    return `<a class="item" href="#m-${esc(m.id)}" style="${catStyle(c.id)}">
+      <span class="item-icon">${svg(c.id)}</span>
+      <span class="item-body">
+        <span class="item-title">${highlight(m.title, q)}</span>
+        <span class="item-sub">${highlight(sub, q)}</span>
+        <span class="item-meta">
+          <span>${esc(c.name)}</span>
+          <span>${svg('clock')}約${esc(m.minutes || 5)}分</span>
+          <span>${m.steps.length}ステップ</span>
+          ${done ? `<span><span class="progress-mini"><i style="width:${pct}%"></i></span>${done}/${m.steps.length}</span>` : ''}
+        </span>
+      </span>
+      ${svg('chev', 'chev')}
+    </a>`;
+  }
+
+  function emptyHTML(icon, text) {
+    return `<div class="empty">${svg(icon)}<div>${text}</div></div>`;
+  }
+
+  /* ================= 画面: ホーム ================= */
+  function renderHome() {
+    const now = new Date();
+    const h = now.getHours();
+    const greet = h < 11 ? 'おはようございます' : h < 17 ? 'こんにちは' : 'おつかれさまです';
+    const wd = '日月火水木金土'[now.getDay()];
+    const favs = state.favs.map(getManual).filter(Boolean);
+    const recent = state.recent.map(getManual).filter(Boolean).slice(0, 4);
+    const latest = [...state.manuals].sort((a, b) => String(b.updated).localeCompare(String(a.updated))).slice(0, 3);
+
+    view.innerHTML = `
+      <section class="hello">
+        <div class="hello-date">${now.getMonth() + 1}月${now.getDate()}日（${wd}）</div>
+        <h1>${greet}</h1>
+        <p>迷ったときは、ここで手順を確認しましょう。</p>
+        <div class="hello-stats">
+          <span class="pill">マニュアル <b>${state.manuals.length}</b> 件</span>
+          <span class="pill">お気に入り <b>${favs.length}</b> 件</span>
+        </div>
+      </section>
+
+      <a class="sos" href="#cat-emergency" style="${catStyle('emergency')}">
+        <span class="sos-icon">${svg('emergency')}</span>
+        <span><strong>緊急時の対応はこちら</strong><span>気分不良・針刺し事故などの手順</span></span>
+        ${svg('chev', 'chev')}
+      </a>
+
+      <section>
+        <div class="section-head"><h2>カテゴリから探す</h2></div>
+        <div class="cat-grid">
+          ${CATEGORIES.map(c => `
+            <a class="cat" href="#cat-${c.id}" style="${catStyle(c.id)}">
+              <span class="cat-icon">${svg(c.id)}</span>
+              <span><span class="cat-name">${esc(c.name)}</span><br><span class="cat-count">${state.manuals.filter(m => m.cat === c.id).length}件</span></span>
+            </a>`).join('')}
+        </div>
+      </section>
+
+      <section>
+        <div class="section-head"><h2>お気に入り</h2>${favs.length ? '<a href="#fav">すべて見る</a>' : ''}</div>
+        ${favs.length ? `<div class="list">${favs.slice(0, 3).map(m => itemHTML(m)).join('')}</div>`
+          : emptyHTML('heart', 'よく使うマニュアルの「お気に入り」を押すと、ここに表示されます')}
+      </section>
+
+      ${recent.length ? `<section>
+        <div class="section-head"><h2>最近見たマニュアル</h2></div>
+        <div class="list">${recent.map(m => itemHTML(m)).join('')}</div>
+      </section>` : ''}
+
+      <section>
+        <div class="section-head"><h2>最近更新されたマニュアル</h2><a href="#all">一覧へ</a></div>
+        <div class="list">${latest.map(m => itemHTML(m)).join('')}</div>
+      </section>
+    `;
+  }
+
+  /* ================= 画面: 一覧 / カテゴリ ================= */
+  let listFilter = 'all';
+  function renderList(catId) {
+    if (catId) listFilter = catId;
+    else if (!catId && location.hash === '#all') listFilter = listFilter || 'all';
+    const items = state.manuals.filter(m => listFilter === 'all' || m.cat === listFilter);
+    const c = listFilter !== 'all' ? catById(listFilter) : null;
+    view.innerHTML = `
+      <section>
+        <div class="section-head"><h2>${c ? esc(c.name) : 'すべてのマニュアル'}</h2><span class="muted" style="font-size:.85rem">${items.length}件</span></div>
+        ${c ? `<p class="muted" style="margin:-6px 0 14px;font-size:.9rem">${esc(c.desc)}</p>` : ''}
+        <div class="chips" role="group" aria-label="カテゴリで絞り込む">
+          <button class="chip" data-filter="all" aria-pressed="${listFilter === 'all'}">すべて</button>
+          ${CATEGORIES.map(x => `<button class="chip" data-filter="${x.id}" aria-pressed="${listFilter === x.id}">${esc(x.name)}</button>`).join('')}
+        </div>
+      </section>
+      <div class="list">
+        ${items.length ? items.map(m => itemHTML(m)).join('') : emptyHTML('plus', 'このカテゴリにはまだマニュアルがありません。<br>下の「追加」から作成できます')}
+      </div>
+    `;
+    view.querySelectorAll('[data-filter]').forEach(b => b.addEventListener('click', () => {
+      listFilter = b.dataset.filter;
+      const target = listFilter === 'all' ? '#all' : `#cat-${listFilter}`;
+      if (location.hash !== target) history.replaceState(null, '', target);
+      renderList(listFilter === 'all' ? null : listFilter);
+      setTab();
+    }));
+  }
+
+  /* ================= 画面: お気に入り ================= */
+  function renderFav() {
+    const favs = state.favs.map(getManual).filter(Boolean);
+    view.innerHTML = `
+      <section>
+        <div class="section-head"><h2>お気に入り</h2><span class="muted" style="font-size:.85rem">${favs.length}件</span></div>
+        ${favs.length ? `<div class="list">${favs.map(m => itemHTML(m)).join('')}</div>`
+          : emptyHTML('heart', 'まだお気に入りがありません。<br>マニュアルを開いて「お気に入り」を押してください')}
+      </section>`;
+  }
+
+  /* ================= 画面: 検索 ================= */
+  function renderSearch(q) {
+    const ql = q.toLowerCase();
+    const hits = state.manuals.filter(m => {
+      const hay = [m.title, m.summary, catById(m.cat).name, ...(m.tags || []), ...m.steps.map(s => s.t + ' ' + (s.tip || '') + ' ' + (s.warn || ''))].join(' ').toLowerCase();
+      return hay.includes(ql);
+    });
+    view.innerHTML = `
+      <section>
+        <div class="section-head"><h2>「${esc(q)}」の検索結果</h2><span class="muted" style="font-size:.85rem">${hits.length}件</span></div>
+        ${hits.length ? `<div class="list">${hits.map(m => itemHTML(m, q)).join('')}</div>`
+          : emptyHTML('search', '見つかりませんでした。<br>別のことば（例：「予約」「消毒」）で試してみてください')}
+      </section>`;
+  }
+
+  /* ================= 画面: マニュアル詳細 ================= */
+  function renderDetail(id) {
+    const m = getManual(id);
+    if (!m) { view.innerHTML = emptyHTML('search', 'マニュアルが見つかりませんでした。<br><a href="#home">ホームへ戻る</a>'); return; }
+    state.recent = [id, ...state.recent.filter(x => x !== id)].slice(0, 8);
+    store.save();
+    const c = catById(m.cat);
+    const isFav = state.favs.includes(id);
+
+    view.innerHTML = `
+      <div style="${catStyle(c.id)};display:flex;flex-direction:column;gap:18px">
+        <div><a class="back" href="#cat-${c.id}">${svg('back')}${esc(c.name)}へ戻る</a></div>
+        <header class="detail-head">
+          <span class="tag">${svg(c.id)}${esc(c.name)}</span>
+          <h1>${esc(m.title)}</h1>
+          ${m.summary ? `<p class="summary">${esc(m.summary)}</p>` : ''}
+          <div class="meta-row">
+            <span>${svg('clock')}所要時間 約${esc(m.minutes || 5)}分</span>
+            <span>${svg('cal')}${fmtDate(m.updated)} 更新</span>
+            ${m.author ? `<span>${svg('user')}${esc(m.author)}</span>` : ''}
+          </div>
+          ${(m.tags || []).length ? `<div class="keywords">${m.tags.map(t => `<span>#${esc(t)}</span>`).join('')}</div>` : ''}
+        </header>
+        <div class="actions">
+          <button class="btn ${isFav ? 'faved' : ''}" id="favBtn" aria-pressed="${isFav}">${svg('heart')}${isFav ? 'お気に入り済み' : 'お気に入り'}</button>
+          <button class="btn" id="resetBtn">${svg('reset')}チェックをリセット</button>
+          <a class="btn" href="#edit-${esc(m.id)}">${svg('pen')}編集</a>
+        </div>
+        <div class="progress" id="progress">
+          <div class="progress-bar"><i id="progressFill"></i></div>
+          <span class="progress-label" id="progressLabel"></span>
+        </div>
+        <ol class="steps">
+          ${m.steps.map((s, i) => `
+            <li class="step" data-i="${i}">
+              <button class="step-check" aria-label="ステップ${i + 1}を完了にする" aria-pressed="false"><span>${i + 1}</span>${svg('check')}</button>
+              <div class="step-body">
+                <p class="step-text">${esc(s.t)}</p>
+                ${s.tip ? `<div class="note tip">${svg('bulb')}<b>ポイント</b><span>${esc(s.tip)}</span></div>` : ''}
+                ${s.warn ? `<div class="note warn">${svg('alert')}<b>注意</b><span>${esc(s.warn)}</span></div>` : ''}
+              </div>
+            </li>`).join('')}
+        </ol>
+        <div class="complete" id="complete" hidden><strong>すべて完了しました</strong><span class="muted">おつかれさまでした。次の作業も確認しましょう。</span></div>
+      </div>`;
+
+    const updateProgress = () => {
+      const set = new Set(state.checks[id] || []);
+      view.querySelectorAll('.step').forEach(li => {
+        const on = set.has(+li.dataset.i);
+        li.classList.toggle('done', on);
+        li.querySelector('.step-check').setAttribute('aria-pressed', on);
+      });
+      const n = doneCount(m), total = m.steps.length;
+      $('#progressFill').style.width = (total ? n / total * 100 : 0) + '%';
+      $('#progressLabel').textContent = `${n} / ${total} 完了`;
+      $('#progress').classList.toggle('done', total > 0 && n === total);
+      $('#complete').hidden = !(total > 0 && n === total);
+    };
+    updateProgress();
+
+    view.querySelectorAll('.step-check').forEach(b => b.addEventListener('click', () => {
+      const i = +b.closest('.step').dataset.i;
+      const set = new Set(state.checks[id] || []);
+      set.has(i) ? set.delete(i) : set.add(i);
+      state.checks[id] = [...set];
+      store.save();
+      updateProgress();
+      if (doneCount(m) === m.steps.length) toast('すべてのステップが完了しました');
+    }));
+    $('#favBtn').addEventListener('click', () => {
+      const on = state.favs.includes(id);
+      state.favs = on ? state.favs.filter(x => x !== id) : [id, ...state.favs];
+      store.save();
+      toast(on ? 'お気に入りから外しました' : 'お気に入りに追加しました');
+      renderDetail(id);
+    });
+    $('#resetBtn').addEventListener('click', () => {
+      delete state.checks[id];
+      store.save();
+      updateProgress();
+      toast('チェックをリセットしました');
+    });
+  }
+
+  /* ================= 画面: 作成・編集 ================= */
+  function renderEdit(id) {
+    const orig = id ? getManual(id) : null;
+    if (id && !orig) { location.hash = '#home'; return; }
+    const draft = orig ? JSON.parse(JSON.stringify(orig)) : {
+      id: 'u' + Date.now().toString(36), cat: listFilter !== 'all' ? listFilter : 'reception', title: '', summary: '', minutes: 5,
+      author: '', tags: [], steps: [{ t: '' }, { t: '' }, { t: '' }]
+    };
+
+    function stepsHTML() {
+      return draft.steps.map((s, i) => {
+        const kind = s.warn ? 'warn' : s.tip ? 'tip' : 'none';
+        return `<div class="step-edit" data-i="${i}">
+          <div class="step-edit-head">
+            <span class="num">${i + 1}</span><span class="label" style="font-weight:700;font-size:.88rem">ステップ${i + 1}</span>
+            <span class="tools">
+              <button type="button" class="icon-btn" data-act="up" aria-label="上へ移動" ${i === 0 ? 'disabled' : ''}>${svg('up')}</button>
+              <button type="button" class="icon-btn" data-act="down" aria-label="下へ移動" ${i === draft.steps.length - 1 ? 'disabled' : ''}>${svg('down')}</button>
+              <button type="button" class="icon-btn" data-act="del" aria-label="このステップを削除">${svg('trash')}</button>
+            </span>
+          </div>
+          <label class="sr-only" for="st-${i}">ステップ${i + 1}の内容</label>
+          <textarea id="st-${i}" data-f="t" rows="2" placeholder="やることを1つ、短く書きます">${esc(s.t)}</textarea>
+          <div class="note-row">
+            <label class="sr-only" for="sk-${i}">補足の種類</label>
+            <select id="sk-${i}" data-f="kind">
+              <option value="none" ${kind === 'none' ? 'selected' : ''}>補足なし</option>
+              <option value="tip" ${kind === 'tip' ? 'selected' : ''}>ポイント</option>
+              <option value="warn" ${kind === 'warn' ? 'selected' : ''}>注意</option>
+            </select>
+            <label class="sr-only" for="sn-${i}">補足の内容</label>
+            <input id="sn-${i}" type="text" data-f="note" placeholder="コツや注意点（任意）" value="${esc(s.warn || s.tip || '')}" ${kind === 'none' ? 'hidden' : ''}>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    view.innerHTML = `
+      <div><a class="back" href="${orig ? '#m-' + esc(orig.id) : '#home'}">${svg('back')}${orig ? 'マニュアルへ戻る' : 'ホームへ戻る'}</a></div>
+      <section>
+        <div class="section-head"><h2>${orig ? 'マニュアルを編集' : '新しいマニュアルを作成'}</h2></div>
+        <form class="form" id="form" novalidate>
+          <div class="field">
+            <label for="f-title">タイトル</label>
+            <input id="f-title" type="text" required maxlength="60" placeholder="例：レントゲン撮影の準備" value="${esc(draft.title)}">
+          </div>
+          <div class="row2">
+            <div class="field">
+              <label for="f-cat">カテゴリ</label>
+              <select id="f-cat">${CATEGORIES.map(c => `<option value="${c.id}" ${draft.cat === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select>
+            </div>
+            <div class="field">
+              <label for="f-min">所要時間（分）</label>
+              <input id="f-min" type="number" min="1" max="240" inputmode="numeric" value="${esc(draft.minutes)}">
+            </div>
+          </div>
+          <div class="field">
+            <label for="f-sum">概要</label>
+            <textarea id="f-sum" rows="2" placeholder="どんなときに使うマニュアルか、ひとことで">${esc(draft.summary)}</textarea>
+          </div>
+          <div class="row2">
+            <div class="field">
+              <label for="f-author">作成・担当</label>
+              <input id="f-author" type="text" placeholder="例：衛生士チーム" value="${esc(draft.author)}">
+            </div>
+            <div class="field">
+              <label for="f-tags">キーワード</label>
+              <input id="f-tags" type="text" placeholder="例：レントゲン, 防護" value="${esc((draft.tags || []).join(', '))}">
+              <span class="hint">カンマ区切り。検索で見つけやすくなります</span>
+            </div>
+          </div>
+          <div class="field">
+            <span class="label">手順</span>
+            <div id="stepsEdit" style="display:flex;flex-direction:column;gap:10px">${stepsHTML()}</div>
+            <button type="button" class="btn" id="addStep" style="align-self:flex-start">${svg('plus')}ステップを追加</button>
+          </div>
+          <div class="form-foot">
+            ${orig ? `<button type="button" class="btn danger" id="delBtn">${svg('trash')}削除する</button>` : '<span></span>'}
+            <button type="submit" class="btn primary">${svg('check')}保存する</button>
+          </div>
+        </form>
+      </section>`;
+
+    const stepsEl = $('#stepsEdit');
+    const collect = () => {
+      stepsEl.querySelectorAll('.step-edit').forEach(box => {
+        const i = +box.dataset.i;
+        const kind = box.querySelector('[data-f="kind"]').value;
+        const note = box.querySelector('[data-f="note"]').value.trim();
+        const s = { t: box.querySelector('[data-f="t"]').value };
+        if (kind === 'tip' && note) s.tip = note;
+        if (kind === 'warn' && note) s.warn = note;
+        draft.steps[i] = s;
+      });
+    };
+    const redrawSteps = () => { stepsEl.innerHTML = stepsHTML(); };
+
+    stepsEl.addEventListener('click', e => {
+      const b = e.target.closest('[data-act]');
+      if (!b) return;
+      collect();
+      const i = +b.closest('.step-edit').dataset.i;
+      const act = b.dataset.act;
+      if (act === 'up' && i > 0) [draft.steps[i - 1], draft.steps[i]] = [draft.steps[i], draft.steps[i - 1]];
+      if (act === 'down' && i < draft.steps.length - 1) [draft.steps[i + 1], draft.steps[i]] = [draft.steps[i], draft.steps[i + 1]];
+      if (act === 'del') { draft.steps.splice(i, 1); if (!draft.steps.length) draft.steps.push({ t: '' }); }
+      redrawSteps();
+    });
+    stepsEl.addEventListener('change', e => {
+      if (e.target.dataset.f === 'kind') {
+        const input = e.target.closest('.note-row').querySelector('[data-f="note"]');
+        input.hidden = e.target.value === 'none';
+        if (!input.hidden) input.focus();
+      }
+    });
+    $('#addStep').addEventListener('click', () => {
+      collect();
+      draft.steps.push({ t: '' });
+      redrawSteps();
+      $(`#st-${draft.steps.length - 1}`).focus();
+    });
+
+    $('#form').addEventListener('submit', e => {
+      e.preventDefault();
+      collect();
+      const title = $('#f-title').value.trim();
+      if (!title) { toast('タイトルを入力してください'); $('#f-title').focus(); return; }
+      const steps = draft.steps.map(s => ({ ...s, t: s.t.trim() })).filter(s => s.t);
+      if (!steps.length) { toast('手順を1つ以上入力してください'); $('#st-0').focus(); return; }
+      const m = {
+        ...draft, title, steps,
+        cat: $('#f-cat').value,
+        minutes: Math.max(1, Math.min(240, parseInt($('#f-min').value, 10) || 5)),
+        summary: $('#f-sum').value.trim(),
+        author: $('#f-author').value.trim(),
+        tags: $('#f-tags').value.split(/[,、，]/).map(t => t.trim().replace(/^#/, '')).filter(Boolean),
+        updated: today()
+      };
+      if (orig) {
+        state.manuals = state.manuals.map(x => x.id === m.id ? m : x);
+        if (orig.steps.length !== m.steps.length) delete state.checks[m.id];
+      } else {
+        state.manuals.unshift(m);
+      }
+      store.save();
+      toast('保存しました');
+      location.hash = '#m-' + m.id;
+    });
+
+    if (orig) $('#delBtn').addEventListener('click', () => {
+      openSheet(`
+        <div class="sheet-head"><h2>このマニュアルを削除しますか？</h2></div>
+        <p style="margin:0">「${esc(orig.title)}」を削除します。この操作は取り消せません。</p>
+        <div class="actions" style="justify-content:flex-end">
+          <button class="btn" data-close>やめる</button>
+          <button class="btn danger" id="confirmDel">${svg('trash')}削除する</button>
+        </div>`);
+      $('#confirmDel').addEventListener('click', () => {
+        state.manuals = state.manuals.filter(x => x.id !== orig.id);
+        state.favs = state.favs.filter(x => x !== orig.id);
+        state.recent = state.recent.filter(x => x !== orig.id);
+        delete state.checks[orig.id];
+        store.save();
+        closeSheet();
+        toast('削除しました');
+        location.hash = '#cat-' + orig.cat;
+      });
+    });
+  }
+
+  /* ================= シート（設定・確認） ================= */
+  const overlay = $('#overlay');
+  function openSheet(html) {
+    overlay.innerHTML = `<div class="sheet" role="dialog" aria-modal="true">${html}</div>`;
+    overlay.hidden = false;
+    const f = overlay.querySelector('button, input, textarea');
+    if (f) f.focus();
+  }
+  function closeSheet() { overlay.hidden = true; overlay.innerHTML = ''; }
+  overlay.addEventListener('click', e => { if (e.target === overlay || e.target.closest('[data-close]')) closeSheet(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !overlay.hidden) closeSheet(); });
+
+  function openSettings() {
+    openSheet(`
+      <div class="sheet-head"><h2>設定</h2><button class="icon-btn" data-close aria-label="閉じる">${svg('x')}</button></div>
+      <div class="setting">
+        <span class="setting-title">文字の大きさ</span>
+        <div class="seg" role="group" aria-label="文字の大きさ">
+          <button data-size="normal" aria-pressed="${!state.largeText}">ふつう</button>
+          <button data-size="large" aria-pressed="${state.largeText}">大きめ</button>
+        </div>
+      </div>
+      <div class="setting">
+        <span class="setting-title">データの書き出し</span>
+        <span class="muted" style="font-size:.84rem">マニュアルはこの端末に保存されています。別の端末に移すときは、下の文字をコピーして、移したい端末の「読み込み」に貼り付けてください。</span>
+        <textarea id="exportBox" readonly></textarea>
+        <button class="btn sm" id="copyExport" style="align-self:flex-start">${svg('copy')}コピーする</button>
+      </div>
+      <div class="setting">
+        <span class="setting-title">データの読み込み</span>
+        <label for="importBox" class="sr-only">読み込むデータ</label>
+        <textarea id="importBox" placeholder="書き出したデータをここに貼り付け"></textarea>
+        <div class="actions">
+          <button class="btn sm" id="doImport">読み込む</button>
+          <label class="btn sm" for="importFile">ファイルから選ぶ</label>
+          <input type="file" id="importFile" accept=".json,application/json" hidden>
+        </div>
+      </div>
+      <div class="setting">
+        <span class="setting-title">初期状態に戻す</span>
+        <span class="muted" style="font-size:.84rem">追加・編集したマニュアルを消して、サンプルのマニュアルに戻します。</span>
+        <button class="btn sm danger" id="resetAll" style="align-self:flex-start">${svg('reset')}初期状態に戻す</button>
+      </div>`);
+
+    $('#exportBox').value = JSON.stringify({ app: 'mirai-manual', version: 1, manuals: state.manuals }, null, 1);
+    overlay.querySelectorAll('[data-size]').forEach(b => b.addEventListener('click', () => {
+      state.largeText = b.dataset.size === 'large';
+      document.documentElement.classList.toggle('large-text', state.largeText);
+      store.save();
+      overlay.querySelectorAll('[data-size]').forEach(x => x.setAttribute('aria-pressed', x === b));
+    }));
+    $('#copyExport').addEventListener('click', () => {
+      const box = $('#exportBox');
+      const fallback = () => { box.focus(); box.select(); toast('選択しました。コピーしてください'); };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(box.value).then(() => toast('コピーしました'), fallback);
+      } else fallback();
+    });
+    const importText = text => {
+      try {
+        const data = JSON.parse(text);
+        const list = Array.isArray(data) ? data : data.manuals;
+        if (!Array.isArray(list) || !list.every(m => m && m.id && m.title && Array.isArray(m.steps))) throw new Error('bad');
+        state.manuals = list;
+        store.save();
+        closeSheet();
+        toast(`${list.length}件のマニュアルを読み込みました`);
+        route();
+      } catch (err) {
+        toast('読み込めませんでした。書き出したデータをそのまま貼り付けてください');
+      }
+    };
+    $('#doImport').addEventListener('click', () => importText($('#importBox').value));
+    $('#importFile').addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const r = new FileReader();
+      r.onload = () => importText(r.result);
+      r.readAsText(file);
+    });
+    $('#resetAll').addEventListener('click', () => {
+      const b = $('#resetAll');
+      if (b.dataset.armed) {
+        state.manuals = JSON.parse(JSON.stringify(DEFAULT_MANUALS));
+        state.checks = {};
+        state.favs = state.favs.filter(getManual);
+        state.recent = state.recent.filter(getManual);
+        store.save();
+        closeSheet();
+        toast('初期状態に戻しました');
+        route();
+      } else {
+        b.dataset.armed = '1';
+        b.innerHTML = `${svg('alert')}もう一度押すと戻します`;
+      }
+    });
+  }
+  $('#openSettings').addEventListener('click', openSettings);
+
+  /* ================= ルーティング ================= */
+  const q = $('#q');
+  let searchTimer;
+  q.addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      const v = q.value.trim();
+      if (v) { renderSearch(v); setTab(''); }
+      else route();
+    }, 150);
+  });
+
+  function setTab(name) {
+    const h = location.hash.slice(1) || 'home';
+    const active = name !== undefined ? name
+      : h === 'home' ? 'home' : (h === 'all' || h.startsWith('cat-')) ? 'all' : h === 'fav' ? 'fav' : h === 'new' ? 'new' : '';
+    document.querySelectorAll('.tab').forEach(t => {
+      if (t.dataset.tab === active) t.setAttribute('aria-current', 'page');
+      else t.removeAttribute('aria-current');
+    });
+  }
+
+  function route() {
+    const h = location.hash.slice(1) || 'home';
+    if (q.value && !h.startsWith('m-')) q.value = '';
+    if (h.startsWith('m-')) { q.value = ''; renderDetail(h.slice(2)); }
+    else if (h.startsWith('cat-')) renderList(h.slice(4));
+    else if (h === 'all') { listFilter = 'all'; renderList(null); }
+    else if (h === 'fav') renderFav();
+    else if (h === 'new') renderEdit(null);
+    else if (h.startsWith('edit-')) renderEdit(h.slice(5));
+    else renderHome();
+    setTab();
+    window.scrollTo(0, 0);
+  }
+  window.addEventListener('hashchange', route);
+  route();
+})();
+</script>
+</body>
+</html>
