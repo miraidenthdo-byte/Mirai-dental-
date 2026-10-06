@@ -469,3 +469,43 @@ function replaceManuals(token, list) {
     return true;
   });
 }
+
+/* ---------- 画像・動画（Googleドライブの非公開フォルダに保存） ---------- */
+
+const MEDIA_TYPES = /^(image\/(jpeg|png|gif|webp|heic|heif)|video\/(mp4|quicktime|webm|3gpp))$/;
+const MEDIA_MAX_BYTES = 25 * 1024 * 1024;
+
+// 保存用フォルダ（初回は自動で作成。共有はしないので、設置した人だけが Drive で見られる）
+function mediaFolder_() {
+  const id = props_().getProperty('MEDIA_FOLDER_ID');
+  if (id) return DriveApp.getFolderById(id);
+  const folder = DriveApp.createFolder('みらい歯科 院内マニュアル 画像・動画');
+  props_().setProperty('MEDIA_FOLDER_ID', folder.getId());
+  return folder;
+}
+
+function uploadMedia(token, editPin, name, mime, base64) {
+  if (!resolve_(token).admin && !pinOk_('edit', editPin)) throw new Error('PIN');
+  if (!MEDIA_TYPES.test(String(mime))) throw new Error('TYPE');
+  const bytes = Utilities.base64Decode(String(base64 || ''));
+  if (!bytes.length) throw new Error('TYPE');
+  if (bytes.length > MEDIA_MAX_BYTES) throw new Error('VIDEOSIZE');
+  const blob = Utilities.newBlob(bytes, mime, String(name || 'file').slice(0, 80));
+  const file = mediaFolder_().createFile(blob);
+  return { id: file.getId(), size: bytes.length };
+}
+
+// ログイン中の人だけ、保存フォルダの中のファイルを少しずつ受け取れる
+function getMediaChunk(token, id, offset, length) {
+  resolve_(token);
+  const file = DriveApp.getFileById(String(id));
+  const parents = file.getParents();
+  const folderId = props_().getProperty('MEDIA_FOLDER_ID');
+  let inFolder = false;
+  while (parents.hasNext()) { if (parents.next().getId() === folderId) inFolder = true; }
+  if (!inFolder) throw new Error('NOTFOUND');
+  const bytes = file.getBlob().getBytes();
+  const start = Math.max(0, Number(offset) || 0);
+  const end = Math.min(bytes.length, start + Math.min(Number(length) || 0, 8 * 1024 * 1024));
+  return { size: bytes.length, mime: file.getMimeType(), data: Utilities.base64Encode(bytes.slice(start, end)) };
+}

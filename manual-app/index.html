@@ -485,6 +485,15 @@ input.ed-h { font-weight: 700; min-height: 36px; padding: 6px 10px; border-style
 .ed-note-head b { font-size: .82rem; }
 .ed-note-head .icon-btn, .ed-h-row .icon-btn { width: 32px; height: 32px; margin-left: auto; }
 .ed-media { font-size: .8rem; color: var(--ink-soft); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.step-video { width: 100%; max-height: 420px; border-radius: var(--radius-sm); background: #000; display: block; }
+.media-loading { display: grid; place-items: center; min-height: 90px; border-radius: var(--radius-sm); background: var(--surface-2); color: var(--ink-soft); font-size: .8rem; }
+.ed-thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }
+.ed-thumb { position: relative; aspect-ratio: 1; border-radius: var(--radius-sm); overflow: hidden; background: var(--surface-2); border: 1px solid var(--line); display: grid; place-items: center; max-width: 100%; }
+.ed-thumb img, .ed-thumb video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ed-thumb .tag-video { position: absolute; left: 4px; bottom: 4px; font-size: .66rem; padding: 0 6px; border-radius: 999px; background: rgba(0,0,0,.6); color: #fff; }
+.ed-thumb .ed-thumb-x { position: absolute; top: 3px; right: 3px; width: 28px; height: 28px; border-radius: 50%; border: none; background: rgba(0,0,0,.6); color: #fff; display: grid; place-items: center; padding: 0; }
+.ed-thumb .ed-thumb-x svg { width: 16px; height: 16px; }
+.ed-thumb.pending { font-size: .72rem; color: var(--ink-soft); text-align: center; padding: 4px; }
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
 </style>
@@ -878,6 +887,105 @@ input.ed-h { font-weight: 700; min-height: 36px; padding: 6px 10px; border-style
     else toast('保存できませんでした。通信状態を確かめて、もう一度お試しください');
   }
   const send = (name, ...args) => callApi(name, ...args).catch(apiError);
+
+  /* ================= 画像・動画の保存先 ================= */
+  // スプレッドシート版：医院のGoogleドライブ（非公開フォルダ）に保存し、ログイン中のスタッフだけが読み込める
+  // 体験モード：この端末のブラウザ（IndexedDB）に保存
+  const MEDIA_LIMIT = { image: 10 * 1024 * 1024, video: 25 * 1024 * 1024 };
+  const MEDIA_CHUNK = 4 * 1024 * 1024;
+  const Media = (() => {
+    const urls = new Map();
+    let dbp = null;
+    const idb = () => dbp || (dbp = new Promise((resolve, reject) => {
+      const req = indexedDB.open('mirai-manual-media', 1);
+      req.onupgradeneeded = () => req.result.createObjectStore('files');
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    }));
+    const idbDo = (mode, fn) => idb().then(db => new Promise((resolve, reject) => {
+      const tx = db.transaction('files', mode);
+      const r = fn(tx.objectStore('files'));
+      tx.oncomplete = () => resolve(r && r.result);
+      tx.onerror = () => reject(tx.error);
+    }));
+    const toBase64 = blob => new Promise((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onload = () => resolve(String(fr.result).split(',')[1] || '');
+      fr.onerror = () => reject(fr.error);
+      fr.readAsDataURL(blob);
+    });
+    const fromBase64 = b64 => { const s = atob(b64); const a = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) a[i] = s.charCodeAt(i); return a; };
+    async function put(blob, name) {
+      if (REMOTE) {
+        const r = await callApi('uploadMedia', tok(), session.editPin, String(name || 'file').slice(0, 80), blob.type, await toBase64(blob));
+        urls.set(r.id, Promise.resolve(URL.createObjectURL(blob)));
+        return r.id;
+      }
+      const id = 'loc-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+      await idbDo('readwrite', st => st.put(blob, id));
+      urls.set(id, Promise.resolve(URL.createObjectURL(blob)));
+      return id;
+    }
+    async function load(id) {
+      if (!REMOTE) {
+        const blob = await idbDo('readonly', st => st.get(id));
+        if (!blob) throw new Error('NOTFOUND');
+        return URL.createObjectURL(blob);
+      }
+      const parts = [];
+      let offset = 0, size = 1, mime = '';
+      while (offset < size) {
+        const r = await callApi('getMediaChunk', tok(), id, offset, MEDIA_CHUNK);
+        size = r.size; mime = r.mime;
+        const bytes = fromBase64(r.data);
+        if (!bytes.length) break;
+        parts.push(bytes);
+        offset += bytes.length;
+      }
+      return URL.createObjectURL(new Blob(parts, { type: mime }));
+    }
+    return {
+      put,
+      url(id) {
+        if (!urls.has(id)) urls.set(id, load(id).catch(e => { urls.delete(id); throw e; }));
+        return urls.get(id);
+      }
+    };
+  })();
+
+  // 写真は送る前に縮小する（長い辺 1600px・JPEG）。GIF や動画はそのまま
+  async function prepareMedia(file) {
+    const type = file.type.startsWith('video/') ? 'video' : file.type.startsWith('image/') ? 'image' : '';
+    if (!type) throw new Error('TYPE');
+    if (type === 'image' && file.type !== 'image/gif' && window.createImageBitmap) {
+      try {
+        const bmp = await createImageBitmap(file);
+        const scale = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+        const c = document.createElement('canvas');
+        c.width = Math.round(bmp.width * scale); c.height = Math.round(bmp.height * scale);
+        c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+        const out = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.85));
+        if (out && out.size < file.size) return { type, blob: out };
+      } catch (e) { /* 縮小できない形式はそのまま送る */ }
+    }
+    if (file.size > MEDIA_LIMIT[type]) throw new Error(type === 'video' ? 'VIDEOSIZE' : 'IMAGESIZE');
+    return { type, blob: file };
+  }
+
+  // 画面内の [data-media-src] に、保存先から読み込んだ画像・動画を入れる
+  function hydrateMedia(root) {
+    root.querySelectorAll('[data-media-src]').forEach(el => {
+      const id = el.dataset.mediaSrc;
+      Media.url(id).then(u => {
+        el.src = u;
+        const box = el.closest('.media-loading');
+        if (box) box.classList.remove('media-loading');
+      }, () => {
+        const host = el.closest('.step-img, .media-loading, .ed-thumb') || el;
+        host.outerHTML = `<div class="img-missing">${svg('image')}画像・動画を読み込めませんでした</div>`;
+      });
+    });
+  }
 
   /* ================= 端末ごとの設定・ログイン ================= */
   const ME_KEY = 'mirai-manual-me-v2';
@@ -1332,6 +1440,9 @@ input.ed-h { font-weight: 700; min-height: 36px; padding: 6px 10px; border-style
                 ${s.say ? `<div class="note say">${svg('chat')}<b>声かけ例</b><span>${esc(s.say)}</span></div>` : ''}
                 ${s.tip ? `<div class="note tip">${svg('bulb')}<b>ポイント</b><span>${esc(s.tip)}</span></div>` : ''}
                 ${s.warn ? `<div class="note warn">${svg('alert')}<b>注意</b><span>${esc(s.warn)}</span></div>` : ''}
+                ${(s.media || []).length ? `<div class="step-imgs step-media">${s.media.map(md => md.type === 'video'
+                  ? `<div class="media-loading" style="grid-column:1/-1"><video class="step-video" controls playsinline preload="metadata" data-media-src="${esc(md.id)}" aria-label="手順${i + 1}の動画"></video></div>`
+                  : `<button type="button" class="step-img media-loading" data-zoom-media="${esc(md.id)}" aria-label="画像を大きく表示"><img data-media-src="${esc(md.id)}" alt="手順${i + 1}の画像"></button>`).join('')}</div>` : ''}
                 ${(s.img || []).length ? `<div class="step-imgs">${s.img.map(u => `<button type="button" class="step-img" data-img="${esc(u)}" aria-label="画像を大きく表示"><img src="${esc(u)}" loading="lazy" alt="手順${i + 1}の画像"></button>`).join('')}</div>` : ''}
                 ${(s.links || []).length ? `<div class="step-links">${s.links.map(l => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${svg('link')}${esc(l.label)}</a>`).join('')}</div>` : ''}
               </div>
@@ -1401,16 +1512,19 @@ input.ed-h { font-weight: 700; min-height: 36px; padding: 6px 10px; border-style
         ? `<a class="img-missing" href="${esc(m.source)}" target="_blank" rel="noopener">${svg('image')}画像はNotionの元ページで見られます</a>`
         : `<div class="img-missing">${svg('image')}画像を読み込めませんでした</div>`;
     };
-    view.querySelectorAll('.step-imgs').forEach(box => {
+    hydrateMedia(view);
+    view.querySelectorAll('.step-imgs:not(.step-media)').forEach(box => {
       box.querySelectorAll('img').forEach(img => {
         img.addEventListener('error', () => missing(box));
         if (img.complete && !img.naturalWidth && img.currentSrc) missing(box);
       });
     });
     view.querySelectorAll('.step-img').forEach(b => b.addEventListener('click', () => {
+      const src = b.dataset.img || (b.querySelector('img') || {}).src;
+      if (!src) return;
       openSheet(`
         <div class="sheet-head"><h2>手順の画像</h2><button class="icon-btn" data-close aria-label="閉じる">${svg('x')}</button></div>
-        <img class="zoom-img" src="${esc(b.dataset.img)}" alt="手順の画像（拡大）">`);
+        <img class="zoom-img" src="${esc(src)}" alt="手順の画像（拡大）">`);
     }));
   }
 
@@ -1461,7 +1575,7 @@ input.ed-h { font-weight: 700; min-height: 36px; padding: 6px 10px; border-style
       steps: m.steps.map((s, i) => ({
         o: i, t: s.t, h: s.h == null ? null : s.h,
         say: s.say == null ? null : s.say, tip: s.tip == null ? null : s.tip, warn: s.warn == null ? null : s.warn,
-        img: (s.img || []).slice(), links: (s.links || []).slice()
+        img: (s.img || []).slice(), media: (s.media || []).map(x => ({ ...x })), links: (s.links || []).slice()
       }))
     };
   }
@@ -1472,7 +1586,7 @@ input.ed-h { font-weight: 700; min-height: 36px; padding: 6px 10px; border-style
     tip: { label: 'ポイント', icon: 'bulb', ph: 'コツや覚えておくと良いこと' },
     warn: { label: '注意', icon: 'alert', ph: '気をつけること' }
   };
-  const blankStep = () => ({ t: '', h: null, say: null, tip: null, warn: null, img: [], links: [] });
+  const blankStep = () => ({ t: '', h: null, say: null, tip: null, warn: null, img: [], media: [], links: [] });
 
   function beginEdit(m, isNew) {
     editing = { id: m.id, isNew, draft: toDraft(m) };
@@ -1554,6 +1668,8 @@ input.ed-h { font-weight: 700; min-height: 36px; padding: 6px 10px; border-style
         o.t = s.t.trim();
         NOTE_KINDS.forEach(k => { if (s[k] && s[k].trim()) o[k] = s[k].trim(); });
         if (s.img.length) o.img = s.img;
+        const md = s.media.filter(x => !x.pending).map(x => ({ id: x.id, type: x.type, name: x.name || '' }));
+        if (md.length) o.media = md;
         if (s.links.length) o.links = s.links;
         return o;
       })
@@ -1580,6 +1696,7 @@ input.ed-h { font-weight: 700; min-height: 36px; padding: 6px 10px; border-style
   }
 
   function finishSave() {
+    if (editing.draft.steps.some(s => s.media.some(x => x.pending))) return toast('画像・動画をアップロード中です。終わってから保存してください');
     const m = saveEdit();
     if (!m) return;
     toast('保存してロックしました');
@@ -1686,11 +1803,18 @@ input.ed-h { font-weight: 700; min-height: 36px; padding: 6px 10px; border-style
                       <textarea id="ed-${k}-${i}" class="ed" data-f="${k}" rows="1" placeholder="${NOTE_INFO[k].ph}" aria-label="${NOTE_INFO[k].label}の内容">${esc(s[k])}</textarea>
                     </div>
                   </div>`).join('')}
-                ${s.img.length || s.links.length ? `<div class="ed-media">${svg('image')}<span>${[s.img.length ? `画像 ${s.img.length}枚` : '', s.links.length ? `リンク ${s.links.length}件` : ''].filter(Boolean).join('・')}（そのまま残ります）</span>
-                  ${s.img.length ? `<button type="button" class="btn sm" data-act="rm-img">画像を外す</button>` : ''}</div>` : ''}
+                ${s.img.length || s.media.length ? `<div class="ed-thumbs">
+                  ${s.img.map((u, n) => `<div class="ed-thumb"><img src="${esc(u)}" alt="" loading="lazy"><button type="button" class="ed-thumb-x" data-act="rm-img" data-n="${n}" aria-label="この画像を外す">${svg('x')}</button></div>`).join('')}
+                  ${s.media.map((x, n) => x.pending
+                    ? `<div class="ed-thumb pending">アップロード中…<br>${esc(x.name || '')}</div>`
+                    : `<div class="ed-thumb">${x.type === 'video' ? `<video data-media-src="${esc(x.id)}" muted playsinline preload="metadata"></video><span class="tag-video">動画</span>` : `<img data-media-src="${esc(x.id)}" alt="">`}<button type="button" class="ed-thumb-x" data-act="rm-media" data-n="${n}" aria-label="この${x.type === 'video' ? '動画' : '画像'}を外す">${svg('x')}</button></div>`).join('')}
+                </div>` : ''}
+                ${s.links.length ? `<div class="ed-media">${svg('link')}<span>リンク ${s.links.length}件（そのまま残ります）</span></div>` : ''}
                 <div class="ed-add-note">
                   ${NOTE_KINDS.filter(k => s[k] === null).map(k => `<button type="button" class="btn sm" data-act="add-${k}">${svg(NOTE_INFO[k].icon)}${NOTE_INFO[k].label}を追加</button>`).join('')}
                   ${s.h === null ? `<button type="button" class="btn sm" data-act="add-h">${svg('plus')}区切り見出し</button>` : ''}
+                  <label class="btn sm" for="ed-file-${i}">${svg('image')}画像・動画を追加</label>
+                  <input type="file" id="ed-file-${i}" data-f-file="${i}" accept="image/*,video/*" multiple hidden>
                 </div>
                 <div class="step-tools">
                   <button type="button" class="icon-btn" data-act="up" aria-label="ステップ${i + 1}を上へ" ${i === 0 ? 'disabled' : ''}>${svg('up')}</button>
@@ -1712,6 +1836,7 @@ input.ed-h { font-weight: 700; min-height: 36px; padding: 6px 10px; border-style
 
     const root = $('.editor', view);
     root.querySelectorAll('textarea.ed').forEach(autosize);
+    hydrateMedia(root);
     const redraw = focusId => {
       const y = window.scrollY;
       renderEditor();
@@ -1730,6 +1855,7 @@ input.ed-h { font-weight: 700; min-height: 36px; padding: 6px 10px; border-style
     root.addEventListener('change', e => {
       const el = e.target;
       if (el.dataset.k === 'cat') { d.cat = el.value; redraw(); }
+      if (el.dataset.fFile !== undefined) addMediaFiles(d.steps[+el.dataset.fFile], [...el.files], redraw);
     });
     root.addEventListener('click', e => {
       const b = e.target.closest('[data-act], [data-ed]');
@@ -1742,13 +1868,34 @@ input.ed-h { font-weight: 700; min-height: 36px; padding: 6px 10px; border-style
       const i = +b.closest('.step').dataset.i;
       const act = b.dataset.act;
       if (act.startsWith('add-')) { const k = act.slice(4); d.steps[i][k] = ''; return redraw(k === 'h' ? 'ed-h-' + i : `ed-${k}-${i}`); }
-      if (act === 'rm-img') { d.steps[i].img = []; return redraw(); }
+      if (act === 'rm-img') { d.steps[i].img.splice(+b.dataset.n, 1); return redraw(); }
+      if (act === 'rm-media') { d.steps[i].media.splice(+b.dataset.n, 1); return redraw(); }
       if (act.startsWith('rm-')) { d.steps[i][act.slice(3)] = null; return redraw(); }
       if (act === 'up' && i > 0) [d.steps[i - 1], d.steps[i]] = [d.steps[i], d.steps[i - 1]];
       if (act === 'down' && i < last) [d.steps[i + 1], d.steps[i]] = [d.steps[i], d.steps[i + 1]];
       if (act === 'del') { d.steps.splice(i, 1); if (!d.steps.length) d.steps.push(blankStep()); }
       redraw();
     });
+  }
+
+  // 選んだ写真・動画を順にアップロードし、終わったものから手順に入れる
+  function addMediaFiles(step, files, redraw) {
+    files.forEach(file => {
+      const ph = { id: 'up-' + Math.random().toString(36).slice(2), type: file.type.startsWith('video/') ? 'video' : 'image', name: file.name, pending: true };
+      step.media.push(ph);
+      prepareMedia(file)
+        .then(({ type, blob }) => Media.put(blob, file.name).then(id => { Object.assign(ph, { id, type }); delete ph.pending; }))
+        .catch(e => {
+          step.media.splice(step.media.indexOf(ph), 1);
+          const m = errText(e);
+          if (m.includes('TYPE')) toast('画像か動画のファイルを選んでください');
+          else if (m.includes('VIDEOSIZE')) toast('動画は25MBまでです。短く撮り直すか、画質を下げてください');
+          else if (m.includes('IMAGESIZE')) toast('画像は10MBまでです');
+          else apiError(e);
+        })
+        .then(() => { if (editing) redraw(); });
+    });
+    redraw();
   }
 
   function askDelete() {
