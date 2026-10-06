@@ -539,10 +539,27 @@ input.ed-h { font-weight: 700; min-height: 36px; padding: 6px 10px; border-style
     if (!v || v.getAttribute('data-err')) return;
     v.setAttribute('data-err', '1');
     v.innerHTML = '<div style="max-width:520px;margin:40px auto;padding:20px;border-radius:16px;background:#FFE5DF;color:#4A3036;line-height:1.8">' +
-      '<b style="color:#A8402E">アプリを読み込めませんでした</b><br>' + String(msg).replace(/[<>&]/g, '') +
+      '<b style="color:#A8402E">アプリを読み込めませんでした</b><br>' + String(msg).replace(/[<>&]/g, '').replace(/\n/g, '<br>') +
       '<br><br>Apps Script の「index」ファイルが最後まで貼り付けられているか（いちばん最後の行が &lt;/html&gt; になっているか）確認してください。</div>';
   };
-  window.addEventListener('error', function (e) { window.__appError((e && e.message) || 'エラーが起きました'); });
+  var __base = (function () { try { throw new Error('x'); } catch (er) { var m = String(er.stack).match(/:(\d+):\d+/); return m ? +m[1] : 0; } })();
+  window.addEventListener('error', function (e) {
+    var msg = (e && e.message) || 'エラーが起きました';
+    try {
+      var main = [].filter.call(document.scripts, function (sc) { return sc.textContent.indexOf('DEFAULT_' + 'MANUALS =') >= 0; })[0];
+      if (main) {
+        var lines = main.textContent.split('\n');
+        msg += '\n【診断】長さ ' + main.textContent.length + ' / 正しい長さ 183729・行数 ' + lines.length + ' / 2057';
+        if (e.lineno && __base) {
+          var row = e.lineno - (__base - 545);
+          var t = lines[row - 567] || '';
+          var c = Math.max(0, (e.colno || 1) - 1);
+          msg += '\n【場所】' + row + '行目・' + (c + 1) + '文字目：' + t.slice(Math.max(0, c - 60), c + 60);
+        }
+      }
+    } catch (er2) {}
+    window.__appError(msg);
+  });
   window.addEventListener('load', function () {
     if (!window.__appLoaded) window.__appError('プログラムが最後まで読み込まれていません（貼り付けが途中で切れている可能性があります）。');
   });
