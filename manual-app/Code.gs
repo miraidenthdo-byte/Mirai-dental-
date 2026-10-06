@@ -312,21 +312,29 @@ function verifyPin(token, kind, pin) {
 }
 
 function saveManual(token, m, map, editPin) {
-  if (!resolve_(token).admin && !pinOk_('edit', editPin)) throw new Error('PIN');
-  return withLock_(() => {
+  const who = resolve_(token);
+  if (!who.admin && !pinOk_('edit', editPin)) throw new Error('PIN');
+  const isNew = withLock_(() => {
+    const existed = rows_('manuals').some(r => String(r[0]) === String(m.id));
     upsert_('manuals', [0], [m.id, JSON.stringify(m), iso_()], true);
     remap_(m.id, map);
-    return true;
+    return !existed;
   });
+  notifyManual_(isNew ? '追加' : '更新', m, who);
+  return true;
 }
 
 function deleteManual(token, id, editPin) {
-  if (!resolve_(token).admin && !pinOk_('edit', editPin)) throw new Error('PIN');
-  return withLock_(() => {
+  const who = resolve_(token);
+  if (!who.admin && !pinOk_('edit', editPin)) throw new Error('PIN');
+  const m = withLock_(() => {
+    const row = rows_('manuals').find(r => String(r[0]) === String(id));
     removeWhere_('manuals', r => String(r[0]) === String(id));
     removeWhere_('progress', r => String(r[1]) === String(id));
-    return true;
+    try { return row ? JSON.parse(row[1]) : null; } catch (e) { return null; }
   });
+  if (m) notifyManual_('削除', m, who);
+  return true;
 }
 
 // 記録先のスタッフはトークンから決める（ほかの人の記録は書き換えられない）
@@ -352,7 +360,8 @@ function adminData(token) {
       retiredAt: when_(r[4]),
       sessions: sessions.filter(x => String(x[1]) === String(r[0])).map(x => ({ device: String(x[2]), lastSeen: when_(x[4]) }))
     })),
-    progress: progress
+    progress: progress,
+    line: lineReady_()
   };
 }
 
@@ -508,4 +517,80 @@ function getMediaChunk(token, id, offset, length) {
   const start = Math.max(0, Number(offset) || 0);
   const end = Math.min(bytes.length, start + Math.min(Number(length) || 0, 8 * 1024 * 1024));
   return { size: bytes.length, mime: file.getMimeType(), data: Utilities.base64Encode(bytes.slice(start, end)) };
+}
+
+/* ---------- LINE通知（管理者へ） ---------- */
+// LINE公式アカウント（Messaging API）から、管理者のLINEにメッセージを送る。
+// チャネルアクセストークンとユーザーIDは、管理者ページの「LINE通知」で登録する（スクリプトのプロパティに保存）。
+
+const CAT_NAMES = {
+  reception: '受付・会計', assist: '診療補助', hygiene: '衛生士業務', steril: '滅菌・消毒', emergency: '緊急時対応',
+  open: '開院・閉院', patient: '患者さま対応', material: '器具・材料', chart: 'カルテ・用語', rules: '院内ルール・申請'
+};
+
+function lineReady_() {
+  const p = props_();
+  return !!(p.getProperty('LINE_TOKEN') && p.getProperty('LINE_TO'));
+}
+
+function sendLine_(text) {
+  const p = props_();
+  const tok = p.getProperty('LINE_TOKEN'), to = p.getProperty('LINE_TO');
+  if (!tok || !to) throw new Error('LINE_UNSET');
+  const res = UrlFetchApp.fetch('https://api.line.me/v2/bot/message/push', {
+    method: 'post',
+    contentType: 'application/json',
+    headers: { Authorization: 'Bearer ' + tok },
+    payload: JSON.stringify({ to: to, messages: [{ type: 'text', text: String(text).slice(0, 4900) }] }),
+    muteHttpExceptions: true
+  });
+  if (res.getResponseCode() !== 200) throw new Error('LINE_' + res.getResponseCode());
+}
+
+// 通知に失敗しても、マニュアルの保存は取り消さない
+function notifyManual_(kind, m, who) {
+  if (!lineReady_()) return;
+  try {
+    const icon = { 追加: '🆕', 更新: '📝', 削除: '🗑' }[kind] || '📝';
+    const name = who.admin ? '管理者' : who.staff.name + 'さん';
+    const url = ScriptApp.getService().getUrl();
+    sendLine_([
+      icon + ' マニュアルが' + kind + 'されました',
+      '「' + String(m.title || '（無題）') + '」（' + (CAT_NAMES[m.cat] || 'その他') + '）',
+      kind + 'した人：' + name,
+      Utilities.formatDate(new Date(), 'Asia/Tokyo', 'M月d日 HH:mm'),
+      kind !== '削除' && url ? url + '?m=' + encodeURIComponent(m.id) : ''
+    ].filter(Boolean).join('\n'));
+  } catch (e) {
+    console.warn('LINE通知に失敗しました: ' + e.message);
+  }
+}
+
+// 空のまま保存すると通知を止める
+function setLine(token, channelToken, userId) {
+  requireAdmin_(token);
+  channelToken = String(channelToken || '').trim();
+  userId = String(userId || '').trim();
+  const p = props_();
+  if (!channelToken && !userId) {
+    p.deleteProperty('LINE_TOKEN');
+    p.deleteProperty('LINE_TO');
+    return false;
+  }
+  if (!/^U[0-9a-f]{32}$/.test(userId) || channelToken.length < 20) throw new Error('FORMAT');
+  p.setProperty('LINE_TOKEN', channelToken);
+  p.setProperty('LINE_TO', userId);
+  return true;
+}
+
+function testLine(token) {
+  requireAdmin_(token);
+  sendLine_('🌸 みらい歯科 院内マニュアル\nLINE通知のテストです。マニュアルが追加・更新・削除されると、ここにお知らせが届きます。');
+  return true;
+}
+
+// 初回だけ、エディタでこの関数を選んで「実行」し、外部への送信（LINE）を許可する
+function authorize() {
+  UrlFetchApp.fetch('https://api.line.me/v2/bot/info', { muteHttpExceptions: true });
+  return 'OK';
 }
