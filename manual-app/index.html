@@ -836,10 +836,18 @@ input.ed-h { font-weight: 700; min-height: 36px; padding: 6px 10px; border-style
     return {
       init() {
         try { db = JSON.parse(localStorage.getItem(DEMO_KEY)); } catch (e) { db = null; }
-        if (db && Array.isArray(db.manuals) && Array.isArray(db.sessions)) return;
+        if (db && Array.isArray(db.manuals) && Array.isArray(db.sessions)) {
+          // あとから増えた初期マニュアルを足す（一度入れて削除したものは戻さない）
+          const seeded = new Set(db.seeded || db.manuals.map(m => m.id));
+          const added = clone(DEFAULT_MANUALS.filter(m => !seeded.has(m.id) && !db.manuals.some(x => x.id === m.id)));
+          db.manuals = db.manuals.concat(added);
+          db.seeded = DEFAULT_MANUALS.map(m => m.id).concat([...seeded].filter(id => !DEFAULT_MANUALS.some(m => m.id === id)));
+          if (added.length) persist();
+          return;
+        }
         const manuals = clone(DEFAULT_MANUALS).map(m => m.id === 'm10' ? { ...m, reviewFrom: '2026-10-01T00:00:00.000Z' } : m);
         const staff = clone(SAMPLE_STAFF).map(s => ({ active: true, retiredAt: '', ...s }));
-        db = { manuals, staff, progress: sampleProgress(manuals, SAMPLE_STAFF), sessions: [], pins: { edit: '', admin: '' } };
+        db = { manuals, staff, progress: sampleProgress(manuals, SAMPLE_STAFF), sessions: [], pins: { edit: '', admin: '' }, seeded: DEFAULT_MANUALS.map(m => m.id) };
         persist();
       },
       call(name, args) { return api[name](...args); }
