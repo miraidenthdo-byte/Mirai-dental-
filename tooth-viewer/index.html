@@ -126,6 +126,7 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 3
     <div class="row"><label>ROI 上方</label><input id="roiUp" type="range" min="2" max="40" step="0.5" value="12"><output id="roiUpO"></output></div>
     <div class="row"><label>ROI 下方</label><input id="roiDn" type="range" min="2" max="40" step="0.5" value="24"><output id="roiDnO"></output></div>
     <div id="seedInfo" class="hint">選択点: なし</div>
+    <div class="flex"><button id="measBtn" title="断面上で2点をクリックして距離を測定">📏 距離計測</button><span id="measOut" class="hint" style="margin:0"></span></div>
   </section>
 
   <section>
@@ -136,6 +137,7 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 3
     <div class="row"><label>骨との分離</label><input id="erode" type="range" min="0" max="4" value="2"><output id="erodeO"></output></div>
     <label class="check"><input id="smooth" type="checkbox" checked>ノイズ除去（平滑化）してから抽出</label>
     <label class="check"><input id="splitNb" type="checkbox" checked>隣在歯との接触部を自動で分離</label>
+    <label class="check"><input id="hiRes" type="checkbox" checked>高精度モード（サブボクセル補間・推奨）</label>
     <label class="check"><input id="preview" type="checkbox" checked>断面にオーバーレイ表示</label>
     <div class="flex"><button id="autoTh">ROIから自動設定</button></div>
     <div class="hint">・歯が骨とつながって抽出される → 「骨との分離」を上げる / ROIを狭める<br>
@@ -146,16 +148,18 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 3
 
   <section>
     <h2><span class="num">4</span>3D表示（VR）</h2>
-    <div class="struct"><input type="color" id="colE" value="#bfe8ff"><span>エナメル質</span><input type="range" id="opE" min="0" max="100" value="60"><output id="opEO"></output></div>
-    <div class="struct"><input type="color" id="colD" value="#f2d49b"><span>象牙質</span><input type="range" id="opD" min="0" max="100" value="35"><output id="opDO"></output></div>
-    <div class="struct"><input type="color" id="colP" value="#ff2d3a"><span>歯髄・根管</span><input type="range" id="opP" min="0" max="100" value="100"><output id="opPO"></output></div>
+    <div class="struct"><input type="color" id="colE" value="#e4e2b4"><span>エナメル質</span><input type="range" id="opE" min="0" max="100" value="55"><output id="opEO"></output></div>
+    <div class="struct"><input type="color" id="colD" value="#d6d09a"><span>象牙質</span><input type="range" id="opD" min="0" max="100" value="55"><output id="opDO"></output></div>
+    <div class="struct"><input type="color" id="colP" value="#3ee08a"><span>歯髄・根管</span><input type="range" id="opP" min="0" max="100" value="100"><output id="opPO"></output></div>
     <div class="struct"><input type="color" id="colB" value="#8fa3b8"><span>周囲の骨</span><input type="range" id="opB" min="0" max="100" value="0"><output id="opBO"></output></div>
-    <div class="row"><label>透かし表示</label><input id="glass" type="range" min="0" max="100" value="85"><output id="glassO"></output></div>
+    <div class="row"><label>透かし表示</label><input id="glass" type="range" min="0" max="100" value="75"><output id="glassO"></output></div>
     <label class="check"><input id="pulpGrad" type="checkbox">根管を高さで色分け（走行が分かりやすい）</label>
     <div class="flex" style="margin:6px 0">
       <button data-preset="solid">不透明</button>
       <button data-preset="canal">根管を透視</button>
       <button data-preset="canalOnly">根管のみ</button>
+      <button data-scheme="green">配色：緑の根管</button>
+      <button data-scheme="red">配色：赤の根管</button>
     </div>
     <div class="row"><label>断面カット</label>
       <select id="clipAxis"><option value="-1">なし</option><option value="0">X（近遠心）</option><option value="1">Y（頬舌）</option><option value="2">Z（水平）</option></select>
@@ -166,7 +170,8 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 3
       <button data-view="top">歯冠側</button><button data-view="bottom">根尖側</button>
       <label class="check" style="margin:0 0 0 4px"><input id="autoRot" type="checkbox">自動回転</label>
     </div>
-    <div class="flex" style="margin-top:6px"><button id="shotBtn">📷 画像を保存</button></div>
+    <div class="flex" style="margin-top:6px"><button id="shotBtn">📷 画像を保存</button>
+      <button id="stlBtn" disabled title="歯と根管の表面形状をSTL（mm単位）で保存。3Dプリントやガイド設計に">🧊 STL出力</button></div>
   </section>
 
   <section>
@@ -185,6 +190,7 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 3
   <div class="view v3d"><canvas id="cv3d"></canvas>
     <div class="vlabel">3D ボリュームレンダリング<small id="lbl3d"></small></div>
     <div class="vtools"><button id="max3d" title="3D表示を最大化">⤢ 拡大</button></div>
+    <canvas id="gizmo" style="position:absolute;right:8px;bottom:8px;width:96px;height:96px;left:auto;top:auto;inset:auto 8px 8px auto;pointer-events:none"></canvas>
     <div class="legend" id="legend">
       <div><i id="lgE"></i>エナメル質</div><div><i id="lgD"></i>象牙質</div>
       <div><i id="lgP"></i><span id="lgPtxt">歯髄・根管</span></div><div id="lgBrow"><i id="lgB"></i>周囲の骨</div>
@@ -440,7 +446,7 @@ async function loadFiles(fileList) {
       order.sort((a, b) => proj[a] - proj[b]);
       sz = medianDiff(order.map((i) => proj[i])) || sz;
     }
-    vol = buildVolume(order.map((i) => it.frames[i]), it, sz, step, it.desc);
+    vol = buildVolume(order.map((i) => it.frames[i]), it, sz, step, it.desc, it.framePos ? it.framePos[order[0]] : it.ipp);
   } else if (singles.length) {
     const groups = {};
     for (const s of singles) {
@@ -454,7 +460,7 @@ async function loadFiles(fileList) {
     g.sort((a, b) => key(a) - key(b));
     let sz = g[0].ipp ? medianDiff(g.map(key)) : 0;
     if (!sz) sz = g[0].thick || 1;
-    vol = buildVolume(g.map((s) => s.frames[0]), g[0], sz, step, g[0].desc);
+    vol = buildVolume(g.map((s) => s.frames[0]), g[0], sz, step, g[0].desc, g[0].ipp);
   }
   if (!vol) { setStatus('画像を読み込めませんでした。' + (lastErr || ''), true); return; }
   setVolume(vol, files.length + 'ファイル' + (errors ? `（${errors}件スキップ）` : '') + (step > 1 ? ` ・大容量のため1/${step}に間引き` : ''));
@@ -471,17 +477,19 @@ function medianDiff(a) {
   d.sort((x, y) => x - y);
   return d[d.length >> 1];
 }
-function buildVolume(slices, it, sz, step, desc) {
+function buildVolume(slices, it, sz, step, desc, origin) {
   if (step > 1) { slices = slices.filter((_, i) => i % step === 0); sz *= step; }
-  return { nx: it.cols, ny: it.rows, nz: slices.length, sx: it.sx, sy: it.sy, sz, slices, desc: desc || '' };
+  const nrm = (a) => { const l = Math.hypot(...a) || 1; return a.map((x) => x / l); };
+  const dirs = it.iop ? [nrm(it.iop.slice(0, 3)), nrm(it.iop.slice(3, 6)), nrm(normalOf(it.iop))] : [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+  return { nx: it.cols, ny: it.rows, nz: slices.length, sx: it.sx, sy: it.sy, sz, slices, desc: desc || '', dirs, origin: origin || [0, 0, 0] };
 }
 
 /* =====================================================================
  *  デモ用ファントム（下顎小臼歯〜大臼歯、骨・歯根膜・ノイズ入り）
  * ===================================================================== */
-function makeDemoVolume() {
-  const nx = 180, ny = 150, nz = 190, s = 0.2;
-  const CEJ = 22, CY = 15;
+function makeDemoVolume(opt = window.DEMO_OPTS || {}) {
+  const s = opt.s || 0.15, nx = Math.round(34 / s), ny = Math.round(26 / s), nz = Math.round(36 / s);
+  const CEJ = 21, CY = 13;
   const teeth = [
     { cx: 9.0, cy: CY, rx: 3.6, ry: 4.0, crownH: 7.5, trunk: 0,
       roots: [{ dx: 0, dy: 0, len: 14, r: 2.9, ry: 3.3, tx: 0.03, ty: 0, canals: [{ dy: -0.9, merge: true }, { dy: 0.9, merge: true }] }] },
@@ -500,9 +508,11 @@ function makeDemoVolume() {
   const rootAt = (T, R, u, m) => {
     const f = u / R.len;
     if (f < 0 || f > 1) return null;
-    let k = 1 - 0.72 * Math.pow(f, 1.3);
-    if (f > 0.9) k *= Math.sqrt(Math.max(0, 1 - ((f - 0.9) / 0.1) ** 2));
-    return { ax: T.cx + R.dx + R.tx * u, ay: T.cy + R.dy + R.ty * u, rx: R.r * k + m, ry: R.ry * k + m, f };
+    const k0 = 1 - 0.62 * Math.pow(f, 1.3);
+    let k = k0;
+    const fa = 1 - 1.0 / R.len; // 根尖は半径約1mmで丸める
+    if (f > fa) k *= Math.sqrt(Math.max(0, 1 - ((f - fa) / (1 - fa)) ** 2));
+    return { ax: T.cx + R.dx + R.tx * u, ay: T.cy + R.dy + R.ty * u, rx: R.r * k + m, ry: R.ry * k + m, f, k0 };
   };
   // 0: 外, 1: エナメル, 2: 象牙質, 3: 歯髄
   const label = (T, x, y, z, m) => {
@@ -538,8 +548,8 @@ function makeDemoVolume() {
         if (!g) continue;
         for (const C of R.canals) {
           const w = C.merge ? 1 - smoothstepJS(0.45, 0.75, g.f) : 1;
-          const cx = g.ax, cy = g.ay + C.dy * w * (1 - 0.35 * g.f);
-          const rc = 0.38 * (1 - 0.55 * g.f);
+          const cx = g.ax, cy = g.ay + C.dy * w * g.k0;
+          const rc = 0.3 * (1 - 0.5 * g.f);
           if (Math.hypot(x - cx, y - cy) <= rc) return 3;
           // 側枝（側方根管）
           if (C.lateral && Math.abs(g.f - 0.62) < 0.02 && x - cx > 0 && Math.abs(y - cy) < 0.2) return 3;
@@ -582,14 +592,16 @@ function makeDemoVolume() {
       }
     }
   }
-  blur3(f, nx, ny, nz);
+  blur3(f, nx, ny, nz); blur3(f, nx, ny, nz); // 撮影系のぼけ（PSF）
   const slices = [];
   for (let k = 0; k < nz; k++) {
     const a = new Int16Array(nx * ny);
-    for (let i = 0; i < nx * ny; i++) a[i] = Math.round(f[k * nx * ny + i] + (rnd() + rnd() + rnd() - 1.5) * 90);
+    for (let i = 0; i < nx * ny; i++) a[i] = Math.round(f[k * nx * ny + i] + (rnd() + rnd() + rnd() - 1.5) * (opt.noise || 110));
     slices.push(a);
   }
-  return { nx, ny, nz, sx: s, sy: s, sz: s, slices, desc: 'デモ（合成ファントム：下顎 小臼歯・第一大臼歯）', demoSeed: [Math.round(17.8 / s), Math.round(15 / s), Math.round(25 / s)] };
+  // 検証用の正解ラベル（mm座標）
+  const gt = (x, y, z, ti) => { if (ti !== undefined) return label(teeth[ti], x, y, z, 0); for (const T of teeth) { const L = label(T, x, y, z, 0); if (L) return L; } return 0; };
+  return { nx, ny, nz, sx: s, sy: s, sz: s, slices, gt, dirs: [[1, 0, 0], [0, 1, 0], [0, 0, 1]], origin: [0, 0, 0], desc: 'デモ（合成ファントム：下顎 小臼歯・第一大臼歯）', demoSeed: [Math.round(17.8 / s), Math.round(CY / s), Math.round(24 / s)] };
 }
 function smoothstepJS(a, b, x) { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); }
 
@@ -611,7 +623,7 @@ function blur3(f, nx, ny, nz, w = [0.25, 0.5, 0.25]) {
  *  アプリ状態
  * ===================================================================== */
 const S = {
-  vol: null, cursor: [0, 0, 0], seed: null, seg: null, ww: 3000, wl: 800,
+  vol: null, cursor: [0, 0, 0], seed: null, seg: null, ww: 3000, wl: 800, meas: { on: false, pts: [] },
 };
 function vget(x, y, z) { return S.vol.slices[z][y * S.vol.nx + x]; }
 
@@ -652,7 +664,7 @@ function setVolume(vol, note) {
   S.chart = null; drawCanalChart(null);
   renderer.clear();
   $('empty3d').style.display = '';
-  $('extractBtn').disabled = true;
+  $('extractBtn').disabled = true; $('stlBtn').disabled = true; S.meas.pts = []; $('measOut').textContent = '';
   for (const v of views) v.resetView();
   if (vol.demoSeed) setSeed(vol.demoSeed);
   else { updateSeedInfo(); renderAll(); }
@@ -756,6 +768,11 @@ class SliceView {
   down(e) {
     if (!S.vol) return;
     this.cv.setPointerCapture(e.pointerId);
+    if (e.button === 0 && S.meas.on) {
+      const [i, j] = this.evtImg(e), g = this.geom();
+      if (i >= 0 && j >= 0 && i < g.w && j < g.h) addMeasPoint(this.toVox(Math.floor(i), Math.floor(j)));
+      return;
+    }
     if (e.button === 0) { this.drag = 'pick'; this.pick(e); }
     else { this.drag = 'pan'; this.lastX = e.clientX; this.lastY = e.clientY; }
   }
@@ -801,6 +818,7 @@ class SliceView {
     const d = this.img.data, lo = S.wl - S.ww / 2, sc = 255 / Math.max(1, S.ww);
     const roi = getROI(), seg = S.seg, showOv = $('preview').checked;
     const th = +$('thHard').value, te = +$('thEnamel').value;
+    const pulpRGB = hexRGB($('colP').value).map((x) => x * 255);
     for (let j = 0; j < g.h; j++) {
       for (let i = 0; i < g.w; i++) {
         let x, y, z;
@@ -812,7 +830,7 @@ class SliceView {
           let col = null, a = 0.45;
           if (seg && seg.roi === roi.key) {
             const L = seg.labels[((z - roi.z0) * roi.ny + (y - roi.y0)) * roi.nx + (x - roi.x0)];
-            if (L) { col = LABEL_COL[L]; a = L === 4 ? 0.25 : L === 3 ? 0.7 : 0.4; }
+            if (L) { col = L === 3 ? pulpRGB : LABEL_COL[L]; a = L === 4 ? 0.25 : L === 3 ? 0.75 : 0.4; }
           } else if (val >= te) { col = [90, 200, 255]; a = 0.35; }
           else if (val >= th) { col = [60, 230, 120]; a = 0.35; }
           if (col) { r = r * (1 - a) + col[0] * a; gg = gg * (1 - a) + col[1] * a; b = b * (1 - a) + col[2] * a; }
@@ -843,6 +861,16 @@ class SliceView {
       const [si, sj] = this.toImg(...S.seed);
       ctx.fillStyle = '#ffd23f';
       ctx.beginPath(); ctx.arc(t.ox + (si + 0.5) * t.px, t.oy + (sj + 0.5) * t.py, 3.5 * dpr, 0, Math.PI * 2); ctx.fill();
+    }
+    // 距離計測
+    if (S.meas.pts.length) {
+      const P = S.meas.pts.map((q) => { const [a, b] = this.toImg(...q); return [t.ox + (a + 0.5) * t.px, t.oy + (b + 0.5) * t.py, q[this.axis] === s]; });
+      ctx.strokeStyle = '#ff9f1a'; ctx.fillStyle = '#ff9f1a'; ctx.lineWidth = 1.5 * dpr;
+      if (P.length === 2) { ctx.setLineDash([5, 3]); ctx.beginPath(); ctx.moveTo(P[0][0], P[0][1]); ctx.lineTo(P[1][0], P[1][1]); ctx.stroke(); ctx.setLineDash([]); }
+      for (const [x0, y0, on] of P) { ctx.beginPath(); ctx.arc(x0, y0, 4 * dpr, 0, Math.PI * 2); on ? ctx.fill() : ctx.stroke(); }
+      if (P.length === 2) {
+        ctx.font = `${12 * dpr}px sans-serif`; ctx.fillText(measDist().toFixed(2) + ' mm', P[1][0] + 8 * dpr, P[1][1] - 6 * dpr);
+      }
     }
     this.lbl.textContent = `${s + 1}/${this.sliceCount()}`;
   }
@@ -1127,8 +1155,10 @@ async function extract() {
   if (k > 0) toothE = dilateWithin(toothE, hardE, ex, ey, ez, k + 1);
   if (split) {
     showProgress('歯を抽出中…（隣在歯との分離）', 0.45); await sleep0();
-    const h0 = holes2D(toothE, ex, ey, ez), dom = new Uint8Array(en);
-    for (let i = 0; i < en; i++) dom[i] = toothE[i] | h0[i];
+    // 隣在歯の「全体」を競合させるため、収縮前の硬組織の連結領域で分水嶺を行い、結果を対象歯の領域に適用する
+    const full = floodFill(hardE, ex, ey, ez, seedIdx);
+    const h0 = holes2D(full, ex, ey, ez), dom = new Uint8Array(en);
+    for (let i = 0; i < en; i++) dom[i] = full[i] | h0[i];
     const lab = splitNeighbors(dom, ex, ey, ez, [v.sx, v.sy, v.sz], seedIdx);
     if (lab) {
       for (let i = 0; i < en; i++) if (lab[i] !== 1) toothE[i] = 0;
@@ -1139,59 +1169,278 @@ async function extract() {
   }
   const f = cropROI(fe, ext, roi, Float32Array), hard = cropROI(hardE, ext, roi, Uint8Array);
   const tooth = cropROI(toothE, ext, roi, Uint8Array);
-  showProgress('歯を抽出中…（歯髄・根管）', 0.55); await sleep0();
-  const holes = holes2D(tooth, nx, ny, nz);
-  const solid = new Uint8Array(n);
-  for (let i = 0; i < n; i++) solid[i] = tooth[i] | holes[i];
-  // 根管感度：歯の内部で、歯質しきい値〜象牙質平均の間の値も根管候補とする
-  let dsum = 0, dcnt = 0;
-  for (let i = 0; i < n; i++) if (tooth[i] && f[i] < te) { dsum += f[i]; dcnt++; }
-  const dMean = dcnt ? dsum / dcnt : th;
-  const tc = th + (dMean - th) * (+$('thCanal').value / 100);
-  const inner = erode6(erode6(solid, nx, ny, nz), nx, ny, nz);
-  const canal = new Uint8Array(n);
-  for (let i = 0; i < n; i++) if (holes[i] || (inner[i] && f[i] < tc)) canal[i] = 1;
-  const voxMm3 = v.sx * v.sy * v.sz;
-  removeSmall(canal, nx, ny, nz, Math.max(4, Math.round(0.06 / voxMm3)));
-  showProgress('歯を抽出中…（ラベル付け）', 0.75); await sleep0();
-  const labels = new Uint8Array(n);
-  const cnt = [0, 0, 0, 0, 0];
-  let zmin = Infinity, zmax = -1;
-  for (let i = 0; i < n; i++) {
-    let L = 0;
-    if (canal[i]) L = 3;
-    else if (solid[i]) L = f[i] >= te ? 1 : 2;
-    else if (hard[i]) L = 4;
-    labels[i] = L; cnt[L]++;
-    if (L && L !== 4) { const z = (i / nxy) | 0; if (z < zmin) zmin = z; if (z > zmax) zmax = z; }
+  // ================= 高精度ステージ（サブボクセル） =================
+  showProgress('高精度処理中…（補間）', 0.5); await sleep0();
+  let bx0 = nx, by0 = ny, bz0 = nz, bx1 = -1, by1 = -1, bz1 = -1;
+  for (let z = 0, i = 0; z < nz; z++) for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++, i++) if (tooth[i]) {
+    if (x < bx0) bx0 = x; if (x > bx1) bx1 = x; if (y < by0) by0 = y; if (y > by1) by1 = y; if (z < bz0) bz0 = z; if (z > bz1) bz1 = z;
   }
-  S.seg = { roi: roi.key, roiObj: roi, labels };
-  showProgress('3Dデータを作成中…', 0.88); await sleep0();
-  renderer.setLabels(labels, nx, ny, nz, v.sx, v.sy, v.sz);
+  if (bx1 < 0) { hideProgress(); setStatus('歯を抽出できませんでした。しきい値を確認してください', true); return; }
+  const mg = Math.ceil(0.8 / Math.min(v.sx, v.sy, v.sz));
+  const box = { x0: Math.max(0, bx0 - mg), y0: Math.max(0, by0 - mg), z0: Math.max(0, bz0 - mg), x1: Math.min(nx - 1, bx1 + mg), y1: Math.min(ny - 1, by1 + mg), z1: Math.min(nz - 1, bz1 + mg) };
+  const bnx = box.x1 - box.x0 + 1, bny = box.y1 - box.y0 + 1, bnz = box.z1 - box.z0 + 1;
+  let u = $('hiRes').checked ? clamp(Math.round(Math.min(v.sx, v.sy, v.sz) / 0.07), 1, 3) : 1;
+  while (u > 1 && bnx * bny * bnz * u ** 3 > 20e6) u--;
+  const fx = bnx * u, fy = bny * u, fz = bnz * u, fn = fx * fy * fz, fxy = fx * fy;
+  const fsp = [v.sx / u, v.sy / u, v.sz / u], fvol = fsp[0] * fsp[1] * fsp[2], fmin = Math.min(...fsp);
+  // 高精度ステージは平滑化前の値を使う（細い根管のコントラストを保つ。ノイズは実測σでしきい値に反映）
+  const I = upsample(roiValues(roi, false), nx, ny, nz, box, u);
+  const tf = new Float32Array(n); for (let i = 0; i < n; i++) tf[i] = tooth[i];
+  const tm = upsample(tf, nx, ny, nz, box, u);
+  showProgress('高精度処理中…（歯の輪郭）', 0.58); await sleep0();
+  let toothF = new Uint8Array(fn);
+  for (let i = 0; i < fn; i++) toothF[i] = tm[i] > 0.15 && I[i] >= th ? 1 : 0;
+  toothF = keepLargest(toothF, fx, fy, fz);
+  const holesF = holes2D(toothF, fx, fy, fz);
+  const solidF = new Uint8Array(fn);
+  for (let i = 0; i < fn; i++) solidF[i] = toothF[i] | holesF[i];
+  // 象牙質の代表値とノイズ（中央値・MAD）
+  const in2 = erode6(erode6(toothF, fx, fy, fz), fx, fy, fz);
+  const dv = [];
+  const stp = Math.max(1, Math.floor(fn / 400000));
+  for (let i = 0; i < fn; i += stp) if (in2[i] && I[i] < te) dv.push(I[i]);
+  dv.sort((a, b) => a - b);
+  const dMed = dv.length ? dv[dv.length >> 1] : th + 500;
+  const mad = dv.length ? dv.map((x) => Math.abs(x - dMed)).sort((a, b) => a - b)[dv.length >> 1] : 50;
+  const sigma = Math.max(5, 1.4826 * mad);
+  showProgress('高精度処理中…（根管の検出）', 0.66); await sleep0();
+  // ブラックトップハット：局所的に周囲の象牙質より暗い細い構造（根管）を強調
+  // エナメル質を象牙質レベルに抑えてからトップハット（エナメル質に接する象牙質を根管と誤認しない）
+  const B = new Float32Array(fn);
+  for (let i = 0; i < fn; i++) B[i] = I[i] > dMed ? dMed : I[i];
+  const r = Math.max(1, Math.round(0.6 / fmin));
+  const C = B.slice();
+  rankFilter3(C, fx, fy, fz, r, true); rankFilter3(C, fx, fy, fz, r, false);
+  // 局所ピークの半値（FWHM）で根管の境界を決める（ぼけによる太りを防ぐ）
+  const Hm = new Float32Array(fn);
+  for (let i = 0; i < fn; i++) Hm[i] = solidF[i] ? C[i] - B[i] : 0;
+  rankFilter3(Hm, fx, fy, fz, Math.max(1, Math.round(0.35 / fmin)), true);
+  const sens = +$('thCanal').value / 100;
+  const kLow = 4.0 - 2.6 * sens, kHigh = kLow + 2.0;
+  // 歯の表面付近（部分容積効果で暗く見える層）は根管候補から除外する
+  const depth = distanceTransform(solidF, fx, fy, fz, fsp[0], fsp[1], fsp[2]);
+  const dS = Math.max(0.3, 2.2 * Math.min(v.sx, v.sy, v.sz)), dW = Math.max(0.1, 0.7 * Math.min(v.sx, v.sy, v.sz));
+  const strong = new Uint8Array(fn), weak = new Uint8Array(fn);
+  for (let i = 0; i < fn; i++) {
+    if (!solidF[i]) continue;
+    const hat = C[i] - B[i], d = depth[i];
+    if (holesF[i] || (d >= dS && ((hat > kHigh * sigma && hat >= 0.5 * Hm[i]) || I[i] < th))) strong[i] = 1;
+    if (strong[i] || (d >= dW && hat > kLow * sigma && hat >= 0.62 * Hm[i])) weak[i] = 1;
+  }
+  const canalF = hysteresis(strong, weak, fx, fy, fz);
+  // 小さな孤立成分（ノイズ）を除去：最大成分（歯髄腔）＋ 長さ1mm以上の成分のみ残す
+  filterComponents(canalF, fx, fy, fz, Math.max(6, Math.round(0.015 / fvol)), Math.round(1.0 / fsp[2]));
+  showProgress('高精度処理中…（ラベル・表面）', 0.78); await sleep0();
+  const labF = new Uint8Array(fn);
+  const cnt = [0, 0, 0, 0, 0];
+  for (let i = 0; i < fn; i++) {
+    let L = 0;
+    if (canalF[i]) L = 3;
+    else if (solidF[i]) L = I[i] >= te ? 1 : 2;
+    else if (I[i] >= th) L = 4;
+    labF[i] = L; cnt[L]++;
+  }
+  // 骨は歯から少し離れたものだけ（接触面のちらつき防止）
+  const nearT = dilate6(solidF, fx, fy, fz, 1);
+  for (let i = 0; i < fn; i++) if (labF[i] === 4 && nearT[i]) { labF[i] = 0; cnt[4]--; cnt[0]++; }
+  const rgba = buildFields(I, labF, solidF, fx, fy, fz, th, te, dMed);
+  // 断面オーバーレイ用に元解像度のラベルへ戻す
+  const labels = new Uint8Array(n);
+  for (let i = 0; i < n; i++) if (hard[i] && !tooth[i]) labels[i] = 4;
+  const hu = u >> 1;
+  for (let z = box.z0; z <= box.z1; z++) for (let y = box.y0; y <= box.y1; y++) for (let x = box.x0; x <= box.x1; x++) {
+    const fi = (((z - box.z0) * u + hu) * fy + (y - box.y0) * u + hu) * fx + (x - box.x0) * u + hu;
+    labels[(z * ny + y) * nx + x] = labF[fi];
+  }
+  let zmin = Infinity, zmax = -1;
+  for (let z = 0; z < fz; z++) {
+    let any = false;
+    for (let i = z * fxy, e = i + fxy; i < e; i++) if (solidF[i]) { any = true; break; }
+    if (any) { if (z < zmin) zmin = z; zmax = z; }
+  }
+  const origin = [(roi.x0 + box.x0 + 0.5 / u - 0.5) * v.sx, (roi.y0 + box.y0 + 0.5 / u - 0.5) * v.sy, (roi.z0 + box.z0 + 0.5 / u - 0.5) * v.sz];
+  S.seg = { roi: roi.key, roiObj: roi, labels, fine: { labels: labF, rgba, nx: fx, ny: fy, nz: fz, sp: fsp, origin, u, box, sigma, dMed } };
+  showProgress('3Dデータを作成中…', 0.9); await sleep0();
+  renderer.setData(rgba, labF, fx, fy, fz, fsp[0], fsp[1], fsp[2]);
   hideProgress();
   $('empty3d').style.display = 'none';
-  // 統計
+  $('stlBtn').disabled = false;
   const touches = (() => { // ROI 境界に歯が接している → ROIが狭い可能性
     for (let z = 0; z < nz; z++) for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) {
       if (x && y && x < nx - 1 && y < ny - 1) continue;
-      const L = labels[(z * ny + y) * nx + x]; if (L && L !== 4) return true;
+      if (tooth[(z * ny + y) * nx + x]) return true;
     }
     return false;
   })();
   const canalCounts = [];
-  for (let z = 0; z < nz; z++) canalCounts.push(count2D(labels, nx, ny, z, 3, Math.max(2, Math.round(0.03 / (v.sx * v.sy)))));
+  const minPx = Math.max(2, Math.round(0.02 / (fsp[0] * fsp[1])));
+  for (let z = 0; z < fz; z++) canalCounts.push(count2D(labF, fx, fy, z, 3, minPx));
   const tno = $('toothNo').value;
   $('segStats').innerHTML =
     (tno ? `<dt>歯番</dt><dd>${esc(tno)}</dd>` : '') +
-    `<dt>歯の高さ（Z方向）</dt><dd>${zmax >= 0 ? ((zmax - zmin + 1) * v.sz).toFixed(1) : '-'} mm</dd>` +
-    `<dt>エナメル質 体積</dt><dd>${(cnt[1] * voxMm3).toFixed(1)} mm³</dd>` +
-    `<dt>象牙質 体積</dt><dd>${(cnt[2] * voxMm3).toFixed(1)} mm³</dd>` +
-    `<dt>歯髄・根管 体積</dt><dd>${(cnt[3] * voxMm3).toFixed(1)} mm³</dd>` +
+    `<dt>解析解像度</dt><dd>${fsp[0].toFixed(3)} mm（×${u}）</dd>` +
+    `<dt>歯の高さ（Z方向）</dt><dd>${zmax >= 0 ? ((zmax - zmin + 1) * fsp[2]).toFixed(1) : '-'} mm</dd>` +
+    `<dt>エナメル質 体積</dt><dd>${(cnt[1] * fvol).toFixed(1)} mm³</dd>` +
+    `<dt>象牙質 体積</dt><dd>${(cnt[2] * fvol).toFixed(1)} mm³</dd>` +
+    `<dt>歯髄・根管 体積</dt><dd>${(cnt[3] * fvol).toFixed(1)} mm³</dd>` +
     `<dt>最大根管数（断面）</dt><dd>${Math.max(0, ...canalCounts)}</dd>`;
-  S.chart = [canalCounts, v.sz, zmin, zmax];
+  S.chart = [canalCounts, fsp[2], zmin, zmax];
   drawCanalChart(...S.chart);
   renderAll();
   setStatus('抽出完了。' + (touches ? '⚠ 歯がROIの枠に接しています。ROIを広げるか、隣在歯・骨とつながっていないか確認してください。' : '3Dビューをドラッグして回転できます。'), touches);
+}
+
+/** ROI内の box 領域を u 倍に三線形補間 */
+function upsample(src, nx, ny, nz, box, u) {
+  const ax = (a0, a1, N) => {
+    const m = (a1 - a0 + 1) * u, i0 = new Int32Array(m), i1 = new Int32Array(m), w = new Float32Array(m);
+    for (let i = 0; i < m; i++) {
+      const c = a0 + (i + 0.5) / u - 0.5, fl = Math.floor(c);
+      w[i] = c - fl; i0[i] = clamp(fl, 0, N - 1); i1[i] = clamp(fl + 1, 0, N - 1);
+    }
+    return { m, i0, i1, w };
+  };
+  const X = ax(box.x0, box.x1, nx), Y = ax(box.y0, box.y1, ny), Z = ax(box.z0, box.z1, nz), nxy = nx * ny;
+  const out = new Float32Array(X.m * Y.m * Z.m);
+  let p = 0;
+  for (let k = 0; k < Z.m; k++) {
+    const za = Z.i0[k] * nxy, zb = Z.i1[k] * nxy, wz = Z.w[k];
+    for (let j = 0; j < Y.m; j++) {
+      const ya = Y.i0[j] * nx, yb = Y.i1[j] * nx, wy = Y.w[j];
+      for (let i = 0; i < X.m; i++) {
+        const xa = X.i0[i], xb = X.i1[i], wx = X.w[i];
+        const c00 = src[za + ya + xa] * (1 - wx) + src[za + ya + xb] * wx;
+        const c01 = src[za + yb + xa] * (1 - wx) + src[za + yb + xb] * wx;
+        const c10 = src[zb + ya + xa] * (1 - wx) + src[zb + ya + xb] * wx;
+        const c11 = src[zb + yb + xa] * (1 - wx) + src[zb + yb + xb] * wx;
+        out[p++] = (c00 * (1 - wy) + c01 * wy) * (1 - wz) + (c10 * (1 - wy) + c11 * wy) * wz;
+      }
+    }
+  }
+  return out;
+}
+/** 立方体近傍の最大値／最小値フィルタ（van Herk / Gil-Werman, 分離型, in-place） */
+function rankFilter3(a, nx, ny, nz, r, isMax) {
+  const w = 2 * r + 1, maxLen = Math.max(nx, ny, nz) + 2 * r + w;
+  const line = new Float32Array(maxLen), g = new Float32Array(maxLen), h = new Float32Array(maxLen);
+  const pad = isMax ? -Infinity : Infinity;
+  const op = isMax ? Math.max : Math.min;
+  const run = (base, stride, len) => {
+    const L = len + 2 * r;
+    const Lp = Math.ceil(L / w) * w;
+    for (let i = 0; i < Lp; i++) { const k = i - r; line[i] = k >= 0 && k < len ? a[base + k * stride] : pad; }
+    for (let b = 0; b < Lp; b += w) {
+      g[b] = line[b]; for (let i = b + 1; i < b + w; i++) g[i] = op(g[i - 1], line[i]);
+      h[b + w - 1] = line[b + w - 1]; for (let i = b + w - 2; i >= b; i--) h[i] = op(h[i + 1], line[i]);
+    }
+    for (let k = 0; k < len; k++) a[base + k * stride] = op(h[k], g[k + w - 1]);
+  };
+  const nxy = nx * ny;
+  for (let z = 0; z < nz; z++) for (let y = 0; y < ny; y++) run(z * nxy + y * nx, 1, nx);
+  for (let z = 0; z < nz; z++) for (let x = 0; x < nx; x++) run(z * nxy + x, nx, ny);
+  for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) run(y * nx + x, nxy, nz);
+}
+function dilate6(src, nx, ny, nz, iters) {
+  const all = new Uint8Array(src.length).fill(1);
+  return dilateWithin(src.slice(), all, nx, ny, nz, iters);
+}
+/** 26近傍の連結成分ラベリング（ラベル配列, 各成分の大きさ・Z範囲） */
+function components26(mask, nx, ny, nz) {
+  const lab = new Int32Array(mask.length), nxy = nx * ny, stack = new Int32Array(mask.length);
+  const size = [0], zlo = [0], zhi = [0];
+  let cur = 0;
+  for (let s = 0; s < mask.length; s++) {
+    if (!mask[s] || lab[s]) continue;
+    cur++; let sp = 0, cnt = 0, a = nz, b = -1; stack[sp++] = s; lab[s] = cur;
+    while (sp) {
+      const i = stack[--sp]; cnt++;
+      const x = i % nx, y = ((i / nx) | 0) % ny, z = (i / nxy) | 0;
+      if (z < a) a = z; if (z > b) b = z;
+      for (let dz = -1; dz <= 1; dz++) {
+        const zz = z + dz; if (zz < 0 || zz >= nz) continue;
+        for (let dy = -1; dy <= 1; dy++) {
+          const yy = y + dy; if (yy < 0 || yy >= ny) continue;
+          for (let dx = -1; dx <= 1; dx++) {
+            const xx = x + dx; if (xx < 0 || xx >= nx) continue;
+            const j = zz * nxy + yy * nx + xx;
+            if (mask[j] && !lab[j]) { lab[j] = cur; stack[sp++] = j; }
+          }
+        }
+      }
+    }
+    size.push(cnt); zlo.push(a); zhi.push(b);
+  }
+  return { lab, size, zlo, zhi };
+}
+function keepLargest(mask, nx, ny, nz) {
+  const c = components26(mask, nx, ny, nz);
+  let best = 0; for (let k = 1; k < c.size.length; k++) if (c.size[k] > c.size[best]) best = k;
+  for (let i = 0; i < mask.length; i++) mask[i] = c.lab[i] === best && best ? 1 : 0;
+  return mask;
+}
+function filterComponents(mask, nx, ny, nz, minSize, minZ) {
+  const c = components26(mask, nx, ny, nz);
+  let best = 0; for (let k = 1; k < c.size.length; k++) if (c.size[k] > c.size[best]) best = k;
+  const keep = c.size.map((sz, k) => k === best || (sz >= minSize && c.zhi[k] - c.zlo[k] + 1 >= minZ));
+  for (let i = 0; i < mask.length; i++) if (mask[i] && !keep[c.lab[i]]) mask[i] = 0;
+}
+/** ヒステリシス：強い候補から、弱い候補の中を26近傍でつながる範囲へ拡張 */
+function hysteresis(strong, weak, nx, ny, nz) {
+  const out = new Uint8Array(strong.length), nxy = nx * ny, q = new Int32Array(strong.length);
+  let qn = 0;
+  for (let i = 0; i < strong.length; i++) if (strong[i]) { out[i] = 1; q[qn++] = i; }
+  while (qn) {
+    const i = q[--qn], x = i % nx, y = ((i / nx) | 0) % ny, z = (i / nxy) | 0;
+    for (let dz = -1; dz <= 1; dz++) {
+      const zz = z + dz; if (zz < 0 || zz >= nz) continue;
+      for (let dy = -1; dy <= 1; dy++) {
+        const yy = y + dy; if (yy < 0 || yy >= ny) continue;
+        for (let dx = -1; dx <= 1; dx++) {
+          const xx = x + dx; if (xx < 0 || xx >= nx) continue;
+          const j = zz * nxy + yy * nx + xx;
+          if (weak[j] && !out[j]) { out[j] = 1; q[qn++] = j; }
+        }
+      }
+    }
+  }
+  return out;
+}
+/**
+ * 3D表示用フィールド（RGBA8）: R=エナメル質の割合, G=歯の外形, B=歯髄・根管, A=骨
+ * 歯の外形はCT値そのものを使い、しきい値位置にサブボクセル精度の等値面ができるようにする
+ */
+function buildFields(I, lab, solid, nx, ny, nz, th, te, dMed) {
+  const n = I.length, rgba = new Uint8Array(n * 4);
+  const blurMask = (pred, w) => { const f = new Float32Array(n); for (let i = 0; i < n; i++) f[i] = pred(i) ? 1 : 0; blur3(f, nx, ny, nz, w); return f; };
+  const W3 = [0.25, 0.5, 0.25];
+  const cut = blurMask((i) => solid[i], W3);
+  const dil = dilate6(solid, nx, ny, nz, 1);
+  const cutOuter = blurMask((i) => dil[i], W3);
+  const ero = erode6(solid, nx, ny, nz);
+  const fill = blurMask((i) => ero[i], W3);
+  const enM = new Uint8Array(n); for (let i = 0; i < n; i++) enM[i] = lab[i] === 1;
+  const enD = dilate6(enM, nx, ny, nz, 3);
+  const enF = blurMask((i) => enD[i], [1 / 16, 4 / 16, 6 / 16, 4 / 16, 1 / 16]);
+  const canal = blurMask((i) => lab[i] === 3, [1 / 16, 4 / 16, 6 / 16, 4 / 16, 1 / 16]);
+  blur3(canal, nx, ny, nz, [0.25, 0.5, 0.25]); // 根管表面のざらつきを除去
+  const bone = blurMask((i) => lab[i] === 4, [1 / 16, 4 / 16, 6 / 16, 4 / 16, 1 / 16]);
+  const dD = Math.max(60, dMed - th);
+  const c01 = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
+  const bodyF = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    // 歯の外形：CT値ベース（外側は1ボクセル膨張したマスクで切る）＋内部は塗りつぶし（根管の内壁を出さない）
+    let body = Math.min(c01(0.5 + (I[i] - th) / (2 * dD)), cutOuter[i]);
+    body = Math.max(body, fill[i]);
+    if (lab[i] === 3) body = Math.max(body, cut[i]);
+    rgba[i * 4] = Math.round(enF[i] * 255);   // エナメル質の割合（色の混合用）
+    bodyF[i] = body;                          // 歯の外形（エナメル質＋象牙質）
+    rgba[i * 4 + 2] = Math.round(canal[i] * 255);
+    rgba[i * 4 + 3] = Math.round(bone[i] * 255);
+  }
+  // 補間格子による段差（年輪状の縞）を消すため、細かい格子上で軽く平滑化
+  blur3(bodyF, nx, ny, nz, [1 / 16, 4 / 16, 6 / 16, 4 / 16, 1 / 16]);
+  for (let i = 0; i < n; i++) rgba[i * 4 + 1] = Math.round(bodyF[i] * 255);
+  return rgba;
 }
 /** 1枚の水平断における、ラベル L の 8連結成分の数 */
 function count2D(labels, nx, ny, z, L, minPx) {
@@ -1267,40 +1516,46 @@ void main(){
   float tnear = max(max(tn.x,tn.y),tn.z), tfar = min(min(tf.x,tf.y),tf.z);
   if (tnear > tfar || tfar < 0.0) { outColor = vec4(bg,1.0); return; }
   float t = max(tnear, 0.0) + uDt * fract(sin(dot(gl_FragCoord.xy, vec2(12.9898,78.233)))*43758.5453);
+  // 等値面合成：各構造の表面を通過するたびに一定の不透明度で1回だけ合成（メッシュ表示に近い見え方）
   vec4 acc = vec4(0.0);
   vec3 L = -dir;
-  float corr = uDt / uRef;
+  vec3 isoV = uIso.yzw;
+  vec3 prev = vec3(0.0);
+  bool prevClipped = false;
   for (int i=0; i<4096; i++) {
     if (t > tfar || acc.a > 0.985) break;
     vec3 p = uEye + dir*t;
     t += uDt;
-    bool nearCut = false;
-    if (uClipOn == 1) {
-      float s = dot(p, uClip.xyz) - uClip.w;
-      if (s > 0.0) continue;
-      nearCut = s > -1.5*uDt;
-    }
+    bool clipped = uClipOn == 1 && dot(p, uClip.xyz) - uClip.w > 0.0;
     vec3 tc = p/(2.0*uHalf) + 0.5;
-    vec4 m = texture(uVol, tc);
-    vec4 dens = smoothstep(uIso-0.12, uIso+0.12, m) * uOpacity;
-    if (dens.x+dens.y+dens.z+dens.w < 0.002) continue;
-    vec4 gx = texture(uVol, tc+vec3(uTexel.x,0,0)) - texture(uVol, tc-vec3(uTexel.x,0,0));
-    vec4 gy = texture(uVol, tc+vec3(0,uTexel.y,0)) - texture(uVol, tc-vec3(0,uTexel.y,0));
-    vec4 gz = texture(uVol, tc+vec3(0,0,uTexel.z)) - texture(uVol, tc-vec3(0,0,uTexel.z));
-    for (int c=0; c<4; c++) {
-      float a = dens[c];
-      if (a <= 0.0) continue;
-      vec3 g = vec3(gx[c], gy[c], gz[c]);
-      float gm = length(g);
-      g /= uHalf * uTexel;
-      if (!nearCut) a *= mix(1.0, 0.3*clamp(gm*2.2, 0.0, 1.0), uGlass[c]);
-      a = 1.0 - pow(max(1.0 - a, 0.0), corr);
-      vec3 n = gm > 1e-4 ? -normalize(g) : L;
-      float diff = nearCut ? 0.72 : abs(dot(n, L));
-      vec3 base = (c == 2 && uPulpGrad == 1) ? pulpHue(tc.z) : uCol[c];
-      vec3 col = base*(0.30 + 0.70*diff) + vec3(0.28)*pow(diff, 36.0);
-      acc.rgb += (1.0-acc.a)*a*col; acc.a += (1.0-acc.a)*a;
+    vec4 m = clipped ? vec4(0.0) : texture(uVol, tc);
+    vec3 cur = m.gba;
+    bvec3 crs = notEqual(greaterThan(cur, isoV), greaterThan(prev, isoV));
+    if (any(crs)) {
+      float en = smoothstep(0.25, 0.75, m.r);
+      for (int c=0; c<3; c++) {
+        if (!crs[c]) continue;
+        float op = c == 0 ? mix(uOpacity.y, uOpacity.x, en) : (c == 1 ? uOpacity.z : uOpacity.w);
+        if (op <= 0.0) continue;
+        bool cutFace = prevClipped && !clipped;
+        float fr = clamp((isoV[c] - prev[c]) / (cur[c] - prev[c]), 0.0, 1.0);
+        vec3 tcc = (p - dir*uDt*(1.0 - fr))/(2.0*uHalf) + 0.5;
+        vec4 gx = texture(uVol, tcc+vec3(uTexel.x,0,0)) - texture(uVol, tcc-vec3(uTexel.x,0,0));
+        vec4 gy = texture(uVol, tcc+vec3(0,uTexel.y,0)) - texture(uVol, tcc-vec3(0,uTexel.y,0));
+        vec4 gz = texture(uVol, tcc+vec3(0,0,uTexel.z)) - texture(uVol, tcc-vec3(0,0,uTexel.z));
+        vec3 g = vec3(gx[c+1], gy[c+1], gz[c+1]) / (uHalf * uTexel);
+        vec3 n = length(g) > 1e-6 ? -normalize(g) : L;
+        float a = op;
+        if (cutFace) { n = uClip.xyz; a = max(op, 0.6); }
+        float facing = abs(dot(n, L));
+        // 透かし表示：正面を向いた面ほど透明に、輪郭ほど不透明に（形が分かりやすい）
+        if (!cutFace) a *= mix(1.0, 0.25 + 0.75*pow(1.0 - facing, 1.5), uGlass[c+1]);
+        vec3 base = c == 0 ? mix(uCol[1], uCol[0], en) : (c == 1 && uPulpGrad == 1) ? pulpHue(tcc.z) : uCol[c+1];
+        vec3 col = base*(c == 0 ? 0.55 + 0.45*facing : 0.40 + 0.60*facing) + vec3(0.20)*pow(facing, 40.0);
+        acc.rgb += (1.0-acc.a)*a*col; acc.a += (1.0-acc.a)*a;
+      }
     }
+    prev = cur; prevClipped = clipped;
   }
   outColor = vec4(acc.rgb + (1.0-acc.a)*bg, 1.0);
 }`;
@@ -1390,17 +1645,9 @@ class VolumeRenderer {
     this.yaw = P[0]; this.pitch = P[1]; this.dist = this.fitDist || 2.4; this.request();
   }
   clear() { this.has = false; this.request(); }
-  setLabels(labels, nx, ny, nz, sx, sy, sz) {
+  /** rgba: R=エナメル質 G=象牙質 B=歯髄・根管 A=骨 のフィールド（0-255, 等値面=128） */
+  setData(rgba, labels, nx, ny, nz, sx, sy, sz) {
     const gl = this.gl; if (!gl) return;
-    const n = nx * ny * nz, rgba = new Uint8Array(n * 4);
-    const f = new Float32Array(n);
-    // チャンネル: R=エナメル(1) G=象牙質(2) B=歯髄(3) A=骨(4)
-    for (let c = 0; c < 4; c++) {
-      const L = c + 1;
-      for (let i = 0; i < n; i++) f[i] = labels[i] === L ? 1 : 0;
-      blur3(f, nx, ny, nz, L === 3 ? [1 / 6, 4 / 6, 1 / 6] : [1 / 16, 4 / 16, 6 / 16, 4 / 16, 1 / 16]);
-      for (let i = 0; i < n; i++) rgba[i * 4 + c] = Math.round(f[i] * 255);
-    }
     gl.bindTexture(gl.TEXTURE_3D, this.tex);
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
     gl.texImage3D(gl.TEXTURE_3D, 0, gl.RGBA8, nx, ny, nz, 0, gl.RGBA, gl.UNSIGNED_BYTE, rgba);
@@ -1452,7 +1699,7 @@ class VolumeRenderer {
     gl.uniform3fv(u.uEye, eye); gl.uniform3fv(u.uHalf, this.half); gl.uniform3fv(u.uTexel, this.texel);
     const op = (id) => +$(id).value / 100;
     gl.uniform4f(u.uOpacity, op('opE'), op('opD'), op('opP'), op('opB'));
-    gl.uniform4f(u.uIso, 0.5, 0.5, 0.3, 0.5);
+    gl.uniform4f(u.uIso, 0.5, 0.5, 0.35, 0.5);
     const g = op('glass');
     gl.uniform4f(u.uGlass, g, g, 0, Math.max(g, 0.6));
     gl.uniform3fv(u.uCol, [...hexRGB($('colE').value), ...hexRGB($('colD').value), ...hexRGB($('colP').value), ...hexRGB($('colB').value)]);
@@ -1467,6 +1714,29 @@ class VolumeRenderer {
     const dt = this.ref * (this.interacting || $('autoRot').checked ? 0.9 : 0.5);
     gl.uniform1f(u.uDt, dt); gl.uniform1f(u.uRef, this.ref);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+    this.drawGizmo(M4.lookAt(eye, tg, up));
+  }
+  /** 患者方向（A/P, R/L, S/I）の表示 */
+  drawGizmo(V) {
+    const cv = $('gizmo'), dpr = window.devicePixelRatio || 1, W = 96 * dpr;
+    if (cv.width !== W) { cv.width = W; cv.height = W; }
+    const c = cv.getContext('2d'); c.clearRect(0, 0, W, W);
+    if (!this.has || !S.vol) return;
+    const D = S.vol.dirs, R = W * 0.32, cx = W / 2, cy = W / 2;
+    const items = [['L', [1, 0, 0], '#ff5a5a'], ['R', [-1, 0, 0], '#ff5a5a'], ['P', [0, 1, 0], '#5b8cff'], ['A', [0, -1, 0], '#5b8cff'], ['S', [0, 0, 1], '#5ad17a'], ['I', [0, 0, -1], '#5ad17a']]
+      .map(([t, P, col]) => {
+        const w = D.map((d) => d[0] * P[0] + d[1] * P[1] + d[2] * P[2]);
+        return [t, V[0] * w[0] + V[4] * w[1] + V[8] * w[2], V[1] * w[0] + V[5] * w[1] + V[9] * w[2], V[2] * w[0] + V[6] * w[1] + V[10] * w[2], col];
+      }).sort((a, b) => a[3] - b[3]);
+    c.font = `bold ${13 * dpr}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
+    for (const [t, x, y, z, col] of items) {
+      const ex = cx + x * R, ey = cy - y * R, a = z < -0.2 ? 0.35 : 1;
+      c.globalAlpha = a; c.strokeStyle = col; c.lineWidth = 2 * dpr;
+      c.beginPath(); c.moveTo(cx, cy); c.lineTo(ex, ey); c.stroke();
+      c.fillStyle = 'rgba(240,240,240,0.92)'; c.fillRect(ex - 8 * dpr, ey - 8 * dpr, 16 * dpr, 16 * dpr);
+      c.fillStyle = col; c.fillText(t, ex, ey + 0.5 * dpr);
+    }
+    c.globalAlpha = 1;
   }
 }
 function hexRGB(h) { return [1, 3, 5].map((i) => parseInt(h.substr(i, 2), 16) / 255); }
@@ -1477,7 +1747,7 @@ function hexRGB(h) { return [1, 3, 5].map((i) => parseInt(h.substr(i, 2), 16) / 
 const views = [new SliceView($('cvAx'), 2, $('lblAx')), new SliceView($('cvCo'), 1, $('lblCo')), new SliceView($('cvSa'), 0, $('lblSa'))];
 let renderer;
 try { renderer = new VolumeRenderer($('cv3d')); }
-catch (e) { renderer = { clear() {}, setLabels() {}, request() {}, setView() {} }; $('empty3d').textContent = '3D表示の初期化に失敗しました: ' + e.message; }
+catch (e) { renderer = { clear() {}, setData() {}, request() {}, setView() {} }; $('empty3d').textContent = '3D表示の初期化に失敗しました: ' + e.message; }
 
 let rafMPR = false;
 function renderAll() {
@@ -1527,12 +1797,12 @@ $('clipAxis').addEventListener('input', () => { // カメラ側の半分を取�
   if (ax >= 0 && renderer.eye) renderer.clipSign = renderer.eye[ax] - (renderer.target || [0, 0, 0])[ax] >= 0 ? 1 : -1;
   r3();
 });
-$('colP').addEventListener('input', () => { if (S.chart) drawCanalChart(...S.chart); });
+$('colP').addEventListener('input', () => { if (S.chart) drawCanalChart(...S.chart); renderAll(); });
 document.querySelectorAll('[data-view]').forEach((b) => (b.onclick = () => renderer.setView(b.dataset.view)));
 document.querySelectorAll('[data-preset]').forEach((b) => (b.onclick = () => {
-  const P = { solid: [100, 100, 100, 0], canal: [60, 35, 100, 0], canalOnly: [0, 8, 100, 0] }[b.dataset.preset];
+  const P = { solid: [100, 100, 100, 0], canal: [55, 55, 100, 0], canalOnly: [10, 10, 100, 0] }[b.dataset.preset];
   ['opE', 'opD', 'opP', 'opB'].forEach((id, i) => setVal(id, P[i]));
-  setVal('glass', b.dataset.preset === 'solid' ? 0 : 85);
+  setVal('glass', b.dataset.preset === 'solid' ? 0 : 75);
   r3();
 }));
 $('max3d').onclick = () => {
@@ -1540,6 +1810,108 @@ $('max3d').onclick = () => {
   $('max3d').textContent = on ? '⤡ 戻す' : '⤢ 拡大';
   renderer.request(); renderAll();
 };
+document.querySelectorAll('[data-scheme]').forEach((b) => (b.onclick = () => {
+  const P = { green: ['#e4e2b4', '#d6d09a', '#3ee08a'], red: ['#bfe8ff', '#f2d49b', '#ff2d3a'] }[b.dataset.scheme];
+  ['colE', 'colD', 'colP'].forEach((id, i) => ($(id).value = P[i]));
+  $('pulpGrad').checked = false;
+  if (S.chart) drawCanalChart(...S.chart);
+  r3(); renderAll();
+}));
+$('measBtn').onclick = () => {
+  S.meas.on = !S.meas.on; S.meas.pts = [];
+  $('measBtn').classList.toggle('primary', S.meas.on);
+  $('measOut').textContent = S.meas.on ? '断面上で2点をクリック' : '';
+  renderAll();
+};
+function addMeasPoint(p) {
+  if (S.meas.pts.length >= 2) S.meas.pts = [];
+  S.meas.pts.push(p);
+  $('measOut').textContent = S.meas.pts.length === 2 ? `距離 ${measDist().toFixed(2)} mm` : '2点目をクリック';
+  renderAll();
+}
+function measDist() {
+  const [a, b] = S.meas.pts, v = S.vol;
+  return Math.hypot((a[0] - b[0]) * v.sx, (a[1] - b[1]) * v.sy, (a[2] - b[2]) * v.sz);
+}
+$('stlBtn').onclick = () => {
+  const F = S.seg && S.seg.fine; if (!F) return;
+  showProgress('STLを作成中…', 0.5);
+  setTimeout(() => {
+    const { rgba, nx, ny, nz, sp, origin } = F, v = S.vol, D = v.dirs, O = v.origin;
+    // ボリューム座標(mm) → 患者座標(DICOM, mm)
+    const toPat = (x, y, z) => [0, 1, 2].map((k) => O[k] + x * D[0][k] + y * D[1][k] + z * D[2][k]);
+    const tag = $('toothNo').value || 'tooth';
+    const mk = (getv, iso, name) => {
+      const tris = surfaceNets(getv, nx, ny, nz, iso, sp, origin, toPat);
+      download(writeSTL(tris, name), `${tag}_${name}.stl`);
+      return tris.length / 9;
+    };
+    const nT = mk((i) => Math.max(rgba[i * 4], rgba[i * 4 + 1]) / 255, 0.5, 'tooth');
+    const nC = mk((i) => rgba[i * 4 + 2] / 255, 0.35, 'canal');
+    hideProgress();
+    setStatus(`STLを保存しました（歯 ${nT.toLocaleString()} 三角形 / 根管 ${nC.toLocaleString()} 三角形、DICOM患者座標・mm）`);
+  }, 30);
+};
+function download(blob, name) {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+/** Surface Nets による等値面メッシュ化（三角形の頂点座標を平坦な配列で返す） */
+function surfaceNets(getv, nx, ny, nz, iso, sp, origin, toPat) {
+  const nxy = nx * ny, idx = new Int32Array(nx * ny * nz).fill(-1), verts = [];
+  const co = [[0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0], [0, 0, 1], [1, 0, 1], [0, 1, 1], [1, 1, 1]];
+  const ed = [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]];
+  const val = new Float32Array(8);
+  for (let z = 0; z < nz - 1; z++) for (let y = 0; y < ny - 1; y++) for (let x = 0; x < nx - 1; x++) {
+    let m = 0;
+    for (let k = 0; k < 8; k++) { val[k] = getv((z + co[k][2]) * nxy + (y + co[k][1]) * nx + x + co[k][0]) - iso; if (val[k] > 0) m |= 1 << k; }
+    if (m === 0 || m === 255) continue;
+    let px = 0, py = 0, pz = 0, c = 0;
+    for (const [a, b] of ed) {
+      if ((val[a] > 0) === (val[b] > 0)) continue;
+      const t = val[a] / (val[a] - val[b]);
+      px += co[a][0] + t * (co[b][0] - co[a][0]); py += co[a][1] + t * (co[b][1] - co[a][1]); pz += co[a][2] + t * (co[b][2] - co[a][2]); c++;
+    }
+    idx[z * nxy + y * nx + x] = verts.length / 3;
+    verts.push(...toPat(origin[0] + (x + px / c) * sp[0], origin[1] + (y + py / c) * sp[1], origin[2] + (z + pz / c) * sp[2]));
+  }
+  const tris = [];
+  const V = (i) => [verts[i * 3], verts[i * 3 + 1], verts[i * 3 + 2]];
+  const quad = (a, b, c, d, flip) => {
+    if (a < 0 || b < 0 || c < 0 || d < 0) return;
+    const q = flip ? [a, d, c, b] : [a, b, c, d];
+    tris.push(...V(q[0]), ...V(q[1]), ...V(q[2]), ...V(q[0]), ...V(q[2]), ...V(q[3]));
+  };
+  const C = (x, y, z) => idx[z * nxy + y * nx + x];
+  for (let z = 0; z < nz; z++) for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) {
+    const i = z * nxy + y * nx + x, a = getv(i) > iso;
+    if (x < nx - 1 && y > 0 && z > 0 && a !== (getv(i + 1) > iso))
+      quad(C(x, y - 1, z - 1), C(x, y, z - 1), C(x, y, z), C(x, y - 1, z), !a);
+    if (y < ny - 1 && x > 0 && z > 0 && a !== (getv(i + nx) > iso))
+      quad(C(x - 1, y, z - 1), C(x - 1, y, z), C(x, y, z), C(x, y, z - 1), !a);
+    if (z < nz - 1 && x > 0 && y > 0 && a !== (getv(i + nxy) > iso))
+      quad(C(x - 1, y - 1, z), C(x, y - 1, z), C(x, y, z), C(x - 1, y, z), !a);
+  }
+  return tris;
+}
+function writeSTL(tris, name) {
+  const nt = tris.length / 9, buf = new ArrayBuffer(84 + nt * 50), dv = new DataView(buf);
+  const hdr = ('Tooth3D ' + name).slice(0, 80);
+  for (let i = 0; i < hdr.length; i++) dv.setUint8(i, hdr.charCodeAt(i));
+  dv.setUint32(80, nt, true);
+  let o = 84;
+  for (let t = 0; t < nt; t++) {
+    const p = t * 9;
+    const ux = tris[p + 3] - tris[p], uy = tris[p + 4] - tris[p + 1], uz = tris[p + 5] - tris[p + 2];
+    const vx = tris[p + 6] - tris[p], vy = tris[p + 7] - tris[p + 1], vz = tris[p + 8] - tris[p + 2];
+    let nx0 = uy * vz - uz * vy, ny0 = uz * vx - ux * vz, nz0 = ux * vy - uy * vx;
+    const l = Math.hypot(nx0, ny0, nz0) || 1;
+    dv.setFloat32(o, nx0 / l, true); dv.setFloat32(o + 4, ny0 / l, true); dv.setFloat32(o + 8, nz0 / l, true); o += 12;
+    for (let k = 0; k < 9; k++) { dv.setFloat32(o, tris[p + k], true); o += 4; }
+    o += 2;
+  }
+  return new Blob([buf], { type: 'model/stl' });
+}
 $('shotBtn').onclick = () => {
   renderer.draw();
   const a = document.createElement('a');
