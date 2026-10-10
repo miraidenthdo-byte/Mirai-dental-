@@ -1,0 +1,1595 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>歯牙・根管 3Dビューア</title>
+<style>
+:root {
+  --bg: #0f1217;
+  --panel: #171b22;
+  --panel2: #1e232c;
+  --line: #2b313c;
+  --text: #e6e9ef;
+  --muted: #8d96a5;
+  --accent: #4fb3ff;
+  --accent2: #ffb84f;
+  --danger: #ff5a5a;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+  font-family: "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, sans-serif; font-size: 13px; }
+header { height: 48px; display: flex; align-items: center; gap: 10px; padding: 0 14px;
+  background: var(--panel); border-bottom: 1px solid var(--line); }
+header h1 { font-size: 15px; margin: 0 12px 0 0; font-weight: 600; white-space: nowrap; }
+header h1 span { color: var(--accent); }
+#status { margin-left: auto; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+button, .btn { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 6px;
+  padding: 6px 10px; font: inherit; cursor: pointer; white-space: nowrap; }
+button:hover, .btn:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); color: #04131f; border-color: var(--accent); font-weight: 700; }
+button.primary:hover { filter: brightness(1.1); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+.app { display: grid; grid-template-columns: 330px 1fr; height: calc(100% - 48px); }
+aside { background: var(--panel); border-right: 1px solid var(--line); overflow-y: auto; padding: 10px 12px 30px; }
+section { border-bottom: 1px solid var(--line); padding: 10px 0 12px; }
+section h2 { font-size: 12.5px; margin: 0 0 8px; color: var(--accent); font-weight: 700; letter-spacing: .03em; }
+section h2 .num { display: inline-block; width: 18px; height: 18px; line-height: 18px; text-align: center;
+  border-radius: 50%; background: var(--accent); color: #04131f; margin-right: 6px; font-size: 11px; }
+.row { display: grid; grid-template-columns: 92px 1fr 52px; align-items: center; gap: 6px; margin: 5px 0; }
+.row label { color: var(--muted); font-size: 12px; }
+.row output { text-align: right; font-variant-numeric: tabular-nums; font-size: 12px; }
+.row input[type=range] { width: 100%; accent-color: var(--accent); }
+.hint { color: var(--muted); font-size: 11.5px; line-height: 1.55; margin: 4px 0 6px; }
+.flex { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+select, input[type=number] { background: var(--panel2); color: var(--text); border: 1px solid var(--line);
+  border-radius: 5px; padding: 4px 6px; font: inherit; }
+.struct { display: grid; grid-template-columns: 22px 1fr 1fr 40px; align-items: center; gap: 6px; margin: 5px 0; }
+.struct input[type=color] { width: 22px; height: 22px; border: none; padding: 0; background: none; cursor: pointer; }
+.struct input[type=range] { accent-color: var(--accent); width: 100%; }
+.struct output { text-align: right; font-size: 12px; }
+.check { display: flex; align-items: center; gap: 6px; margin: 5px 0; color: var(--text); }
+.views { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 3px; background: #000; min-height: 0; }
+.views.max3d { grid-template-columns: 1fr; grid-template-rows: 1fr; }
+.views.max3d .view:not(.v3d) { display: none; }
+.view { position: relative; background: #000; min-height: 0; min-width: 0; overflow: hidden; }
+.view canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.vlabel { position: absolute; left: 8px; top: 6px; font-size: 12px; color: #fff; text-shadow: 0 0 3px #000;
+  pointer-events: none; font-weight: 600; }
+.vlabel small { color: var(--muted); font-weight: 400; margin-left: 6px; }
+.vtools { position: absolute; right: 6px; top: 6px; display: flex; gap: 4px; }
+.vtools button { padding: 3px 7px; font-size: 12px; background: rgba(30,35,44,.85); }
+.legend { position: absolute; left: 8px; bottom: 8px; background: rgba(15,18,23,.78); border: 1px solid var(--line);
+  border-radius: 6px; padding: 6px 9px; font-size: 12px; pointer-events: none; }
+.legend div { display: flex; align-items: center; gap: 6px; margin: 2px 0; }
+.legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.legend .grad { width: 12px; height: 12px; border-radius: 3px; background: linear-gradient(#ffe026, #ff2e26, #d933f2, #3373ff); }
+.empty3d { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center;
+  color: var(--muted); line-height: 1.8; pointer-events: none; padding: 20px; }
+.dropzone { position: fixed; inset: 0; background: rgba(79,179,255,.12); border: 3px dashed var(--accent);
+  display: none; align-items: center; justify-content: center; font-size: 22px; z-index: 50; pointer-events: none; }
+.dropzone.on { display: flex; }
+.stats { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; font-size: 12px; }
+.stats dt { color: var(--muted); }
+.stats dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+#canalChart { width: 100%; height: 170px; background: var(--panel2); border-radius: 6px; margin-top: 8px; display: block; }
+.progress { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); background: var(--panel);
+  border: 1px solid var(--line); border-radius: 10px; padding: 18px 26px; z-index: 60; display: none; min-width: 300px;
+  box-shadow: 0 10px 40px rgba(0,0,0,.6); }
+.progress.on { display: block; }
+.progress .bar { height: 6px; background: var(--panel2); border-radius: 3px; overflow: hidden; margin-top: 10px; }
+.progress .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .1s; }
+.warn { color: var(--accent2); }
+kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-size: 11px; }
+@media (max-width: 900px) {
+  .app { grid-template-columns: 1fr; grid-template-rows: auto 80vh; height: auto; }
+  aside { max-height: none; }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>🦷 歯牙・根管 <span>3D</span> ビューア</h1>
+  <label class="btn" title="DICOMファイルが入ったフォルダを選択">📁 フォルダを開く
+    <input id="dirInput" type="file" webkitdirectory directory multiple hidden></label>
+  <label class="btn" title="DICOMファイルを選択（複数可）">📄 ファイルを開く
+    <input id="fileInput" type="file" multiple hidden></label>
+  <button id="demoBtn" title="合成した歯のファントムで動作を試す">🧪 デモデータ</button>
+  <div id="status">DICOM（CBCT）のフォルダまたはファイルを開くか、ここにドラッグ＆ドロップしてください</div>
+</header>
+
+<div class="app">
+<aside>
+  <section>
+    <h2><span class="num">1</span>データ</h2>
+    <dl class="stats" id="volInfo"><dt>未読込</dt><dd></dd></dl>
+    <div class="row"><label>ウィンドウ幅</label><input id="ww" type="range" min="1" max="6000" value="3000"><output id="wwO"></output></div>
+    <div class="row"><label>ウィンドウ中心</label><input id="wl" type="range" min="-1000" max="5000" value="800"><output id="wlO"></output></div>
+    <div class="flex"><button id="wlAuto">自動W/L</button><button id="wlTooth">歯質向け</button></div>
+  </section>
+
+  <section>
+    <h2><span class="num">2</span>歯の選択</h2>
+    <div class="hint">断面画像上で<b>抽出したい歯（象牙質の部分）</b>をクリックしてください。黄色い枠（ROI）の中から、その歯だけを抽出します。<br>
+      <kbd>ホイール</kbd> スライス送り / <kbd>Ctrl</kbd>+<kbd>ホイール</kbd> 拡大 / <kbd>右ドラッグ</kbd> 移動</div>
+    <div class="flex" style="margin-bottom:6px">
+      <label class="muted">歯番 (FDI)</label>
+      <select id="toothNo"></select>
+      <select id="jaw" title="ROIの上下範囲のプリセット">
+        <option value="lower">下顎（歯冠が上）</option>
+        <option value="upper">上顎（歯冠が下）</option>
+        <option value="both">上下均等</option>
+      </select>
+    </div>
+    <div class="row"><label>ROI 幅 X</label><input id="roiX" type="range" min="4" max="30" step="0.5" value="12"><output id="roiXO"></output></div>
+    <div class="row"><label>ROI 幅 Y</label><input id="roiY" type="range" min="4" max="30" step="0.5" value="12"><output id="roiYO"></output></div>
+    <div class="row"><label>ROI 上方</label><input id="roiUp" type="range" min="2" max="40" step="0.5" value="12"><output id="roiUpO"></output></div>
+    <div class="row"><label>ROI 下方</label><input id="roiDn" type="range" min="2" max="40" step="0.5" value="24"><output id="roiDnO"></output></div>
+    <div id="seedInfo" class="hint">選択点: なし</div>
+  </section>
+
+  <section>
+    <h2><span class="num">3</span>しきい値（緑のプレビューで確認）</h2>
+    <div class="row"><label>歯質（硬組織）</label><input id="thHard" type="range" min="-1000" max="4000" value="900"><output id="thHardO"></output></div>
+    <div class="row"><label>エナメル質</label><input id="thEnamel" type="range" min="-1000" max="5000" value="2000"><output id="thEnamelO"></output></div>
+    <div class="row"><label>根管感度</label><input id="thCanal" type="range" min="0" max="100" value="45"><output id="thCanalO"></output></div>
+    <div class="row"><label>骨との分離</label><input id="erode" type="range" min="0" max="4" value="2"><output id="erodeO"></output></div>
+    <label class="check"><input id="smooth" type="checkbox" checked>ノイズ除去（平滑化）してから抽出</label>
+    <label class="check"><input id="splitNb" type="checkbox" checked>隣在歯との接触部を自動で分離</label>
+    <label class="check"><input id="preview" type="checkbox" checked>断面にオーバーレイ表示</label>
+    <div class="flex"><button id="autoTh">ROIから自動設定</button></div>
+    <div class="hint">・歯が骨とつながって抽出される → 「骨との分離」を上げる / ROIを狭める<br>
+      ・根管が途切れる → 「根管感度」を上げる<br>
+      ・歯に穴があく → 「歯質」しきい値を下げる</div>
+    <button id="extractBtn" class="primary" style="width:100%;margin-top:6px;padding:9px" disabled>🦷 選択した歯を抽出して3D表示</button>
+  </section>
+
+  <section>
+    <h2><span class="num">4</span>3D表示（VR）</h2>
+    <div class="struct"><input type="color" id="colE" value="#bfe8ff"><span>エナメル質</span><input type="range" id="opE" min="0" max="100" value="60"><output id="opEO"></output></div>
+    <div class="struct"><input type="color" id="colD" value="#f2d49b"><span>象牙質</span><input type="range" id="opD" min="0" max="100" value="35"><output id="opDO"></output></div>
+    <div class="struct"><input type="color" id="colP" value="#ff2d3a"><span>歯髄・根管</span><input type="range" id="opP" min="0" max="100" value="100"><output id="opPO"></output></div>
+    <div class="struct"><input type="color" id="colB" value="#8fa3b8"><span>周囲の骨</span><input type="range" id="opB" min="0" max="100" value="0"><output id="opBO"></output></div>
+    <div class="row"><label>透かし表示</label><input id="glass" type="range" min="0" max="100" value="85"><output id="glassO"></output></div>
+    <label class="check"><input id="pulpGrad" type="checkbox">根管を高さで色分け（走行が分かりやすい）</label>
+    <div class="flex" style="margin:6px 0">
+      <button data-preset="solid">不透明</button>
+      <button data-preset="canal">根管を透視</button>
+      <button data-preset="canalOnly">根管のみ</button>
+    </div>
+    <div class="row"><label>断面カット</label>
+      <select id="clipAxis"><option value="-1">なし</option><option value="0">X（近遠心）</option><option value="1">Y（頬舌）</option><option value="2">Z（水平）</option></select>
+      <label class="check" style="margin:0"><input id="clipFlip" type="checkbox">反転</label></div>
+    <div class="row"><label>カット位置</label><input id="clipPos" type="range" min="-100" max="100" value="0"><output id="clipPosO"></output></div>
+    <div class="flex" style="margin-top:6px">
+      <button data-view="front">正面</button><button data-view="side">側面</button>
+      <button data-view="top">歯冠側</button><button data-view="bottom">根尖側</button>
+      <label class="check" style="margin:0 0 0 4px"><input id="autoRot" type="checkbox">自動回転</label>
+    </div>
+    <div class="flex" style="margin-top:6px"><button id="shotBtn">📷 画像を保存</button></div>
+  </section>
+
+  <section>
+    <h2><span class="num">5</span>計測</h2>
+    <dl class="stats" id="segStats"><dt>未抽出</dt><dd></dd></dl>
+    <canvas id="canalChart"></canvas>
+    <div class="hint">各高さの水平断面に含まれる根管の数（Vertucci分類の目安）。</div>
+  </section>
+  <div class="hint" style="margin-top:10px">※データはブラウザ内だけで処理され、外部に送信されません。<br>※本ツールは参考表示用であり、診断の最終判断は原画像で行ってください。</div>
+</aside>
+
+<div class="views" id="views">
+  <div class="view"><canvas id="cvAx"></canvas><div class="vlabel">アキシャル（水平断）<small id="lblAx"></small></div></div>
+  <div class="view"><canvas id="cvCo"></canvas><div class="vlabel">コロナル（前頭断）<small id="lblCo"></small></div></div>
+  <div class="view"><canvas id="cvSa"></canvas><div class="vlabel">サジタル（矢状断）<small id="lblSa"></small></div></div>
+  <div class="view v3d"><canvas id="cv3d"></canvas>
+    <div class="vlabel">3D ボリュームレンダリング<small id="lbl3d"></small></div>
+    <div class="vtools"><button id="max3d" title="3D表示を最大化">⤢ 拡大</button></div>
+    <div class="legend" id="legend">
+      <div><i id="lgE"></i>エナメル質</div><div><i id="lgD"></i>象牙質</div>
+      <div><i id="lgP"></i><span id="lgPtxt">歯髄・根管</span></div><div id="lgBrow"><i id="lgB"></i>周囲の骨</div>
+    </div>
+    <div class="empty3d" id="empty3d">① DICOMを開く → ② 断面で歯をクリック → ③「抽出して3D表示」<br>
+      ドラッグで回転 / ホイールで拡大縮小 / ダブルクリックでリセット</div>
+  </div>
+</div>
+</div>
+
+<div class="dropzone" id="dropzone">ここにDICOMフォルダ／ファイルをドロップ</div>
+<div class="progress" id="progress"><div id="progressText">処理中…</div><div class="bar"><i id="progressBar"></i></div></div>
+
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const sleep0 = () => new Promise((r) => setTimeout(r, 0));
+
+/* =====================================================================
+ *  DICOM パーサ（非圧縮 Implicit/Explicit Little Endian、JPEG Baseline）
+ * ===================================================================== */
+const LONG_VR = new Set(['OB', 'OD', 'OF', 'OL', 'OW', 'SQ', 'UC', 'UR', 'UT', 'UN', 'OV', 'SV', 'UV']);
+const IMPLICIT_SQ = new Set(['52009229', '52009230', '00289110', '00209113', '00289145', '00209116', '00209111', '00289132', '00082112', '00081140']);
+const UNDEF = 0xFFFFFFFF;
+const hex4 = (n) => n.toString(16).toUpperCase().padStart(4, '0');
+
+function parseDicom(buffer) {
+  const dv = new DataView(buffer);
+  const len = buffer.byteLength;
+  const ds = { el: {}, deep: {}, buffer, dv, explicit: null, ts: null, pixel: null };
+  let pos = 0;
+  if (len > 132 && dv.getUint32(128, false) === 0x4449434D) pos = 132; // "DICM"
+  else if (len < 8) throw new Error('too small');
+
+  const readSeq = (p, slen, ctx, depth) => {
+    const end = slen === UNDEF ? len : Math.min(len, p + slen);
+    while (p + 8 <= end) {
+      const g = dv.getUint16(p, true), e = dv.getUint16(p + 2, true);
+      if (g === 0xFFFE && e === 0xE0DD) return p + 8;
+      if (g !== 0xFFFE || e !== 0xE000) break;
+      const ilen = dv.getUint32(p + 4, true);
+      p += 8;
+      if (ilen === UNDEF) p = readEls(p, end, ctx, depth);
+      else { readEls(p, Math.min(end, p + ilen), ctx, depth); p += ilen; }
+    }
+    return slen === UNDEF ? p : end;
+  };
+
+  const readEls = (p, end, ctx, depth) => {
+    while (p + 8 <= end) {
+      const g = dv.getUint16(p, true), e = dv.getUint16(p + 2, true);
+      if (g === 0xFFFE) {
+        if (e === 0xE00D || e === 0xE0DD) return p + 8;
+        p += 8; continue;
+      }
+      if (depth === 0 && g !== 0x0002 && ds.explicit === null) {
+        const tsv = getStr(ds, '00020010');
+        if (tsv) ds.explicit = tsv !== '1.2.840.10008.1.2';
+        else { // メタ情報なし: VR文字があるかで推定
+          const a = dv.getUint8(p + 4), b = dv.getUint8(p + 5);
+          ds.explicit = a >= 65 && a <= 90 && b >= 65 && b <= 90;
+        }
+        ds.ts = tsv || (ds.explicit ? '1.2.840.10008.1.2.1' : '1.2.840.10008.1.2');
+        if (ds.ts === '1.2.840.10008.1.2.2') throw new Error('Big Endian 形式には未対応です');
+        if (ds.ts === '1.2.840.10008.1.2.1.99') throw new Error('Deflate 圧縮形式には未対応です');
+        ctx = { explicit: ds.explicit };
+      }
+      const explicit = g === 0x0002 ? true : ctx.explicit;
+      const key = hex4(g) + hex4(e);
+      let vr, vlen, hdr;
+      if (explicit) {
+        vr = String.fromCharCode(dv.getUint8(p + 4), dv.getUint8(p + 5));
+        if (LONG_VR.has(vr)) { vlen = dv.getUint32(p + 8, true); hdr = 12; }
+        else { vlen = dv.getUint16(p + 6, true); hdr = 8; }
+      } else {
+        vr = IMPLICIT_SQ.has(key) ? 'SQ' : 'UN';
+        vlen = dv.getUint32(p + 4, true); hdr = 8;
+      }
+      const vpos = p + hdr;
+      if (key === '7FE00010' && depth === 0) {
+        if (vlen === UNDEF) {
+          const frags = [];
+          let q = vpos, first = true;
+          while (q + 8 <= len) {
+            const gg = dv.getUint16(q, true), ee = dv.getUint16(q + 2, true), il = dv.getUint32(q + 4, true);
+            if (gg === 0xFFFE && ee === 0xE0DD) { q += 8; break; }
+            if (gg !== 0xFFFE || ee !== 0xE000) break;
+            if (!first) frags.push(new Uint8Array(buffer, q + 8, Math.min(il, len - q - 8)));
+            first = false;
+            q += 8 + il;
+          }
+          ds.pixel = { encapsulated: true, frags };
+          p = q;
+        } else {
+          ds.pixel = { encapsulated: false, pos: vpos, len: Math.min(vlen, len - vpos) };
+          p = vpos + vlen;
+        }
+        continue;
+      }
+      if (vr === 'SQ' || vlen === UNDEF) {
+        const sctx = (vr === 'UN' && explicit) ? { explicit: false } : ctx;
+        p = readSeq(vpos, vlen, sctx, depth + 1);
+        continue;
+      }
+      const v = { vr, pos: vpos, len: vlen };
+      if (depth === 0) { if (!ds.el[key]) ds.el[key] = v; }
+      else (ds.deep[key] || (ds.deep[key] = [])).push(v);
+      p = vpos + vlen;
+    }
+    return p;
+  };
+  readEls(pos, len, { explicit: true }, 0);
+  return ds;
+}
+function elOf(ds, k) { return ds.el[k] || (ds.deep[k] && ds.deep[k][0]) || null; }
+function strOfEl(ds, v) {
+  if (!v || v.pos + v.len > ds.buffer.byteLength) return null;
+  let s = '';
+  const u8 = new Uint8Array(ds.buffer, v.pos, v.len);
+  for (let i = 0; i < u8.length; i++) s += String.fromCharCode(u8[i]);
+  return s.replace(/[\0\s]+$/, '').trim();
+}
+function getStr(ds, k) { return strOfEl(ds, elOf(ds, k)); }
+function getNums(ds, k) { const s = getStr(ds, k); return s ? s.split('\\').map(Number) : null; }
+function getNum(ds, k) { const a = getNums(ds, k); return a && isFinite(a[0]) ? a[0] : null; }
+function getUS(ds, k) { const v = elOf(ds, k); return v && v.len >= 2 ? ds.dv.getUint16(v.pos, true) : null; }
+
+/** DICOMの各フレームを Int16Array（Rescale適用済み・間引き済み）へ */
+async function decodeFrames(ds, step) {
+  const rows = getUS(ds, '00280010'), cols = getUS(ds, '00280011');
+  if (!rows || !cols || !ds.pixel) return null;
+  const spp = getUS(ds, '00280002') || 1;
+  if (spp !== 1) throw new Error('カラー画像には未対応です');
+  const bits = getUS(ds, '00280100') || 16;
+  const stored = getUS(ds, '00280101') || bits;
+  const signed = getUS(ds, '00280103') === 1;
+  const slope = getNum(ds, '00281053') ?? 1, inter = getNum(ds, '00281052') ?? 0;
+  const nFrames = Math.max(1, Math.round(getNum(ds, '00280008') || 1));
+  const ow = Math.floor(cols / step), oh = Math.floor(rows / step);
+  const out = [];
+  const conv = (getter) => {
+    const a = new Int16Array(ow * oh);
+    for (let y = 0; y < oh; y++) {
+      const ry = y * step;
+      for (let x = 0; x < ow; x++) {
+        const v = getter(ry * cols + x * step) * slope + inter;
+        a[y * ow + x] = v > 32767 ? 32767 : v < -32768 ? -32768 : Math.round(v);
+      }
+    }
+    return a;
+  };
+  if (!ds.pixel.encapsulated) {
+    const bpp = bits / 8, fsize = rows * cols * bpp;
+    const mask = stored < 16 && !signed ? (1 << stored) - 1 : 0xFFFF;
+    for (let f = 0; f < nFrames; f++) {
+      const off = ds.pixel.pos + f * fsize;
+      if (off + fsize > ds.buffer.byteLength) break;
+      let getter;
+      if (bits === 16) {
+        const raw = (off % 2 === 0) ? null : new Uint8Array(ds.buffer.slice(off, off + fsize)).buffer;
+        const arr = signed ? new Int16Array(raw || ds.buffer, raw ? 0 : off, rows * cols)
+                           : new Uint16Array(raw || ds.buffer, raw ? 0 : off, rows * cols);
+        getter = signed ? (i) => arr[i] : (i) => arr[i] & mask;
+      } else if (bits === 8) {
+        const arr = new Uint8Array(ds.buffer, off, rows * cols);
+        getter = signed ? (i) => (arr[i] << 24) >> 24 : (i) => arr[i];
+      } else if (bits === 32) {
+        const raw = new Uint8Array(ds.buffer.slice(off, off + fsize)).buffer;
+        const arr = signed ? new Int32Array(raw) : new Uint32Array(raw);
+        getter = (i) => arr[i];
+      } else throw new Error(`BitsAllocated=${bits} には未対応です`);
+      out.push(conv(getter));
+    }
+  } else {
+    const ts = ds.ts || '';
+    if (ts !== '1.2.840.10008.1.2.4.50') {
+      throw new Error('圧縮DICOM（転送構文 ' + ts + '）には未対応です。撮影ソフトから「非圧縮」で書き出してください。');
+    }
+    let frames = ds.pixel.frags;
+    if (frames.length !== nFrames) {
+      if (nFrames === 1) frames = [concatU8(frames)];
+      else throw new Error('JPEGフレーム構成を解釈できません');
+    }
+    const cv = document.createElement('canvas');
+    cv.width = cols; cv.height = rows;
+    const cx = cv.getContext('2d', { willReadFrequently: true });
+    for (const fr of frames) {
+      const bmp = await createImageBitmap(new Blob([fr], { type: 'image/jpeg' }));
+      cx.drawImage(bmp, 0, 0);
+      const d = cx.getImageData(0, 0, cols, rows).data;
+      out.push(conv((i) => d[i * 4]));
+    }
+  }
+  return { rows: oh, cols: ow, frames: out };
+}
+function concatU8(list) {
+  const n = list.reduce((s, a) => s + a.length, 0), o = new Uint8Array(n);
+  let p = 0; for (const a of list) { o.set(a, p); p += a.length; }
+  return o;
+}
+
+/* =====================================================================
+ *  ファイル読み込み → ボリューム構築
+ * ===================================================================== */
+const MAX_VOXELS = 260e6;
+
+async function loadFiles(fileList) {
+  const files = Array.from(fileList).filter((f) => f.size > 200 && !/DICOMDIR$/i.test(f.name) &&
+    !/\.(jpg|jpeg|png|txt|xml|html?|exe|dll|ini|pdf|inf|zip)$/i.test(f.name));
+  if (!files.length) { setStatus('DICOMファイルが見つかりませんでした', true); return; }
+  showProgress('DICOMを読み込み中…', 0);
+  const singles = [], multis = [];
+  let step = 0, errors = 0, lastErr = '';
+  for (let i = 0; i < files.length; i++) {
+    if (i % 8 === 0) { showProgress(`DICOMを読み込み中… ${i}/${files.length}`, i / files.length); await sleep0(); }
+    try {
+      const ds = parseDicom(await files[i].arrayBuffer());
+      if (!ds.pixel) continue;
+      const rows = getUS(ds, '00280010'), cols = getUS(ds, '00280011');
+      const nFrames = Math.max(1, Math.round(getNum(ds, '00280008') || 1));
+      if (!step) {
+        const est = rows * cols * Math.max(nFrames, files.length);
+        step = est > MAX_VOXELS ? Math.ceil(Math.cbrt(est / MAX_VOXELS)) : 1;
+      }
+      const dec = await decodeFrames(ds, step);
+      if (!dec || !dec.frames.length) continue;
+      const ps = getNums(ds, '00280030') || [1, 1];
+      const iop = getNums(ds, '00200037');
+      const item = {
+        series: getStr(ds, '0020000E') || 'x', rows: dec.rows, cols: dec.cols, frames: dec.frames,
+        sx: (ps[1] || ps[0] || 1) * step, sy: (ps[0] || 1) * step,
+        thick: getNum(ds, '00180088') || getNum(ds, '00180050'),
+        ipp: getNums(ds, '00200032'), iop: iop && iop.length === 6 ? iop : null,
+        inst: getNum(ds, '00200013') || 0,
+        desc: [getStr(ds, '00080060'), getStr(ds, '0008103E')].filter(Boolean).join(' '),
+      };
+      if (nFrames > 1) {
+        const all = (ds.deep['00200032'] || []).map((v) => (strOfEl(ds, v) || '').split('\\').map(Number));
+        item.framePos = all.length === nFrames ? all : null;
+        multis.push(item);
+      } else singles.push(item);
+    } catch (e) { errors++; lastErr = e.message; }
+  }
+  hideProgress();
+  let vol = null;
+  if (multis.length) {
+    const it = multis.sort((a, b) => b.frames.length - a.frames.length)[0];
+    let order = it.frames.map((f, i) => i), sz = it.thick || it.sx / step;
+    if (it.framePos) {
+      const n = normalOf(it.iop);
+      const proj = it.framePos.map((p) => p[0] * n[0] + p[1] * n[1] + p[2] * n[2]);
+      order.sort((a, b) => proj[a] - proj[b]);
+      sz = medianDiff(order.map((i) => proj[i])) || sz;
+    }
+    vol = buildVolume(order.map((i) => it.frames[i]), it, sz, step, it.desc);
+  } else if (singles.length) {
+    const groups = {};
+    for (const s of singles) {
+      const k = s.series + '|' + s.rows + 'x' + s.cols;
+      (groups[k] || (groups[k] = [])).push(s);
+    }
+    const g = Object.values(groups).sort((a, b) => b.length - a.length)[0];
+    if (g.length < 3) { setStatus('ボリュームを構成するのに十分なスライスがありません（' + g.length + '枚）', true); return; }
+    const n = normalOf(g[0].iop);
+    const key = (s) => (s.ipp ? s.ipp[0] * n[0] + s.ipp[1] * n[1] + s.ipp[2] * n[2] : s.inst);
+    g.sort((a, b) => key(a) - key(b));
+    let sz = g[0].ipp ? medianDiff(g.map(key)) : 0;
+    if (!sz) sz = g[0].thick || 1;
+    vol = buildVolume(g.map((s) => s.frames[0]), g[0], sz, step, g[0].desc);
+  }
+  if (!vol) { setStatus('画像を読み込めませんでした。' + (lastErr || ''), true); return; }
+  setVolume(vol, files.length + 'ファイル' + (errors ? `（${errors}件スキップ）` : '') + (step > 1 ? ` ・大容量のため1/${step}に間引き` : ''));
+}
+function normalOf(iop) {
+  if (!iop) return [0, 0, 1];
+  const r = iop.slice(0, 3), c = iop.slice(3, 6);
+  return [r[1] * c[2] - r[2] * c[1], r[2] * c[0] - r[0] * c[2], r[0] * c[1] - r[1] * c[0]];
+}
+function medianDiff(a) {
+  const d = [];
+  for (let i = 1; i < a.length; i++) { const v = Math.abs(a[i] - a[i - 1]); if (v > 1e-4) d.push(v); }
+  if (!d.length) return 0;
+  d.sort((x, y) => x - y);
+  return d[d.length >> 1];
+}
+function buildVolume(slices, it, sz, step, desc) {
+  if (step > 1) { slices = slices.filter((_, i) => i % step === 0); sz *= step; }
+  return { nx: it.cols, ny: it.rows, nz: slices.length, sx: it.sx, sy: it.sy, sz, slices, desc: desc || '' };
+}
+
+/* =====================================================================
+ *  デモ用ファントム（下顎小臼歯〜大臼歯、骨・歯根膜・ノイズ入り）
+ * ===================================================================== */
+function makeDemoVolume() {
+  const nx = 180, ny = 150, nz = 190, s = 0.2;
+  const CEJ = 22, CY = 15;
+  const teeth = [
+    { cx: 9.0, cy: CY, rx: 3.6, ry: 4.0, crownH: 7.5, trunk: 0,
+      roots: [{ dx: 0, dy: 0, len: 14, r: 2.9, ry: 3.3, tx: 0.03, ty: 0, canals: [{ dy: -0.9, merge: true }, { dy: 0.9, merge: true }] }] },
+    { cx: 17.8, cy: CY, rx: 5.2, ry: 5.0, crownH: 7.0, trunk: 3,
+      roots: [{ dx: -2.3, dy: 0, len: 13, r: 1.8, ry: 3.6, tx: -0.07, ty: 0, canals: [{ dy: -1.4 }, { dy: 1.4 }] },
+              { dx: 2.4, dy: 0, len: 12.5, r: 1.8, ry: 3.2, tx: 0.08, ty: 0, canals: [{ dy: 0 }] }] },
+    { cx: 26.4, cy: CY, rx: 3.4, ry: 3.8, crownH: 8.0, trunk: 0,
+      roots: [{ dx: 0, dy: 0, len: 15, r: 2.7, ry: 3.1, tx: 0, ty: 0.02, canals: [{ dy: 0, lateral: true }] }] },
+  ];
+  const crownProfile = (t) => {
+    if (t < 0 || t > 1) return 0;
+    let s = 0.82 + 0.18 * Math.sin(Math.min(t / 0.55, 1) * Math.PI / 2);
+    if (t > 0.72) s *= Math.sqrt(Math.max(0, 1 - ((t - 0.72) / 0.28) ** 2));
+    return s;
+  };
+  const rootAt = (T, R, u, m) => {
+    const f = u / R.len;
+    if (f < 0 || f > 1) return null;
+    let k = 1 - 0.72 * Math.pow(f, 1.3);
+    if (f > 0.9) k *= Math.sqrt(Math.max(0, 1 - ((f - 0.9) / 0.1) ** 2));
+    return { ax: T.cx + R.dx + R.tx * u, ay: T.cy + R.dy + R.ty * u, rx: R.r * k + m, ry: R.ry * k + m, f };
+  };
+  // 0: 外, 1: エナメル, 2: 象牙質, 3: 歯髄
+  const label = (T, x, y, z, m) => {
+    const dx = x - T.cx, dy = y - T.cy, h = z - CEJ;
+    let outer = false, inCrown = false;
+    if (h >= 0 && h <= T.crownH + m) {
+      const s = crownProfile(h / (T.crownH + m));
+      if (Math.hypot(dx / (T.rx + m), dy / (T.ry + m)) <= s) { outer = true; inCrown = true; }
+    }
+    if (!outer && h < 0 && T.trunk > 0 && h > -T.trunk) {
+      const s = 0.82 - 0.22 * (-h / T.trunk);
+      if (Math.hypot(dx / (T.rx + m), dy / (T.ry + m)) <= s) outer = true;
+    }
+    if (!outer && h < 0.2) {
+      for (const R of T.roots) {
+        const g = rootAt(T, R, -h, m);
+        if (g && Math.hypot((x - g.ax) / g.rx, (y - g.ay) / g.ry) <= 1) { outer = true; break; }
+      }
+    }
+    if (!outer) return 0;
+    if (m > 0) return 2;
+    // 歯髄腔
+    const top = T.crownH * 0.5, bot = -1.2 - T.trunk * 0.6;
+    if (h >= bot && h <= top) {
+      const tt = (h - bot) / (top - bot);
+      let s = 0.42 * (tt > 0.65 ? Math.sqrt(Math.max(0, 1 - ((tt - 0.65) / 0.35) ** 2)) : 1);
+      if (Math.hypot(dx / T.rx, dy / T.ry) <= s) return 3;
+    }
+    // 根管
+    if (h < 0.5) {
+      for (const R of T.roots) {
+        const g = rootAt(T, R, Math.max(0, -h), 0);
+        if (!g) continue;
+        for (const C of R.canals) {
+          const w = C.merge ? 1 - smoothstepJS(0.45, 0.75, g.f) : 1;
+          const cx = g.ax, cy = g.ay + C.dy * w * (1 - 0.35 * g.f);
+          const rc = 0.38 * (1 - 0.55 * g.f);
+          if (Math.hypot(x - cx, y - cy) <= rc) return 3;
+          // 側枝（側方根管）
+          if (C.lateral && Math.abs(g.f - 0.62) < 0.02 && x - cx > 0 && Math.abs(y - cy) < 0.2) return 3;
+        }
+      }
+    }
+    if (inCrown) {
+      const tt = h / T.crownH;
+      const e = 1.3 * Math.min(1, tt * 4);
+      const ti = h / (T.crownH - e);
+      const qi = Math.hypot(dx / Math.max(T.rx - e, 0.1), dy / Math.max(T.ry - e, 0.1));
+      if (!(ti <= 1 && qi <= crownProfile(ti))) return 1;
+    }
+    return 2;
+  };
+  let seed = 12345;
+  const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+  const N = nx * ny * nz, f = new Float32Array(N);
+  for (let k = 0; k < nz; k++) {
+    const z = (k + 0.5) * s;
+    for (let j = 0; j < ny; j++) {
+      const y = (j + 0.5) * s;
+      for (let i = 0; i < nx; i++) {
+        const x = (i + 0.5) * s;
+        let v;
+        const by = Math.abs(y - CY);
+        if (z < CEJ - 1.5 && by < 7.5) {
+          v = by > 6.4 || z < 1.5 ? 1250 : 620 + 260 * Math.sin(x * 2.3 + z) * Math.sin(y * 1.9 - z * 0.7) * Math.sin(z * 2.1 + x * 0.6);
+        } else if (z < CEJ + 1.5 && by < 8.5) v = 40;
+        else v = -1000;
+        let lab = 0;
+        for (const T of teeth) {
+          if (Math.abs(x - T.cx) > T.rx + 4 || Math.abs(y - T.cy) > T.ry + 3) continue;
+          lab = label(T, x, y, z, 0);
+          if (lab) break;
+          if (v > 300 && label(T, x, y, z, 0.25)) v = 60; // 歯根膜腔
+        }
+        if (lab === 1) v = 2600; else if (lab === 2) v = 1550; else if (lab === 3) v = 90;
+        f[(k * ny + j) * nx + i] = v;
+      }
+    }
+  }
+  blur3(f, nx, ny, nz);
+  const slices = [];
+  for (let k = 0; k < nz; k++) {
+    const a = new Int16Array(nx * ny);
+    for (let i = 0; i < nx * ny; i++) a[i] = Math.round(f[k * nx * ny + i] + (rnd() + rnd() + rnd() - 1.5) * 90);
+    slices.push(a);
+  }
+  return { nx, ny, nz, sx: s, sy: s, sz: s, slices, desc: 'デモ（合成ファントム：下顎 小臼歯・第一大臼歯）', demoSeed: [Math.round(17.8 / s), Math.round(15 / s), Math.round(25 / s)] };
+}
+function smoothstepJS(a, b, x) { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); }
+
+/** [1,2,1]/4 の分離型3Dぼかし（Float32Array in-place） */
+function blur3(f, nx, ny, nz, w = [0.25, 0.5, 0.25]) {
+  const tmp = new Float32Array(f.length), nxy = nx * ny, r = (w.length - 1) / 2;
+  const pass = (src, dst, stride, n) => {
+    for (let i = 0; i < src.length; i++) {
+      const c = Math.floor(i / stride) % n;
+      let s = 0;
+      for (let k = -r; k <= r; k++) s += w[k + r] * src[i + stride * (clamp(c + k, 0, n - 1) - c)];
+      dst[i] = s;
+    }
+  };
+  pass(f, tmp, 1, nx); pass(tmp, f, nx, ny); pass(f, tmp, nxy, nz); f.set(tmp);
+}
+
+/* =====================================================================
+ *  アプリ状態
+ * ===================================================================== */
+const S = {
+  vol: null, cursor: [0, 0, 0], seed: null, seg: null, ww: 3000, wl: 800,
+};
+function vget(x, y, z) { return S.vol.slices[z][y * S.vol.nx + x]; }
+
+function setStatus(t, warn) { const el = $('status'); el.textContent = t; el.className = warn ? 'warn' : ''; }
+function showProgress(t, p) { $('progress').classList.add('on'); $('progressText').textContent = t; $('progressBar').style.width = (p * 100).toFixed(0) + '%'; }
+function hideProgress() { $('progress').classList.remove('on'); }
+
+function setVolume(vol, note) {
+  S.vol = vol; S.seg = null; S.seed = null;
+  S.cursor = [vol.nx >> 1, vol.ny >> 1, vol.nz >> 1];
+  // 統計（サンプリング）
+  const samp = [];
+  const stepS = Math.max(1, Math.floor(vol.nx * vol.ny * vol.nz / 400000));
+  let c = 0;
+  for (let z = 0; z < vol.nz; z++) {
+    const sl = vol.slices[z];
+    for (let i = (c % stepS); i < sl.length; i += stepS) samp.push(sl[i]);
+    c += sl.length;
+  }
+  samp.sort((a, b) => a - b);
+  const pct = (p) => samp[Math.min(samp.length - 1, Math.floor(p * samp.length))];
+  vol.p01 = pct(0.01); vol.p999 = pct(0.999); vol.min = samp[0]; vol.max = samp[samp.length - 1];
+  const lo = Math.min(vol.min, -1000), hi = Math.max(vol.max, 1000);
+  for (const id of ['wl', 'thHard', 'thEnamel']) { $(id).min = lo; $(id).max = hi; }
+  $('ww').max = Math.max(100, hi - lo);
+  autoWL();
+  // 初期しきい値（全体の分布から推定）
+  const [t1, t2, t3] = multiOtsu(samp, 3);
+  setVal('thHard', Math.round(t2)); setVal('thEnamel', Math.round(t3));
+  const mm = (n, s) => (n * s).toFixed(1);
+  $('volInfo').innerHTML =
+    `<dt>画像</dt><dd>${esc(vol.desc || '-')}</dd>` +
+    `<dt>サイズ</dt><dd>${vol.nx}×${vol.ny}×${vol.nz}</dd>` +
+    `<dt>ボクセル</dt><dd>${vol.sx.toFixed(3)}×${vol.sy.toFixed(3)}×${vol.sz.toFixed(3)} mm</dd>` +
+    `<dt>範囲</dt><dd>${mm(vol.nx, vol.sx)}×${mm(vol.ny, vol.sy)}×${mm(vol.nz, vol.sz)} mm</dd>` +
+    `<dt>値の範囲</dt><dd>${vol.min} 〜 ${vol.max}</dd>`;
+  $('segStats').innerHTML = '<dt>未抽出</dt><dd></dd>';
+  S.chart = null; drawCanalChart(null);
+  renderer.clear();
+  $('empty3d').style.display = '';
+  $('extractBtn').disabled = true;
+  for (const v of views) v.resetView();
+  if (vol.demoSeed) setSeed(vol.demoSeed);
+  else { updateSeedInfo(); renderAll(); }
+  setStatus('読み込み完了: ' + note + '　→ 断面画像上で抽出したい歯をクリックしてください');
+}
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function setVal(id, v) { $(id).value = v; syncOut(id); }
+function syncOut(id) {
+  const o = $(id + 'O'); if (!o) return;
+  const v = +$(id).value;
+  const fmt = {
+    roiX: v + 'mm', roiY: v + 'mm', roiUp: v + 'mm', roiDn: v + 'mm', thCanal: v + '%',
+    erode: ['なし', '弱', '中', '強', '最強'][v], opE: v + '%', opD: v + '%', opP: v + '%', opB: v + '%',
+    glass: v + '%', clipPos: v + '%',
+  }[id];
+  o.textContent = fmt !== undefined ? fmt : v;
+}
+function autoWL() {
+  const v = S.vol; if (!v) return;
+  setVal('ww', Math.round(v.p999 - v.p01)); setVal('wl', Math.round((v.p999 + v.p01) / 2));
+  readWL();
+}
+function readWL() { S.ww = +$('ww').value; S.wl = +$('wl').value; }
+
+/* ---------- ROI ---------- */
+function getROI() {
+  const v = S.vol; if (!v || !S.seed) return null;
+  const [x, y, z] = S.seed;
+  const hx = +$('roiX').value / 2 / v.sx, hy = +$('roiY').value / 2 / v.sy;
+  const up = +$('roiUp').value / v.sz, dn = +$('roiDn').value / v.sz;
+  const r = {
+    x0: clamp(Math.round(x - hx), 0, v.nx - 1), x1: clamp(Math.round(x + hx), 0, v.nx - 1),
+    y0: clamp(Math.round(y - hy), 0, v.ny - 1), y1: clamp(Math.round(y + hy), 0, v.ny - 1),
+    z0: clamp(Math.round(z - dn), 0, v.nz - 1), z1: clamp(Math.round(z + up), 0, v.nz - 1),
+  };
+  r.nx = r.x1 - r.x0 + 1; r.ny = r.y1 - r.y0 + 1; r.nz = r.z1 - r.z0 + 1;
+  r.key = `${r.x0},${r.y0},${r.z0},${r.x1},${r.y1},${r.z1}`;
+  return r;
+}
+function setSeed(p) {
+  S.seed = p.slice(); S.cursor = p.slice();
+  $('extractBtn').disabled = false;
+  updateSeedInfo(); renderAll();
+}
+function updateSeedInfo() {
+  if (!S.seed) { $('seedInfo').textContent = '選択点: なし'; return; }
+  const v = S.vol, [x, y, z] = S.seed;
+  $('seedInfo').innerHTML = `選択点: (${x}, ${y}, ${z})　値 <b>${vget(x, y, z)}</b>`;
+}
+
+/* =====================================================================
+ *  断面ビュー（MPR）
+ * ===================================================================== */
+const LABEL_COL = [null, [140, 220, 255], [255, 200, 90], [255, 40, 60], [120, 140, 160]];
+class SliceView {
+  constructor(canvas, axis, lbl) {
+    this.cv = canvas; this.axis = axis; this.lbl = lbl;
+    this.ctx = canvas.getContext('2d');
+    this.off = document.createElement('canvas'); this.offCtx = this.off.getContext('2d');
+    this.zoom = 1; this.panX = 0; this.panY = 0;
+    canvas.addEventListener('pointerdown', (e) => this.down(e));
+    canvas.addEventListener('pointermove', (e) => this.move(e));
+    canvas.addEventListener('pointerup', (e) => { this.drag = null; canvas.releasePointerCapture(e.pointerId); });
+    canvas.addEventListener('wheel', (e) => this.wheel(e), { passive: false });
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    new ResizeObserver(() => this.render()).observe(canvas);
+  }
+  resetView() { this.zoom = 1; this.panX = this.panY = 0; }
+  geom() { // 画像幅/高さ（ボクセル）と物理ピクセルサイズ
+    const v = S.vol;
+    if (this.axis === 2) return { w: v.nx, h: v.ny, pw: v.sx, ph: v.sy };
+    if (this.axis === 1) return { w: v.nx, h: v.nz, pw: v.sx, ph: v.sz };
+    return { w: v.ny, h: v.nz, pw: v.sy, ph: v.sz };
+  }
+  slice() { return S.cursor[this.axis]; }
+  sliceCount() { const v = S.vol; return [v.nx, v.ny, v.nz][this.axis]; }
+  toVox(i, j) {
+    const v = S.vol, s = this.slice();
+    if (this.axis === 2) return [i, j, s];
+    if (this.axis === 1) return [i, s, v.nz - 1 - j];
+    return [s, i, v.nz - 1 - j];
+  }
+  toImg(x, y, z) {
+    const v = S.vol;
+    if (this.axis === 2) return [x, y];
+    if (this.axis === 1) return [x, v.nz - 1 - z];
+    return [y, v.nz - 1 - z];
+  }
+  xform() {
+    const g = this.geom(), cw = this.cv.width, ch = this.cv.height;
+    const base = Math.min(cw / (g.w * g.pw), ch / (g.h * g.ph)) * 0.96;
+    const px = base * this.zoom * g.pw, py = base * this.zoom * g.ph;
+    return { px, py, ox: cw / 2 - g.w * px / 2 + this.panX, oy: ch / 2 - g.h * py / 2 + this.panY };
+  }
+  evtImg(e) {
+    const r = this.cv.getBoundingClientRect(), dpr = this.cv.width / r.width;
+    const sx = (e.clientX - r.left) * dpr, sy = (e.clientY - r.top) * dpr, t = this.xform();
+    return [(sx - t.ox) / t.px, (sy - t.oy) / t.py, sx, sy];
+  }
+  down(e) {
+    if (!S.vol) return;
+    this.cv.setPointerCapture(e.pointerId);
+    if (e.button === 0) { this.drag = 'pick'; this.pick(e); }
+    else { this.drag = 'pan'; this.lastX = e.clientX; this.lastY = e.clientY; }
+  }
+  move(e) {
+    if (!this.drag) return;
+    if (this.drag === 'pick') this.pick(e);
+    else {
+      const dpr = this.cv.width / this.cv.getBoundingClientRect().width;
+      this.panX += (e.clientX - this.lastX) * dpr; this.panY += (e.clientY - this.lastY) * dpr;
+      this.lastX = e.clientX; this.lastY = e.clientY; this.render();
+    }
+  }
+  pick(e) {
+    const [i, j] = this.evtImg(e), g = this.geom();
+    if (i < 0 || j < 0 || i >= g.w || j >= g.h) return;
+    setSeed(this.toVox(Math.floor(i), Math.floor(j)));
+  }
+  wheel(e) {
+    if (!S.vol) return;
+    e.preventDefault();
+    if (e.ctrlKey || e.shiftKey || e.metaKey) {
+      const [, , sx, sy] = this.evtImg(e);
+      const f = Math.exp(-e.deltaY * 0.0015), cw = this.cv.width / 2, ch = this.cv.height / 2;
+      this.panX = sx - cw - (sx - cw - this.panX) * f; this.panY = sy - ch - (sy - ch - this.panY) * f;
+      this.zoom *= f; this.render();
+    } else {
+      const d = Math.sign(e.deltaY);
+      S.cursor[this.axis] = clamp(S.cursor[this.axis] + d, 0, this.sliceCount() - 1);
+      renderAll();
+    }
+  }
+  render() {
+    const cv = this.cv, dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const W = Math.max(1, Math.round(cv.clientWidth * dpr)), H = Math.max(1, Math.round(cv.clientHeight * dpr));
+    if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+    const ctx = this.ctx;
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+    if (!S.vol) return;
+    const v = S.vol, g = this.geom(), s = this.slice();
+    if (this.off.width !== g.w || this.off.height !== g.h) {
+      this.off.width = g.w; this.off.height = g.h; this.img = this.offCtx.createImageData(g.w, g.h);
+    }
+    const d = this.img.data, lo = S.wl - S.ww / 2, sc = 255 / Math.max(1, S.ww);
+    const roi = getROI(), seg = S.seg, showOv = $('preview').checked;
+    const th = +$('thHard').value, te = +$('thEnamel').value;
+    for (let j = 0; j < g.h; j++) {
+      for (let i = 0; i < g.w; i++) {
+        let x, y, z;
+        if (this.axis === 2) { x = i; y = j; z = s; } else if (this.axis === 1) { x = i; y = s; z = v.nz - 1 - j; } else { x = s; y = i; z = v.nz - 1 - j; }
+        const val = v.slices[z][y * v.nx + x];
+        let gr = (val - lo) * sc; gr = gr < 0 ? 0 : gr > 255 ? 255 : gr;
+        let r = gr, gg = gr, b = gr;
+        if (showOv && roi && x >= roi.x0 && x <= roi.x1 && y >= roi.y0 && y <= roi.y1 && z >= roi.z0 && z <= roi.z1) {
+          let col = null, a = 0.45;
+          if (seg && seg.roi === roi.key) {
+            const L = seg.labels[((z - roi.z0) * roi.ny + (y - roi.y0)) * roi.nx + (x - roi.x0)];
+            if (L) { col = LABEL_COL[L]; a = L === 4 ? 0.25 : L === 3 ? 0.7 : 0.4; }
+          } else if (val >= te) { col = [90, 200, 255]; a = 0.35; }
+          else if (val >= th) { col = [60, 230, 120]; a = 0.35; }
+          if (col) { r = r * (1 - a) + col[0] * a; gg = gg * (1 - a) + col[1] * a; b = b * (1 - a) + col[2] * a; }
+        }
+        const o = (j * g.w + i) * 4;
+        d[o] = r; d[o + 1] = gg; d[o + 2] = b; d[o + 3] = 255;
+      }
+    }
+    this.offCtx.putImageData(this.img, 0, 0);
+    const t = this.xform();
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(this.off, t.ox, t.oy, g.w * t.px, g.h * t.py);
+    // 十字線
+    const [ci, cj] = this.toImg(...S.cursor);
+    ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(79,179,255,0.55)'; ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(t.ox + (ci + 0.5) * t.px, 0); ctx.lineTo(t.ox + (ci + 0.5) * t.px, H);
+    ctx.moveTo(0, t.oy + (cj + 0.5) * t.py); ctx.lineTo(W, t.oy + (cj + 0.5) * t.py);
+    ctx.stroke(); ctx.setLineDash([]);
+    // ROI
+    if (roi) {
+      const [a0, b0] = this.toImg(roi.x0, roi.y0, roi.z1), [a1, b1] = this.toImg(roi.x1, roi.y1, roi.z0);
+      const inside = s >= [roi.x0, roi.y0, roi.z0][this.axis] && s <= [roi.x1, roi.y1, roi.z1][this.axis];
+      ctx.strokeStyle = inside ? '#ffd23f' : 'rgba(255,210,63,0.35)'; ctx.lineWidth = 1.5 * dpr;
+      if (!inside) ctx.setLineDash([6, 4]);
+      ctx.strokeRect(t.ox + a0 * t.px, t.oy + b0 * t.py, (a1 - a0 + 1) * t.px, (b1 - b0 + 1) * t.py);
+      ctx.setLineDash([]);
+      const [si, sj] = this.toImg(...S.seed);
+      ctx.fillStyle = '#ffd23f';
+      ctx.beginPath(); ctx.arc(t.ox + (si + 0.5) * t.px, t.oy + (sj + 0.5) * t.py, 3.5 * dpr, 0, Math.PI * 2); ctx.fill();
+    }
+    this.lbl.textContent = `${s + 1}/${this.sliceCount()}`;
+  }
+}
+
+/* =====================================================================
+ *  歯の抽出（セグメンテーション）
+ * ===================================================================== */
+function multiOtsu(values, k) {
+  // values: ソート済みでなくてよい。128ビンのヒストグラムで k 個のしきい値を全探索（k<=3）
+  let lo = Infinity, hi = -Infinity;
+  for (const v of values) { if (v < lo) lo = v; if (v > hi) hi = v; }
+  const B = 128, h = new Float64Array(B), bw = (hi - lo) / B || 1;
+  for (const v of values) h[Math.min(B - 1, Math.floor((v - lo) / bw))]++;
+  const P = new Float64Array(B + 1), Sx = new Float64Array(B + 1);
+  for (let i = 0; i < B; i++) { P[i + 1] = P[i] + h[i]; Sx[i + 1] = Sx[i] + h[i] * i; }
+  const term = (a, b) => { const p = P[b] - P[a]; if (p <= 0) return 0; const s = Sx[b] - Sx[a]; return s * s / p; };
+  let best = -1, bt = [];
+  if (k === 1) { for (let a = 1; a < B; a++) { const v = term(0, a) + term(a, B); if (v > best) { best = v; bt = [a]; } } }
+  else if (k === 2) { for (let a = 1; a < B - 1; a++) for (let b = a + 1; b < B; b++) { const v = term(0, a) + term(a, b) + term(b, B); if (v > best) { best = v; bt = [a, b]; } } }
+  else {
+    for (let a = 1; a < B - 2; a++) for (let b = a + 1; b < B - 1; b++) {
+      const ab = term(0, a) + term(a, b);
+      for (let c = b + 1; c < B; c++) { const v = ab + term(b, c) + term(c, B); if (v > best) { best = v; bt = [a, b, c]; } }
+    }
+  }
+  return bt.map((t) => lo + t * bw);
+}
+
+function expandROI(roi, mm) {
+  const v = S.vol, mx = Math.round(mm / v.sx), my = Math.round(mm / v.sy);
+  const r = { x0: Math.max(0, roi.x0 - mx), x1: Math.min(v.nx - 1, roi.x1 + mx), y0: Math.max(0, roi.y0 - my), y1: Math.min(v.ny - 1, roi.y1 + my), z0: roi.z0, z1: roi.z1 };
+  r.nx = r.x1 - r.x0 + 1; r.ny = r.y1 - r.y0 + 1; r.nz = r.z1 - r.z0 + 1;
+  return r;
+}
+function cropROI(a, ext, roi, T) {
+  const o = new T(roi.nx * roi.ny * roi.nz);
+  let p = 0;
+  for (let z = roi.z0; z <= roi.z1; z++) for (let y = roi.y0; y <= roi.y1; y++) {
+    const b = ((z - ext.z0) * ext.ny + (y - ext.y0)) * ext.nx - ext.x0;
+    for (let x = roi.x0; x <= roi.x1; x++) o[p++] = a[b + x];
+  }
+  return o;
+}
+function roiValues(roi, smooth) {
+  const v = S.vol, n = roi.nx * roi.ny * roi.nz, f = new Float32Array(n);
+  let p = 0;
+  for (let z = roi.z0; z <= roi.z1; z++) {
+    const sl = v.slices[z];
+    for (let y = roi.y0; y <= roi.y1; y++) for (let x = roi.x0; x <= roi.x1; x++) f[p++] = sl[y * v.nx + x];
+  }
+  if (smooth) blur3(f, roi.nx, roi.ny, roi.nz);
+  return f;
+}
+
+function autoThreshold() {
+  const roi = getROI();
+  if (!roi) { setStatus('先に断面上で歯をクリックしてください', true); return; }
+  const f = roiValues(roi, true);
+  const samp = [];
+  const st = Math.max(1, Math.floor(f.length / 300000));
+  for (let i = 0; i < f.length; i += st) samp.push(f[i]);
+  const [t1, t2, t3] = multiOtsu(samp, 3);
+  // 硬組織/エナメル の2しきい値を、t1 以上の画素で再推定（空気の影響を除く）
+  const hard = samp.filter((x) => x >= t1);
+  const [a, b] = hard.length > 100 ? multiOtsu(hard, 2) : [t2, t3];
+  setVal('thHard', Math.round(a)); setVal('thEnamel', Math.round(Math.max(b, a + 50)));
+  renderAll();
+  setStatus(`しきい値を自動設定しました（歯質 ${Math.round(a)} / エナメル質 ${Math.round(b)}）。緑のプレビューを確認してください`);
+}
+
+function erode6(src, nx, ny, nz) {
+  const dst = new Uint8Array(src.length), nxy = nx * ny;
+  for (let z = 1; z < nz - 1; z++) for (let y = 1; y < ny - 1; y++) {
+    let i = z * nxy + y * nx + 1;
+    for (let x = 1; x < nx - 1; x++, i++) {
+      if (src[i] && src[i - 1] && src[i + 1] && src[i - nx] && src[i + nx] && src[i - nxy] && src[i + nxy]) dst[i] = 1;
+    }
+  }
+  return dst;
+}
+function dilateWithin(cur, mask, nx, ny, nz, iters) {
+  const nxy = nx * ny;
+  for (let k = 0; k < iters; k++) {
+    const nxt = cur.slice();
+    for (let z = 0; z < nz; z++) for (let y = 0; y < ny; y++) {
+      let i = z * nxy + y * nx;
+      for (let x = 0; x < nx; x++, i++) {
+        if (!cur[i]) continue;
+        if (x > 0 && mask[i - 1]) nxt[i - 1] = 1; if (x < nx - 1 && mask[i + 1]) nxt[i + 1] = 1;
+        if (y > 0 && mask[i - nx]) nxt[i - nx] = 1; if (y < ny - 1 && mask[i + nx]) nxt[i + nx] = 1;
+        if (z > 0 && mask[i - nxy]) nxt[i - nxy] = 1; if (z < nz - 1 && mask[i + nxy]) nxt[i + nxy] = 1;
+      }
+    }
+    cur = nxt;
+  }
+  return cur;
+}
+/** マスク内で seed から連結した領域（6近傍） */
+function floodFill(mask, nx, ny, nz, seedIdx) {
+  const out = new Uint8Array(mask.length), nxy = nx * ny;
+  const stack = new Int32Array(mask.length);
+  let sp = 0; stack[sp++] = seedIdx; out[seedIdx] = 1;
+  while (sp) {
+    const i = stack[--sp], x = i % nx, y = ((i / nx) | 0) % ny, z = (i / nxy) | 0;
+    const push = (j) => { if (mask[j] && !out[j]) { out[j] = 1; stack[sp++] = j; } };
+    if (x > 0) push(i - 1); if (x < nx - 1) push(i + 1);
+    if (y > 0) push(i - nx); if (y < ny - 1) push(i + nx);
+    if (z > 0) push(i - nxy); if (z < nz - 1) push(i + nxy);
+  }
+  return out;
+}
+/** 26近傍の連結成分ラベリング → 小さい成分を除去 */
+function removeSmall(mask, nx, ny, nz, minSize) {
+  const lab = new Int32Array(mask.length), nxy = nx * ny, stack = new Int32Array(mask.length);
+  const sizes = [0];
+  let cur = 0;
+  for (let s = 0; s < mask.length; s++) {
+    if (!mask[s] || lab[s]) continue;
+    cur++; let sp = 0, cnt = 0; stack[sp++] = s; lab[s] = cur;
+    while (sp) {
+      const i = stack[--sp]; cnt++;
+      const x = i % nx, y = ((i / nx) | 0) % ny, z = (i / nxy) | 0;
+      for (let dz = -1; dz <= 1; dz++) {
+        const zz = z + dz; if (zz < 0 || zz >= nz) continue;
+        for (let dy = -1; dy <= 1; dy++) {
+          const yy = y + dy; if (yy < 0 || yy >= ny) continue;
+          for (let dx = -1; dx <= 1; dx++) {
+            const xx = x + dx; if (xx < 0 || xx >= nx) continue;
+            const j = zz * nxy + yy * nx + xx;
+            if (mask[j] && !lab[j]) { lab[j] = cur; stack[sp++] = j; }
+          }
+        }
+      }
+    }
+    sizes.push(cnt);
+  }
+  for (let i = 0; i < mask.length; i++) if (mask[i] && sizes[lab[i]] < minSize) mask[i] = 0;
+  return mask;
+}
+/** 3D 距離変換（チャンファ, 26近傍, mm単位）。ROI外は前景とみなす */
+function distanceTransform(mask, nx, ny, nz, sx, sy, sz) {
+  const n = mask.length, nxy = nx * ny, d = new Float32Array(n);
+  for (let i = 0; i < n; i++) d[i] = mask[i] ? 1e9 : 0;
+  const offs = [];
+  for (let dz = -1; dz <= 1; dz++) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+    if (dz * 9 + dy * 3 + dx < 0) offs.push([dx, dy, dz, Math.hypot(dx * sx, dy * sy, dz * sz)]);
+  }
+  const pass = (fwd) => {
+    const sg = fwd ? 1 : -1;
+    for (let c = 0; c < n; c++) {
+      const i = fwd ? c : n - 1 - c;
+      if (!mask[i]) continue;
+      const x = i % nx, y = ((i / nx) | 0) % ny, z = (i / nxy) | 0;
+      let best = d[i];
+      for (const [dx0, dy0, dz0, w] of offs) {
+        const xx = x + dx0 * sg, yy = y + dy0 * sg, zz = z + dz0 * sg;
+        if (xx < 0 || yy < 0 || zz < 0 || xx >= nx || yy >= ny || zz >= nz) continue; // ROI外=前景
+        const v = d[i + (dx0 + dy0 * nx + dz0 * nxy) * sg] + w;
+        if (v < best) best = v;
+      }
+      d[i] = best;
+    }
+  };
+  pass(true); pass(false);
+  for (let i = 0; i < n; i++) if (d[i] >= 1e8) d[i] = 1e3;
+  return d;
+}
+/**
+ * 隣在歯との接触部分離：距離変換の「くびれ」で分ける（マーカー付きウォーターシェッド）。
+ * 太い部分(dist>=D)を核とし、選択点の核＝対象歯、その他の核＝隣在歯として競合成長させる。
+ */
+function splitNeighbors(domain, nx, ny, nz, sp, seedIdx) {
+  const n = domain.length, nxy = nx * ny;
+  const dist = distanceTransform(domain, nx, ny, nz, sp[0], sp[1], sp[2]);
+  let maxD = 0;
+  for (let i = 0; i < n; i++) if (domain[i] && dist[i] < 1e3 && dist[i] > maxD) maxD = dist[i];
+  const D = Math.max(1.0, 0.5 * maxD);
+  // 核の連結成分
+  const comp = new Int32Array(n), stack = new Int32Array(n);
+  let nc = 0;
+  for (let s = 0; s < n; s++) {
+    if (!domain[s] || comp[s] || dist[s] < D) continue;
+    nc++; let sp2 = 0; stack[sp2++] = s; comp[s] = nc;
+    while (sp2) {
+      const i = stack[--sp2], x = i % nx, y = ((i / nx) | 0) % ny, z = (i / nxy) | 0;
+      const nb = [x > 0 ? i - 1 : -1, x < nx - 1 ? i + 1 : -1, y > 0 ? i - nx : -1, y < ny - 1 ? i + nx : -1, z > 0 ? i - nxy : -1, z < nz - 1 ? i + nxy : -1];
+      for (const j of nb) if (j >= 0 && domain[j] && !comp[j] && dist[j] >= D) { comp[j] = nc; stack[sp2++] = j; }
+    }
+  }
+  if (nc < 2) return null;
+  const csize = new Int32Array(nc + 1);
+  for (let i = 0; i < n; i++) csize[comp[i]]++;
+  const minCore = Math.round(3 / (sp[0] * sp[1] * sp[2])); // 3mm³ 未満の核は無視
+  // 選択点の核：選択点から最も近い核
+  let seedComp = comp[seedIdx];
+  if (!seedComp) {
+    const sxx = seedIdx % nx, syy = ((seedIdx / nx) | 0) % ny, szz = (seedIdx / nxy) | 0;
+    let bd = Infinity;
+    for (let i = 0; i < n; i++) if (comp[i]) {
+      const dd = (i % nx - sxx) ** 2 + (((i / nx) | 0) % ny - syy) ** 2 + ((i / nxy | 0) - szz) ** 2;
+      if (dd < bd) { bd = dd; seedComp = comp[i]; }
+    }
+  }
+  const lab = new Uint8Array(n); // 1=対象歯, 2=隣在歯
+  const Q = 0.05, nb = Math.ceil(Math.min(maxD, 50) / Q) + 2, buckets = Array.from({ length: nb }, () => []);
+  const bOf = (i) => Math.min(nb - 1, Math.floor(Math.min(dist[i], 50) / Q));
+  let others = 0;
+  for (let i = 0; i < n; i++) if (comp[i]) {
+    const other = comp[i] !== seedComp && csize[comp[i]] >= minCore;
+    lab[i] = other ? 2 : 1; if (other) others++;
+    buckets[bOf(i)].push(i);
+  }
+  if (!others) return null;
+  for (let lv = nb - 1; lv >= 0; lv--) {
+    const B = buckets[lv];
+    for (let h = 0; h < B.length; h++) {
+      const i = B[h], x = i % nx, y = ((i / nx) | 0) % ny, z = (i / nxy) | 0, L = lab[i];
+      const nbs = [x > 0 ? i - 1 : -1, x < nx - 1 ? i + 1 : -1, y > 0 ? i - nx : -1, y < ny - 1 ? i + nx : -1, z > 0 ? i - nxy : -1, z < nz - 1 ? i + nxy : -1];
+      for (const j of nbs) if (j >= 0 && domain[j] && !lab[j]) { lab[j] = L; buckets[Math.min(lv, bOf(j))].push(j); }
+    }
+    buckets[lv] = null;
+  }
+  return lab;
+}
+
+/** 水平断ごとの2D穴埋め：外側から到達できない非歯質領域 = 歯髄腔・根管 */
+function holes2D(tooth, nx, ny, nz) {
+  const holes = new Uint8Array(tooth.length), nxy = nx * ny;
+  const outside = new Uint8Array(nxy), stack = new Int32Array(nxy);
+  for (let z = 0; z < nz; z++) {
+    const base = z * nxy; outside.fill(0);
+    let sp = 0;
+    const seedPx = (i) => { if (!tooth[base + i] && !outside[i]) { outside[i] = 1; stack[sp++] = i; } };
+    for (let x = 0; x < nx; x++) { seedPx(x); seedPx((ny - 1) * nx + x); }
+    for (let y = 0; y < ny; y++) { seedPx(y * nx); seedPx(y * nx + nx - 1); }
+    while (sp) {
+      const i = stack[--sp], x = i % nx, y = (i / nx) | 0;
+      if (x > 0) seedPx(i - 1); if (x < nx - 1) seedPx(i + 1);
+      if (y > 0) seedPx(i - nx); if (y < ny - 1) seedPx(i + nx);
+    }
+    for (let i = 0; i < nxy; i++) if (!tooth[base + i] && !outside[i]) holes[base + i] = 1;
+  }
+  return holes;
+}
+
+async function extract() {
+  const roi = getROI();
+  if (!roi) { setStatus('先に断面上で歯をクリックしてください', true); return; }
+  const v = S.vol, { nx, ny, nz } = roi, n = nx * ny * nz, nxy = nx * ny;
+  const th = +$('thHard').value, te = +$('thEnamel').value;
+  const k = +$('erode').value;
+  const split = $('splitNb').checked;
+  showProgress('歯を抽出中…（平滑化）', 0.1); await sleep0();
+  // 隣在歯の歯冠全体を含めて「くびれ」で分離できるよう、内部的に ROI を左右前後へ 5mm 広げて処理する
+  const ext = expandROI(roi, split ? 5 : 0);
+  const ex = ext.nx, ey = ext.ny, ez = ext.nz, en = ex * ey * ez;
+  const fe = roiValues(ext, $('smooth').checked);
+  showProgress('歯を抽出中…（領域拡張）', 0.3); await sleep0();
+  const hardE = new Uint8Array(en);
+  for (let i = 0; i < en; i++) if (fe[i] >= th) hardE[i] = 1;
+  let core = hardE;
+  for (let i = 0; i < k; i++) core = erode6(core, ex, ey, ez);
+  // 選択点から最も近いコア画素を探す
+  const sx = S.seed[0] - ext.x0, sy = S.seed[1] - ext.y0, sz = S.seed[2] - ext.z0;
+  let seedIdx = -1, bestD = Infinity;
+  const R = Math.ceil(4 / Math.min(v.sx, v.sy, v.sz));
+  for (let dz = -R; dz <= R; dz++) for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+    const x = sx + dx, y = sy + dy, z = sz + dz;
+    if (x < 0 || y < 0 || z < 0 || x >= ex || y >= ey || z >= ez) continue;
+    const i = (z * ey + y) * ex + x;
+    if (!core[i]) continue;
+    const d = (dx * v.sx) ** 2 + (dy * v.sy) ** 2 + (dz * v.sz) ** 2;
+    if (d < bestD) { bestD = d; seedIdx = i; }
+  }
+  if (seedIdx < 0) {
+    hideProgress();
+    setStatus('選択点の近く（4mm以内）に歯質が見つかりません。歯の象牙質をクリックするか、しきい値を下げてください', true);
+    return;
+  }
+  let toothE = floodFill(core, ex, ey, ez, seedIdx);
+  if (k > 0) toothE = dilateWithin(toothE, hardE, ex, ey, ez, k + 1);
+  if (split) {
+    showProgress('歯を抽出中…（隣在歯との分離）', 0.45); await sleep0();
+    const h0 = holes2D(toothE, ex, ey, ez), dom = new Uint8Array(en);
+    for (let i = 0; i < en; i++) dom[i] = toothE[i] | h0[i];
+    const lab = splitNeighbors(dom, ex, ey, ez, [v.sx, v.sy, v.sz], seedIdx);
+    if (lab) {
+      for (let i = 0; i < en; i++) if (lab[i] !== 1) toothE[i] = 0;
+      let s0 = seedIdx;
+      if (!toothE[s0]) for (let i = 0; i < en; i++) if (toothE[i]) { s0 = i; break; }
+      toothE = floodFill(toothE, ex, ey, ez, s0);
+    }
+  }
+  const f = cropROI(fe, ext, roi, Float32Array), hard = cropROI(hardE, ext, roi, Uint8Array);
+  const tooth = cropROI(toothE, ext, roi, Uint8Array);
+  showProgress('歯を抽出中…（歯髄・根管）', 0.55); await sleep0();
+  const holes = holes2D(tooth, nx, ny, nz);
+  const solid = new Uint8Array(n);
+  for (let i = 0; i < n; i++) solid[i] = tooth[i] | holes[i];
+  // 根管感度：歯の内部で、歯質しきい値〜象牙質平均の間の値も根管候補とする
+  let dsum = 0, dcnt = 0;
+  for (let i = 0; i < n; i++) if (tooth[i] && f[i] < te) { dsum += f[i]; dcnt++; }
+  const dMean = dcnt ? dsum / dcnt : th;
+  const tc = th + (dMean - th) * (+$('thCanal').value / 100);
+  const inner = erode6(erode6(solid, nx, ny, nz), nx, ny, nz);
+  const canal = new Uint8Array(n);
+  for (let i = 0; i < n; i++) if (holes[i] || (inner[i] && f[i] < tc)) canal[i] = 1;
+  const voxMm3 = v.sx * v.sy * v.sz;
+  removeSmall(canal, nx, ny, nz, Math.max(4, Math.round(0.06 / voxMm3)));
+  showProgress('歯を抽出中…（ラベル付け）', 0.75); await sleep0();
+  const labels = new Uint8Array(n);
+  const cnt = [0, 0, 0, 0, 0];
+  let zmin = Infinity, zmax = -1;
+  for (let i = 0; i < n; i++) {
+    let L = 0;
+    if (canal[i]) L = 3;
+    else if (solid[i]) L = f[i] >= te ? 1 : 2;
+    else if (hard[i]) L = 4;
+    labels[i] = L; cnt[L]++;
+    if (L && L !== 4) { const z = (i / nxy) | 0; if (z < zmin) zmin = z; if (z > zmax) zmax = z; }
+  }
+  S.seg = { roi: roi.key, roiObj: roi, labels };
+  showProgress('3Dデータを作成中…', 0.88); await sleep0();
+  renderer.setLabels(labels, nx, ny, nz, v.sx, v.sy, v.sz);
+  hideProgress();
+  $('empty3d').style.display = 'none';
+  // 統計
+  const touches = (() => { // ROI 境界に歯が接している → ROIが狭い可能性
+    for (let z = 0; z < nz; z++) for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) {
+      if (x && y && x < nx - 1 && y < ny - 1) continue;
+      const L = labels[(z * ny + y) * nx + x]; if (L && L !== 4) return true;
+    }
+    return false;
+  })();
+  const canalCounts = [];
+  for (let z = 0; z < nz; z++) canalCounts.push(count2D(labels, nx, ny, z, 3, Math.max(2, Math.round(0.03 / (v.sx * v.sy)))));
+  const tno = $('toothNo').value;
+  $('segStats').innerHTML =
+    (tno ? `<dt>歯番</dt><dd>${esc(tno)}</dd>` : '') +
+    `<dt>歯の高さ（Z方向）</dt><dd>${zmax >= 0 ? ((zmax - zmin + 1) * v.sz).toFixed(1) : '-'} mm</dd>` +
+    `<dt>エナメル質 体積</dt><dd>${(cnt[1] * voxMm3).toFixed(1)} mm³</dd>` +
+    `<dt>象牙質 体積</dt><dd>${(cnt[2] * voxMm3).toFixed(1)} mm³</dd>` +
+    `<dt>歯髄・根管 体積</dt><dd>${(cnt[3] * voxMm3).toFixed(1)} mm³</dd>` +
+    `<dt>最大根管数（断面）</dt><dd>${Math.max(0, ...canalCounts)}</dd>`;
+  S.chart = [canalCounts, v.sz, zmin, zmax];
+  drawCanalChart(...S.chart);
+  renderAll();
+  setStatus('抽出完了。' + (touches ? '⚠ 歯がROIの枠に接しています。ROIを広げるか、隣在歯・骨とつながっていないか確認してください。' : '3Dビューをドラッグして回転できます。'), touches);
+}
+/** 1枚の水平断における、ラベル L の 8連結成分の数 */
+function count2D(labels, nx, ny, z, L, minPx) {
+  const base = z * nx * ny, seen = new Uint8Array(nx * ny), stack = new Int32Array(nx * ny);
+  let comps = 0;
+  for (let s = 0; s < nx * ny; s++) {
+    if (labels[base + s] !== L || seen[s]) continue;
+    let sp = 0, c = 0; stack[sp++] = s; seen[s] = 1;
+    while (sp) {
+      const i = stack[--sp]; c++;
+      const x = i % nx, y = (i / nx) | 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const xx = x + dx, yy = y + dy;
+        if (xx < 0 || yy < 0 || xx >= nx || yy >= ny) continue;
+        const j = yy * nx + xx;
+        if (!seen[j] && labels[base + j] === L) { seen[j] = 1; stack[sp++] = j; }
+      }
+    }
+    if (c >= minPx) comps++;
+  }
+  return comps;
+}
+function drawCanalChart(counts, sz, zmin, zmax) {
+  const cv = $('canalChart'), dpr = window.devicePixelRatio || 1;
+  cv.width = cv.clientWidth * dpr; cv.height = cv.clientHeight * dpr;
+  const c = cv.getContext('2d'), W = cv.width, H = cv.height;
+  c.clearRect(0, 0, W, H);
+  c.font = `${11 * dpr}px sans-serif`; c.fillStyle = '#8d96a5';
+  if (!counts || zmax < 0) { c.fillText('抽出後に表示されます', 10 * dpr, 20 * dpr); return; }
+  const z0 = zmin, z1 = zmax, maxC = Math.max(3, ...counts.slice(z0, z1 + 1));
+  const L = 44 * dpr, R = W - 10 * dpr, T = 10 * dpr, B = H - 22 * dpr;
+  const yOf = (z) => B - (z - z0 + 0.5) / (z1 - z0 + 1) * (B - T);
+  const xOf = (n) => L + n / maxC * (R - L);
+  c.strokeStyle = '#2b313c'; c.lineWidth = 1;
+  for (let n = 0; n <= maxC; n++) { c.beginPath(); c.moveTo(xOf(n), T); c.lineTo(xOf(n), B); c.stroke(); c.fillText(n, xOf(n) - 3 * dpr, H - 7 * dpr); }
+  c.fillStyle = $('colP').value;
+  const bh = Math.max(1, (B - T) / (z1 - z0 + 1));
+  for (let z = z0; z <= z1; z++) if (counts[z]) c.fillRect(L, yOf(z) - bh / 2, xOf(counts[z]) - L, bh + 0.5);
+  c.fillStyle = '#8d96a5';
+  c.save(); c.translate(12 * dpr, (T + B) / 2); c.rotate(-Math.PI / 2); c.textAlign = 'center'; c.fillText('高さ（上→下）', 0, 0); c.restore();
+  c.textAlign = 'right';
+  c.fillText(((z1 - z0) * sz).toFixed(0) + 'mm', L - 4 * dpr, T + 8 * dpr); c.fillText('0', L - 4 * dpr, B);
+  c.textAlign = 'left';
+}
+
+/* =====================================================================
+ *  3D ボリュームレンダラ（WebGL2 レイマーチング）
+ * ===================================================================== */
+const VS = `#version 300 es
+out vec2 vNdc;
+void main(){ vec2 p = vec2(float((gl_VertexID<<1)&2), float(gl_VertexID&2))*2.0-1.0; vNdc=p; gl_Position=vec4(p,0.0,1.0); }`;
+const FS = `#version 300 es
+precision highp float; precision highp sampler3D;
+in vec2 vNdc; out vec4 outColor;
+uniform sampler3D uVol;
+uniform mat4 uInvVP; uniform vec3 uEye; uniform vec3 uHalf; uniform vec3 uTexel;
+uniform vec4 uOpacity; uniform vec4 uIso; uniform vec4 uGlass; uniform vec3 uCol[4];
+uniform vec4 uClip; uniform int uClipOn; uniform int uPulpGrad; uniform float uDt; uniform float uRef;
+uniform vec2 uZRange;
+vec3 pulpHue(float z){
+  float t = clamp((z - uZRange.x) / max(uZRange.y - uZRange.x, 1e-3), 0.0, 1.0);
+  vec3 c = mix(vec3(0.20,0.45,1.0), vec3(0.85,0.20,0.95), smoothstep(0.0,0.33,t));
+  c = mix(c, vec3(1.0,0.18,0.15), smoothstep(0.33,0.66,t));
+  return mix(c, vec3(1.0,0.88,0.15), smoothstep(0.66,1.0,t));
+}
+void main(){
+  vec4 pf = uInvVP * vec4(vNdc, 1.0, 1.0); pf /= pf.w;
+  vec3 dir = normalize(pf.xyz - uEye);
+  vec3 bg = mix(vec3(0.03,0.04,0.06), vec3(0.12,0.14,0.19), vNdc.y*0.5+0.5);
+  vec3 inv = 1.0/dir;
+  vec3 t0 = (-uHalf - uEye)*inv, t1 = (uHalf - uEye)*inv;
+  vec3 tn = min(t0,t1), tf = max(t0,t1);
+  float tnear = max(max(tn.x,tn.y),tn.z), tfar = min(min(tf.x,tf.y),tf.z);
+  if (tnear > tfar || tfar < 0.0) { outColor = vec4(bg,1.0); return; }
+  float t = max(tnear, 0.0) + uDt * fract(sin(dot(gl_FragCoord.xy, vec2(12.9898,78.233)))*43758.5453);
+  vec4 acc = vec4(0.0);
+  vec3 L = -dir;
+  float corr = uDt / uRef;
+  for (int i=0; i<4096; i++) {
+    if (t > tfar || acc.a > 0.985) break;
+    vec3 p = uEye + dir*t;
+    t += uDt;
+    bool nearCut = false;
+    if (uClipOn == 1) {
+      float s = dot(p, uClip.xyz) - uClip.w;
+      if (s > 0.0) continue;
+      nearCut = s > -1.5*uDt;
+    }
+    vec3 tc = p/(2.0*uHalf) + 0.5;
+    vec4 m = texture(uVol, tc);
+    vec4 dens = smoothstep(uIso-0.12, uIso+0.12, m) * uOpacity;
+    if (dens.x+dens.y+dens.z+dens.w < 0.002) continue;
+    vec4 gx = texture(uVol, tc+vec3(uTexel.x,0,0)) - texture(uVol, tc-vec3(uTexel.x,0,0));
+    vec4 gy = texture(uVol, tc+vec3(0,uTexel.y,0)) - texture(uVol, tc-vec3(0,uTexel.y,0));
+    vec4 gz = texture(uVol, tc+vec3(0,0,uTexel.z)) - texture(uVol, tc-vec3(0,0,uTexel.z));
+    for (int c=0; c<4; c++) {
+      float a = dens[c];
+      if (a <= 0.0) continue;
+      vec3 g = vec3(gx[c], gy[c], gz[c]);
+      float gm = length(g);
+      g /= uHalf * uTexel;
+      if (!nearCut) a *= mix(1.0, 0.3*clamp(gm*2.2, 0.0, 1.0), uGlass[c]);
+      a = 1.0 - pow(max(1.0 - a, 0.0), corr);
+      vec3 n = gm > 1e-4 ? -normalize(g) : L;
+      float diff = nearCut ? 0.72 : abs(dot(n, L));
+      vec3 base = (c == 2 && uPulpGrad == 1) ? pulpHue(tc.z) : uCol[c];
+      vec3 col = base*(0.30 + 0.70*diff) + vec3(0.28)*pow(diff, 36.0);
+      acc.rgb += (1.0-acc.a)*a*col; acc.a += (1.0-acc.a)*a;
+    }
+  }
+  outColor = vec4(acc.rgb + (1.0-acc.a)*bg, 1.0);
+}`;
+
+const M4 = {
+  perspective(fovy, asp, near, far) {
+    const f = 1 / Math.tan(fovy / 2), nf = 1 / (near - far);
+    return [f / asp, 0, 0, 0, 0, f, 0, 0, 0, 0, (far + near) * nf, -1, 0, 0, 2 * far * near * nf, 0];
+  },
+  lookAt(e, c, u) {
+    let zx = e[0] - c[0], zy = e[1] - c[1], zz = e[2] - c[2];
+    let l = Math.hypot(zx, zy, zz); zx /= l; zy /= l; zz /= l;
+    let xx = u[1] * zz - u[2] * zy, xy = u[2] * zx - u[0] * zz, xz = u[0] * zy - u[1] * zx;
+    l = Math.hypot(xx, xy, xz); xx /= l; xy /= l; xz /= l;
+    const yx = zy * xz - zz * xy, yy = zz * xx - zx * xz, yz = zx * xy - zy * xx;
+    return [xx, yx, zx, 0, xy, yy, zy, 0, xz, yz, zz, 0,
+      -(xx * e[0] + xy * e[1] + xz * e[2]), -(yx * e[0] + yy * e[1] + yz * e[2]), -(zx * e[0] + zy * e[1] + zz * e[2]), 1];
+  },
+  mul(a, b) {
+    const o = new Array(16);
+    for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) {
+      let s = 0; for (let k = 0; k < 4; k++) s += a[k * 4 + r] * b[c * 4 + k]; o[c * 4 + r] = s;
+    }
+    return o;
+  },
+  invert(m) {
+    const inv = new Array(16);
+    inv[0] = m[5] * m[10] * m[15] - m[5] * m[11] * m[14] - m[9] * m[6] * m[15] + m[9] * m[7] * m[14] + m[13] * m[6] * m[11] - m[13] * m[7] * m[10];
+    inv[4] = -m[4] * m[10] * m[15] + m[4] * m[11] * m[14] + m[8] * m[6] * m[15] - m[8] * m[7] * m[14] - m[12] * m[6] * m[11] + m[12] * m[7] * m[10];
+    inv[8] = m[4] * m[9] * m[15] - m[4] * m[11] * m[13] - m[8] * m[5] * m[15] + m[8] * m[7] * m[13] + m[12] * m[5] * m[11] - m[12] * m[7] * m[9];
+    inv[12] = -m[4] * m[9] * m[14] + m[4] * m[10] * m[13] + m[8] * m[5] * m[14] - m[8] * m[6] * m[13] - m[12] * m[5] * m[10] + m[12] * m[6] * m[9];
+    inv[1] = -m[1] * m[10] * m[15] + m[1] * m[11] * m[14] + m[9] * m[2] * m[15] - m[9] * m[3] * m[14] - m[13] * m[2] * m[11] + m[13] * m[3] * m[10];
+    inv[5] = m[0] * m[10] * m[15] - m[0] * m[11] * m[14] - m[8] * m[2] * m[15] + m[8] * m[3] * m[14] + m[12] * m[2] * m[11] - m[12] * m[3] * m[10];
+    inv[9] = -m[0] * m[9] * m[15] + m[0] * m[11] * m[13] + m[8] * m[1] * m[15] - m[8] * m[3] * m[13] - m[12] * m[1] * m[11] + m[12] * m[3] * m[9];
+    inv[13] = m[0] * m[9] * m[14] - m[0] * m[10] * m[13] - m[8] * m[1] * m[14] + m[8] * m[2] * m[13] + m[12] * m[1] * m[10] - m[12] * m[2] * m[9];
+    inv[2] = m[1] * m[6] * m[15] - m[1] * m[7] * m[14] - m[5] * m[2] * m[15] + m[5] * m[3] * m[14] + m[13] * m[2] * m[7] - m[13] * m[3] * m[6];
+    inv[6] = -m[0] * m[6] * m[15] + m[0] * m[7] * m[14] + m[4] * m[2] * m[15] - m[4] * m[3] * m[14] - m[12] * m[2] * m[7] + m[12] * m[3] * m[6];
+    inv[10] = m[0] * m[5] * m[15] - m[0] * m[7] * m[13] - m[4] * m[1] * m[15] + m[4] * m[3] * m[13] + m[12] * m[1] * m[7] - m[12] * m[3] * m[5];
+    inv[14] = -m[0] * m[5] * m[14] + m[0] * m[6] * m[13] + m[4] * m[1] * m[14] - m[4] * m[2] * m[13] - m[12] * m[1] * m[6] + m[12] * m[2] * m[5];
+    inv[3] = -m[1] * m[6] * m[11] + m[1] * m[7] * m[10] + m[5] * m[2] * m[11] - m[5] * m[3] * m[10] - m[9] * m[2] * m[7] + m[9] * m[3] * m[6];
+    inv[7] = m[0] * m[6] * m[11] - m[0] * m[7] * m[10] - m[4] * m[2] * m[11] + m[4] * m[3] * m[10] + m[8] * m[2] * m[7] - m[8] * m[3] * m[6];
+    inv[11] = -m[0] * m[5] * m[11] + m[0] * m[7] * m[9] + m[4] * m[1] * m[11] - m[4] * m[3] * m[9] - m[8] * m[1] * m[7] + m[8] * m[3] * m[5];
+    inv[15] = m[0] * m[5] * m[10] - m[0] * m[6] * m[9] - m[4] * m[1] * m[10] + m[4] * m[2] * m[9] + m[8] * m[1] * m[6] - m[8] * m[2] * m[5];
+    let det = m[0] * inv[0] + m[1] * inv[4] + m[2] * inv[8] + m[3] * inv[12];
+    det = 1 / det;
+    return inv.map((x) => x * det);
+  },
+};
+
+class VolumeRenderer {
+  constructor(canvas) {
+    this.cv = canvas;
+    const gl = canvas.getContext('webgl2', { preserveDrawingBuffer: true, antialias: false });
+    this.gl = gl;
+    this.yaw = -Math.PI / 2; this.pitch = 0.15; this.dist = 2.4;
+    this.has = false;
+    if (!gl) { $('empty3d').innerHTML = 'このブラウザは WebGL2 に対応していません。最新の Google Chrome をご利用ください。'; return; }
+    const sh = (type, src) => {
+      const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+      return s;
+    };
+    const p = gl.createProgram();
+    gl.attachShader(p, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, FS));
+    gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+    this.prog = p; this.vao = gl.createVertexArray(); this.tex = gl.createTexture();
+    this.u = {};
+    for (const n of ['uVol', 'uInvVP', 'uEye', 'uHalf', 'uTexel', 'uOpacity', 'uIso', 'uGlass', 'uCol', 'uClip', 'uClipOn', 'uPulpGrad', 'uDt', 'uRef', 'uZRange'])
+      this.u[n] = gl.getUniformLocation(p, n);
+    // 操作
+    let drag = null;
+    canvas.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: e.clientY }; canvas.setPointerCapture(e.pointerId); this.interacting = true; });
+    canvas.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      this.yaw -= (e.clientX - drag.x) * 0.008;
+      this.pitch = clamp(this.pitch + (e.clientY - drag.y) * 0.008, -1.55, 1.55);
+      drag = { x: e.clientX, y: e.clientY }; this.request();
+    });
+    canvas.addEventListener('pointerup', () => { drag = null; this.interacting = false; this.request(); });
+    canvas.addEventListener('wheel', (e) => { e.preventDefault(); this.dist = clamp(this.dist * Math.exp(e.deltaY * 0.001), 0.2, 8); this.request(); }, { passive: false });
+    canvas.addEventListener('dblclick', () => this.setView('front'));
+    new ResizeObserver(() => this.request()).observe(canvas);
+  }
+  setView(name) {
+    const P = { front: [-Math.PI / 2, 0.12], side: [0, 0.12], top: [-Math.PI / 2, 1.55], bottom: [-Math.PI / 2, -1.55] }[name];
+    this.yaw = P[0]; this.pitch = P[1]; this.dist = this.fitDist || 2.4; this.request();
+  }
+  clear() { this.has = false; this.request(); }
+  setLabels(labels, nx, ny, nz, sx, sy, sz) {
+    const gl = this.gl; if (!gl) return;
+    const n = nx * ny * nz, rgba = new Uint8Array(n * 4);
+    const f = new Float32Array(n);
+    // チャンネル: R=エナメル(1) G=象牙質(2) B=歯髄(3) A=骨(4)
+    for (let c = 0; c < 4; c++) {
+      const L = c + 1;
+      for (let i = 0; i < n; i++) f[i] = labels[i] === L ? 1 : 0;
+      blur3(f, nx, ny, nz, L === 3 ? [1 / 6, 4 / 6, 1 / 6] : [1 / 16, 4 / 16, 6 / 16, 4 / 16, 1 / 16]);
+      for (let i = 0; i < n; i++) rgba[i * 4 + c] = Math.round(f[i] * 255);
+    }
+    gl.bindTexture(gl.TEXTURE_3D, this.tex);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.texImage3D(gl.TEXTURE_3D, 0, gl.RGBA8, nx, ny, nz, 0, gl.RGBA, gl.UNSIGNED_BYTE, rgba);
+    for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR],
+      [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE]])
+      gl.texParameteri(gl.TEXTURE_3D, k, v);
+    const ex = [nx * sx, ny * sy, nz * sz], m = Math.max(...ex);
+    this.half = ex.map((e) => e / m / 2);
+    this.texel = [1 / nx, 1 / ny, 1 / nz];
+    this.ref = Math.min(sx, sy, sz) / m;
+    this.dims = [nx, ny, nz];
+    // 歯（骨以外）の外接箱にカメラを合わせる
+    const lo = [nx, ny, nz], hi = [-1, -1, -1];
+    for (let z = 0, i = 0; z < nz; z++) for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++, i++) {
+      const L = labels[i]; if (!L || L === 4) continue;
+      if (x < lo[0]) lo[0] = x; if (x > hi[0]) hi[0] = x; if (y < lo[1]) lo[1] = y; if (y > hi[1]) hi[1] = y;
+      if (z < lo[2]) lo[2] = z; if (z > hi[2]) hi[2] = z;
+    }
+    if (hi[0] >= 0) {
+      const d = this.dims;
+      this.target = [0, 1, 2].map((a) => ((lo[a] + hi[a] + 1) / 2 / d[a] - 0.5) * 2 * this.half[a]);
+      const ext = Math.max(...[0, 1, 2].map((a) => (hi[a] - lo[a] + 1) / d[a] * 2 * this.half[a]));
+      this.fitDist = clamp(ext * 0.5 / Math.tan(0.25) * 1.25, 0.4, 6);
+      this.zRange = [lo[2] / nz, (hi[2] + 1) / nz];
+    } else { this.target = [0, 0, 0]; this.fitDist = 2.4; this.zRange = [0, 1]; }
+    this.has = true;
+    this.setView('front');
+  }
+  request() { if (!this.pending) { this.pending = true; requestAnimationFrame(() => { this.pending = false; this.draw(); }); } }
+  draw() {
+    const gl = this.gl; if (!gl) return;
+    const cv = this.cv;
+    const scale = this.interacting || $('autoRot').checked ? 0.6 : Math.min(window.devicePixelRatio || 1, 1.5);
+    const W = Math.max(1, Math.round(cv.clientWidth * scale)), H = Math.max(1, Math.round(cv.clientHeight * scale));
+    if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+    gl.viewport(0, 0, W, H);
+    gl.clearColor(0.05, 0.06, 0.09, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+    if (!this.has) return;
+    const tg = this.target || [0, 0, 0];
+    const eye = [tg[0] + this.dist * Math.cos(this.pitch) * Math.cos(this.yaw), tg[1] + this.dist * Math.cos(this.pitch) * Math.sin(this.yaw), tg[2] + this.dist * Math.sin(this.pitch)];
+    this.eye = eye;
+    const up = Math.abs(this.pitch) > 1.5 ? [Math.cos(this.yaw) * -Math.sign(this.pitch), Math.sin(this.yaw) * -Math.sign(this.pitch), 0] : [0, 0, 1];
+    const vp = M4.mul(M4.perspective(0.5, W / H, 0.05, 20), M4.lookAt(eye, tg, up));
+    gl.useProgram(this.prog); gl.bindVertexArray(this.vao);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_3D, this.tex);
+    const u = this.u;
+    gl.uniform1i(u.uVol, 0);
+    gl.uniformMatrix4fv(u.uInvVP, false, M4.invert(vp));
+    gl.uniform3fv(u.uEye, eye); gl.uniform3fv(u.uHalf, this.half); gl.uniform3fv(u.uTexel, this.texel);
+    const op = (id) => +$(id).value / 100;
+    gl.uniform4f(u.uOpacity, op('opE'), op('opD'), op('opP'), op('opB'));
+    gl.uniform4f(u.uIso, 0.5, 0.5, 0.3, 0.5);
+    const g = op('glass');
+    gl.uniform4f(u.uGlass, g, g, 0, Math.max(g, 0.6));
+    gl.uniform3fv(u.uCol, [...hexRGB($('colE').value), ...hexRGB($('colD').value), ...hexRGB($('colP').value), ...hexRGB($('colB').value)]);
+    const ax = +$('clipAxis').value;
+    if (ax >= 0) {
+      const nrm = [0, 0, 0]; nrm[ax] = (this.clipSign || 1) * ($('clipFlip').checked ? -1 : 1);
+      gl.uniform4f(u.uClip, nrm[0], nrm[1], nrm[2], (tg[ax] + (+$('clipPos').value / 100) * this.half[ax]) * nrm[ax]);
+      gl.uniform1i(u.uClipOn, 1);
+    } else gl.uniform1i(u.uClipOn, 0);
+    gl.uniform1i(u.uPulpGrad, $('pulpGrad').checked ? 1 : 0);
+    gl.uniform2fv(u.uZRange, this.zRange || [0, 1]);
+    const dt = this.ref * (this.interacting || $('autoRot').checked ? 0.9 : 0.5);
+    gl.uniform1f(u.uDt, dt); gl.uniform1f(u.uRef, this.ref);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+}
+function hexRGB(h) { return [1, 3, 5].map((i) => parseInt(h.substr(i, 2), 16) / 255); }
+
+/* =====================================================================
+ *  UI 結線
+ * ===================================================================== */
+const views = [new SliceView($('cvAx'), 2, $('lblAx')), new SliceView($('cvCo'), 1, $('lblCo')), new SliceView($('cvSa'), 0, $('lblSa'))];
+let renderer;
+try { renderer = new VolumeRenderer($('cv3d')); }
+catch (e) { renderer = { clear() {}, setLabels() {}, request() {}, setView() {} }; $('empty3d').textContent = '3D表示の初期化に失敗しました: ' + e.message; }
+
+let rafMPR = false;
+function renderAll() {
+  if (rafMPR) return; rafMPR = true;
+  requestAnimationFrame(() => { rafMPR = false; for (const v of views) v.render(); updateSeedInfo(); });
+}
+
+// 歯番（FDI）
+(() => {
+  const sel = $('toothNo');
+  sel.add(new Option('（未指定）', ''));
+  for (const q of [1, 2, 3, 4]) for (let t = 1; t <= 8; t++) sel.add(new Option(`${q}${t}`, `${q}${t}`));
+  sel.addEventListener('change', () => {
+    const v = sel.value; if (!v) return;
+    $('jaw').value = (v[0] === '1' || v[0] === '2') ? 'upper' : 'lower';
+    const molar = +v[1] >= 6;
+    setVal('roiX', molar ? 13 : 10); setVal('roiY', molar ? 13 : 10);
+    applyJaw();
+  });
+})();
+function applyJaw() {
+  const j = $('jaw').value;
+  if (j === 'lower') { setVal('roiUp', 12); setVal('roiDn', 24); }
+  else if (j === 'upper') { setVal('roiUp', 24); setVal('roiDn', 12); }
+  else { setVal('roiUp', 18); setVal('roiDn', 18); }
+  renderAll();
+}
+$('jaw').addEventListener('change', applyJaw);
+
+for (const id of ['ww', 'wl']) $(id).addEventListener('input', () => { syncOut(id); readWL(); renderAll(); });
+for (const id of ['roiX', 'roiY', 'roiUp', 'roiDn', 'thHard', 'thEnamel', 'thCanal', 'erode'])
+  $(id).addEventListener('input', () => { syncOut(id); renderAll(); });
+$('preview').addEventListener('change', renderAll);
+$('wlAuto').onclick = autoWL;
+$('wlTooth').onclick = () => {
+  const th = +$('thHard').value, te = +$('thEnamel').value;
+  setVal('ww', Math.round(Math.max(500, (te - th) * 2.6))); setVal('wl', Math.round((th + te) / 2)); readWL(); renderAll();
+};
+$('autoTh').onclick = autoThreshold;
+$('extractBtn').onclick = () => extract().catch((e) => { hideProgress(); setStatus('抽出に失敗しました: ' + e.message, true); console.error(e); });
+
+const r3 = () => { renderer.request(); updateLegend(); };
+for (const id of ['opE', 'opD', 'opP', 'opB', 'glass', 'clipPos']) $(id).addEventListener('input', () => { syncOut(id); r3(); });
+for (const id of ['colE', 'colD', 'colP', 'colB', 'pulpGrad', 'clipFlip']) $(id).addEventListener('input', r3);
+$('clipAxis').addEventListener('input', () => { // カメラ側の半分を取り除く向きにする
+  const ax = +$('clipAxis').value;
+  if (ax >= 0 && renderer.eye) renderer.clipSign = renderer.eye[ax] - (renderer.target || [0, 0, 0])[ax] >= 0 ? 1 : -1;
+  r3();
+});
+$('colP').addEventListener('input', () => { if (S.chart) drawCanalChart(...S.chart); });
+document.querySelectorAll('[data-view]').forEach((b) => (b.onclick = () => renderer.setView(b.dataset.view)));
+document.querySelectorAll('[data-preset]').forEach((b) => (b.onclick = () => {
+  const P = { solid: [100, 100, 100, 0], canal: [60, 35, 100, 0], canalOnly: [0, 8, 100, 0] }[b.dataset.preset];
+  ['opE', 'opD', 'opP', 'opB'].forEach((id, i) => setVal(id, P[i]));
+  setVal('glass', b.dataset.preset === 'solid' ? 0 : 85);
+  r3();
+}));
+$('max3d').onclick = () => {
+  const on = $('views').classList.toggle('max3d');
+  $('max3d').textContent = on ? '⤡ 戻す' : '⤢ 拡大';
+  renderer.request(); renderAll();
+};
+$('shotBtn').onclick = () => {
+  renderer.draw();
+  const a = document.createElement('a');
+  a.download = `tooth3d_${$('toothNo').value || 'x'}_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '')}.png`;
+  a.href = $('cv3d').toDataURL('image/png'); a.click();
+};
+function updateLegend() {
+  $('lgE').style.background = $('colE').value; $('lgD').style.background = $('colD').value;
+  $('lgB').style.background = $('colB').value; $('lgBrow').style.display = +$('opB').value ? '' : 'none';
+  const grad = $('pulpGrad').checked;
+  $('lgP').className = grad ? 'grad' : ''; $('lgP').style.background = grad ? '' : $('colP').value;
+  $('lgPtxt').textContent = grad ? '歯髄・根管（高さで色分け：上→下）' : '歯髄・根管';
+}
+(function spin() {
+  if ($('autoRot').checked && renderer.has) { renderer.yaw += 0.012; renderer.request(); }
+  requestAnimationFrame(spin);
+})();
+$('autoRot').addEventListener('change', () => renderer.request());
+
+// 読み込み
+$('dirInput').addEventListener('change', (e) => { if (e.target.files.length) loadFiles(e.target.files); e.target.value = ''; });
+$('fileInput').addEventListener('change', (e) => { if (e.target.files.length) loadFiles(e.target.files); e.target.value = ''; });
+$('demoBtn').onclick = async () => { showProgress('デモデータを生成中…', 0.5); await sleep0(); const v = makeDemoVolume(); hideProgress(); setVolume(v, 'デモデータ'); };
+// ドラッグ＆ドロップ（フォルダ対応）
+let dragCnt = 0;
+window.addEventListener('dragenter', (e) => { e.preventDefault(); dragCnt++; $('dropzone').classList.add('on'); });
+window.addEventListener('dragleave', () => { if (--dragCnt <= 0) { dragCnt = 0; $('dropzone').classList.remove('on'); } });
+window.addEventListener('dragover', (e) => e.preventDefault());
+window.addEventListener('drop', async (e) => {
+  e.preventDefault(); dragCnt = 0; $('dropzone').classList.remove('on');
+  const items = Array.from(e.dataTransfer.items || []).map((it) => it.webkitGetAsEntry && it.webkitGetAsEntry()).filter(Boolean);
+  const files = [];
+  const walk = async (ent) => {
+    if (ent.isFile) files.push(await new Promise((res, rej) => ent.file(res, rej)));
+    else if (ent.isDirectory) {
+      const rd = ent.createReader();
+      for (;;) {
+        const batch = await new Promise((res, rej) => rd.readEntries(res, rej));
+        if (!batch.length) break;
+        for (const b of batch) await walk(b);
+      }
+    }
+  };
+  if (items.length) { showProgress('ファイル一覧を取得中…', 0); for (const it of items) await walk(it); hideProgress(); }
+  else files.push(...e.dataTransfer.files);
+  if (files.length) loadFiles(files);
+});
+
+['ww', 'wl', 'roiX', 'roiY', 'roiUp', 'roiDn', 'thHard', 'thEnamel', 'thCanal', 'erode', 'opE', 'opD', 'opP', 'opB', 'glass', 'clipPos'].forEach(syncOut);
+updateLegend(); drawCanalChart(null); renderAll();
+</script>
+</body>
+</html>
