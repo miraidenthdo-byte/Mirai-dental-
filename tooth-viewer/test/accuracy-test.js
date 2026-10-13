@@ -12,6 +12,8 @@ const CASES = [
   { name: '第一大臼歯 0.10mm', tooth: 1, demo: { s: 0.10, noise: 150 } },
   { name: '第一大臼歯 0.20mm 高ノイズ', tooth: 1, demo: { s: 0.20, noise: 200 } },
   { name: '第一大臼歯 0.25mm', tooth: 1, demo: { s: 0.25, noise: 110 } },
+  { name: '第一大臼歯 15°傾斜＋歯軸自動合わせ', tooth: 1, demo: { s: 0.15, noise: 110, tilt: 15 }, autoAxis: true },
+  { name: '第一大臼歯 骨が歯根に密着', tooth: 1, demo: { s: 0.15, noise: 110, bone: 1250, pdl: 0 } },
 ];
 
 (async () => {
@@ -30,13 +32,20 @@ const CASES = [
     }, c.tooth);
     await page.click('#autoTh');
     await page.click('#extractBtn');
-    await page.waitForFunction(() => document.getElementById('empty3d').style.display === 'none', null, { timeout: 180000 });
+    await page.waitForFunction(() => !S.busy && document.getElementById('empty3d').style.display === 'none', null, { timeout: 180000 });
+    if (c.autoAxis) {
+      await page.click('#axisAuto');
+      await page.waitForTimeout(300);
+      await page.waitForFunction(() => !S.busy, null, { timeout: 180000 });
+    }
     const r = await page.evaluate((ti) => {
       const F = S.seg.fine, v = S.vol, s = v.sx, { nx, ny, nz, sp, origin } = F;
       let tp = 0, fp = 0, fn = 0, ctp = 0, cfp = 0, cfn = 0;
       const gl = new Uint8Array(nx * ny * nz);
       for (let z = 0, i = 0; z < nz; z++) for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++, i++) {
-        const g = v.gt(origin[0] + x * sp[0] + s / 2, origin[1] + y * sp[1] + s / 2, origin[2] + z * sp[2] + s / 2, ti);
+        // 解析はローカル座標（歯軸に沿った枠）なので、ボリューム座標(mm)へ戻して正解と比べる
+        const q = S.seg.localToVolMm([origin[0] + x * sp[0], origin[1] + y * sp[1], origin[2] + z * sp[2]]);
+        const g = v.gt(q[0] + s / 2, q[1] + s / 2, q[2] + s / 2, ti);
         gl[i] = g;
         const L = F.labels[i], pt = L >= 1 && L <= 3, gt = g > 0;
         if (pt && gt) tp++; else if (pt) fp++; else if (gt) fn++;
