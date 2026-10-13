@@ -51,6 +51,17 @@ select, input[type=number] { background: var(--panel2); color: var(--text); bord
 .struct input[type=range] { accent-color: var(--accent); width: 100%; }
 .struct output { text-align: right; font-size: 12px; }
 .check { display: flex; align-items: center; gap: 6px; margin: 5px 0; color: var(--text); }
+.main { display: grid; grid-template-rows: auto 1fr; min-height: 0; min-width: 0; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; padding: 6px 10px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.toolbar .grp { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.toolbar .grp > span { color: var(--muted); font-size: 12px; margin-right: 2px; }
+.toolbar button { padding: 4px 9px; font-size: 12.5px; }
+.toolbar button.on { background: var(--accent); color: #04131f; border-color: var(--accent); font-weight: 700; }
+.toolbar .help { color: var(--muted); font-size: 11.5px; line-height: 1.5; }
+.vinfo { position: absolute; left: 8px; bottom: 6px; font-size: 11.5px; color: #dfe6ee; text-shadow: 0 0 3px #000; pointer-events: none; font-variant-numeric: tabular-nums; }
+.vlabel i.pl { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: 0; }
+.views.solo { grid-template-columns: 1fr; grid-template-rows: 1fr; }
+.views.solo .view:not(.solo-on) { display: none; }
 .views { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 3px; background: #000; min-height: 0; }
 .views.max3d { grid-template-columns: 1fr; grid-template-rows: 1fr; }
 .views.max3d .view:not(.v3d) { display: none; }
@@ -118,7 +129,7 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 3
 
   <section>
     <h2><span class="num">2</span>歯の選択</h2>
-    <div class="hint">断面画像上で<b>抽出したい歯（象牙質の部分）</b>をクリックしてください。黄色い枠（ROI）の中から、その歯だけを抽出します。<br>
+    <div class="hint">上の <b>「🦷 歯を選択」</b> を押してから、断面画像上で<b>抽出したい歯（象牙質の部分）</b>をクリックしてください。黄色い枠（ROI）の中から、その歯だけを抽出します。<br>
       <kbd>ホイール</kbd> スライス送り / <kbd>Ctrl</kbd>+<kbd>ホイール</kbd> 拡大 / <kbd>右ドラッグ</kbd> 移動</div>
     <div class="flex" style="margin-bottom:6px">
       <label class="muted">歯番 (FDI)</label>
@@ -201,13 +212,31 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 3
   <div class="hint" style="margin-top:10px">※データはブラウザ内だけで処理され、外部に送信されません。<br>※本ツールは参考表示用であり、診断の最終判断は原画像で行ってください。</div>
 </aside>
 
+<div class="main">
+<div class="toolbar">
+  <div class="grp"><span>操作</span>
+    <button data-tool="view" class="on" title="クリック／ドラッグで十字線を移動して画像を見る">🖱 閲覧</button>
+    <button data-tool="seed" title="断面上でクリックした歯を選択">🦷 歯を選択</button>
+    <button data-tool="meas" title="2点間の距離">📏 距離</button>
+    <button data-tool="brush" title="抽出から外す部分をなぞる">🖌 除外ブラシ</button>
+  </div>
+  <div class="grp"><span>W/L</span>
+    <button data-wlp="bone">骨</button><button data-wlp="tooth">歯</button><button data-wlp="soft">軟組織</button><button data-wlp="auto">自動</button>
+  </div>
+  <div class="grp"><button id="resetViews" title="拡大・移動を元に戻す（R キー）">表示リセット</button>
+    <label class="check" style="margin:0"><input id="xhair" type="checkbox" checked>十字線</label></div>
+  <div class="help">ホイール：スライス送り ／ 右ドラッグ：明るさ・コントラスト ／ 中ドラッグ・Shift+ドラッグ：移動 ／ Ctrl+ホイール：拡大 ／ ダブルクリック：1画面表示 ／ ↑↓・PageUp/Down：スライス</div>
+</div>
 <div class="views" id="views">
-  <div class="view"><canvas id="cvAx"></canvas><div class="vlabel">アキシャル（水平断）<small id="lblAx"></small></div></div>
-  <div class="view"><canvas id="cvCo"></canvas><div class="vlabel">コロナル（前頭断）<small id="lblCo"></small></div></div>
-  <div class="view"><canvas id="cvSa"></canvas><div class="vlabel">サジタル（矢状断）<small id="lblSa"></small></div></div>
+  <div class="view"><canvas id="cvAx"></canvas><div class="vlabel"><i class="pl" style="background:#4f8bff"></i>アキシャル（水平断）<small id="lblAx"></small></div><div class="vinfo" id="infoAx"></div></div>
+  <div class="view"><canvas id="cvCo"></canvas><div class="vlabel"><i class="pl" style="background:#5ad17a"></i>コロナル（前頭断）<small id="lblCo"></small></div><div class="vinfo" id="infoCo"></div></div>
+  <div class="view"><canvas id="cvSa"></canvas><div class="vlabel"><i class="pl" style="background:#ff6b6b"></i>サジタル（矢状断）<small id="lblSa"></small></div><div class="vinfo" id="infoSa"></div></div>
   <div class="view v3d"><canvas id="cv3d"></canvas>
     <div class="vlabel">3D ボリュームレンダリング<small id="lbl3d"></small></div>
-    <div class="vtools"><button id="max3d" title="3D表示を最大化">⤢ 拡大</button></div>
+    <div class="vtools">
+      <select id="mode3d" title="3Dで表示する対象"><option value="tooth">抽出した歯</option><option value="ct">CT全体</option></select>
+      <span id="ctThWrap" hidden style="display:flex;align-items:center;gap:4px;background:rgba(30,35,44,.85);padding:2px 6px;border-radius:5px;font-size:12px">しきい値<input id="ctTh" type="range" style="width:110px"><output id="ctThO"></output></span>
+      <button id="max3d" title="3D表示を最大化">⤢ 拡大</button></div>
     <canvas id="gizmo" style="position:absolute;right:8px;bottom:8px;width:96px;height:96px;left:auto;top:auto;inset:auto 8px 8px auto;pointer-events:none"></canvas>
     <div class="legend" id="legend">
       <div><i id="lgE"></i>エナメル質</div><div><i id="lgD"></i>象牙質</div>
@@ -218,6 +247,7 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 3
       <button id="go3d" class="primary" hidden>✅ 範囲を決定して解析</button></div>
     <div class="decide" id="decideBar" hidden><span>範囲を調整中です。決まったら押してください</span><button id="decideBtn" class="primary">✅ 範囲を決定して解析</button></div>
   </div>
+</div>
 </div>
 </div>
 
@@ -648,7 +678,7 @@ function blur3(f, nx, ny, nz, w = [0.25, 0.5, 0.25]) {
  *  アプリ状態
  * ===================================================================== */
 const S = {
-  vol: null, cursor: [0, 0, 0], seed: null, seg: null, ww: 3000, wl: 800, meas: { on: false, pts: [] }, shift: [0, 0], brush: { on: false, groups: [] },
+  vol: null, cursor: [0, 0, 0], seed: null, seg: null, ww: 3000, wl: 800, meas: { on: false, pts: [] }, tool: 'view', shift: [0, 0], brush: { on: false, groups: [] },
 };
 function vget(x, y, z) { return S.vol.slices[z][y * S.vol.nx + x]; }
 
@@ -689,7 +719,7 @@ function setVolume(vol, note) {
   S.chart = null; drawCanalChart(null);
   renderer.clear();
   $('empty3d').style.display = '';
-  S.dirty = false; $('decideBar').hidden = true;
+  S.dirty = false; $('decideBar').hidden = true; S.ctThSet = false; renderer.mode = 'tooth'; $('mode3d').value = 'tooth'; $('ctThWrap').hidden = true;
   $('extractBtn').disabled = true; $('go3d').hidden = true; $('stlBtn').disabled = true; $('axisAuto').disabled = true;
   ['tiltX', 'tiltY', 'tiltZ'].forEach((id) => setVal(id, 0)); S.meas.pts = []; $('measOut').textContent = '';
   for (const v of views) v.resetView();
@@ -834,6 +864,10 @@ class SliceView {
       if ($('autoExtract').checked) runExtract(); else markDirty();
     });
     canvas.addEventListener('wheel', (e) => this.wheel(e), { passive: false });
+    canvas.addEventListener('pointerenter', () => { S.hoverView = this; });
+    canvas.addEventListener('pointerleave', () => { if (this.info) this.info.textContent = ''; });
+    canvas.addEventListener('dblclick', () => { if (S.tool === 'view') toggleSolo(canvas.parentElement); });
+    canvas.addEventListener('auxclick', (e) => e.preventDefault());
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
     new ResizeObserver(() => this.render()).observe(canvas);
   }
@@ -872,7 +906,11 @@ class SliceView {
   down(e) {
     if (!S.vol) return;
     this.cv.setPointerCapture(e.pointerId);
-    if (e.button === 0 && S.meas.on) {
+    // 右ドラッグ：明るさ・コントラスト（W/L）／中ドラッグ・Shift+左ドラッグ：移動
+    if (e.button === 2) { this.drag = 'wl'; this.wl0 = [S.ww, S.wl]; this.lastX = e.clientX; this.lastY = e.clientY; return; }
+    if (e.button === 1 || (e.button === 0 && e.shiftKey)) { e.preventDefault(); this.drag = 'pan'; this.lastX = e.clientX; this.lastY = e.clientY; return; }
+    if (e.button !== 0) return;
+    if (S.meas.on) {
       const [i, j] = this.evtImg(e), g = this.geom();
       if (i >= 0 && j >= 0 && i < g.w && j < g.h) addMeasPoint(this.toVox(Math.floor(i), Math.floor(j)));
       return;
@@ -885,12 +923,35 @@ class SliceView {
       const f = (this.faces || []).find((q) => Math.hypot(q.x - sx, q.y - sy) < 11 * dpr);
       if (f) { this.drag = 'face'; this.face = f; return; }
     }
-    if (e.button === 0) { this.drag = 'pick'; this.pick(e); }
-    else { this.drag = 'pan'; this.lastX = e.clientX; this.lastY = e.clientY; }
+    if (S.tool === 'seed') { this.drag = 'pick'; this.pick(e); }
+    else { this.drag = 'cursor'; this.moveCursor(e); }
+  }
+  /** 閲覧：十字線（3断面の交点）を移動 */
+  moveCursor(e) {
+    const [i, j] = this.evtImg(e), g = this.geom();
+    const q = this.toVox(clamp(Math.floor(i), 0, g.w - 1), clamp(Math.floor(j), 0, g.h - 1));
+    S.cursor = q.map((x, k) => clamp(Math.round(x), 0, [S.vol.nx, S.vol.ny, S.vol.nz][k] - 1));
+    renderAll();
+  }
+  /** マウス位置の座標とCT値 */
+  hover(e) {
+    const [i, j] = this.evtImg(e), g = this.geom(), el = this.info;
+    if (!el) return;
+    if (i < 0 || j < 0 || i >= g.w || j >= g.h) { el.textContent = ''; return; }
+    const [x, y, z] = this.toVox(Math.floor(i), Math.floor(j)), v = S.vol;
+    el.textContent = `(${x}, ${y}, ${z})  ${(x * v.sx).toFixed(1)}, ${(y * v.sy).toFixed(1)}, ${(z * v.sz).toFixed(1)} mm  値 ${vget(x, y, z)}`;
   }
   move(e) {
+    if (S.vol) this.hover(e);
     if (!this.drag) return;
     if (this.drag === 'pick') this.pick(e);
+    else if (this.drag === 'cursor') this.moveCursor(e);
+    else if (this.drag === 'wl') {
+      const k = Math.max(1, this.wl0[0]) / 250;
+      setVal('ww', Math.round(Math.max(1, this.wl0[0] + (e.clientX - this.lastX) * k)));
+      setVal('wl', Math.round(this.wl0[1] - (e.clientY - this.lastY) * k));
+      readWL(); renderAll();
+    }
     else if (this.drag === 'tilt') this.tilt(e);
     else if (this.drag === 'rot') this.rotate(e);
     else if (this.drag === 'face') this.moveFace(e);
@@ -1007,13 +1068,25 @@ class SliceView {
     const t = this.xform();
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(this.off, t.ox, t.oy, g.w * t.px, g.h * t.py);
-    // 十字線
-    const [ci, cj] = this.toImg(...S.cursor);
-    ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(79,179,255,0.55)'; ctx.setLineDash([4, 4]);
-    ctx.beginPath();
-    ctx.moveTo(t.ox + (ci + 0.5) * t.px, 0); ctx.lineTo(t.ox + (ci + 0.5) * t.px, H);
-    ctx.moveTo(0, t.oy + (cj + 0.5) * t.py); ctx.lineTo(W, t.oy + (cj + 0.5) * t.py);
-    ctx.stroke(); ctx.setLineDash([]);
+    // 十字線（断面ごとの色：水平断=青, 前頭断=緑, 矢状断=赤）
+    if ($('xhair').checked) {
+      const [ci, cj] = this.toImg(...S.cursor), PC = ['#ff6b6b', '#5ad17a', '#4f8bff'];
+      const ax = this.axis === 0 ? 1 : 0, ay = this.axis === 2 ? 1 : 2;
+      ctx.lineWidth = 1 * dpr; ctx.globalAlpha = 0.75;
+      ctx.strokeStyle = PC[ax]; ctx.beginPath(); ctx.moveTo(t.ox + (ci + 0.5) * t.px, 0); ctx.lineTo(t.ox + (ci + 0.5) * t.px, H); ctx.stroke();
+      ctx.strokeStyle = PC[ay]; ctx.beginPath(); ctx.moveTo(0, t.oy + (cj + 0.5) * t.py); ctx.lineTo(W, t.oy + (cj + 0.5) * t.py); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    // 方向表示（画面の左右・上下が患者のどちら向きか）
+    {
+      const D = v.dirs, letter = (vec) => { const k = [0, 1, 2].reduce((a, b) => (Math.abs(vec[b]) > Math.abs(vec[a]) ? b : a), 0); return [['R', 'L'], ['A', 'P'], ['I', 'S']][k][vec[k] > 0 ? 1 : 0]; };
+      const neg = (a) => a.map((x) => -x);
+      const sx = this.axis === 0 ? D[1] : D[0], sy = this.axis === 2 ? D[1] : neg(D[2]);
+      ctx.font = `bold ${12 * dpr}px sans-serif`; ctx.fillStyle = 'rgba(255,214,102,0.9)'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(letter(sx), W - 12 * dpr, H / 2); ctx.fillText(letter(neg(sx)), 12 * dpr, H / 2);
+      ctx.fillText(letter(sy), W / 2, H - 12 * dpr); ctx.fillText(letter(neg(sy)), W / 2, 26 * dpr);
+      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    }
     // ROI
     if (roi && F) {
       // 傾けた枠（直方体）の辺をこの断面へ投影して描く
@@ -1570,6 +1643,7 @@ async function extract() {
   S.seg = { roi: roi.key, roiObj: roi, labels, labelAt, localToVolMm, dirsL, fine: { labels: labF, rgba, nx: fx, ny: fy, nz: fz, sp: fsp, origin, u, box, sigma, dMed } };
   $('axisAuto').disabled = false;
   showProgress('3Dデータを作成中…', 0.9); await sleep0();
+  renderer.mode = 'tooth'; $('mode3d').value = 'tooth'; $('ctThWrap').hidden = true;
   renderer.setData(rgba, labF, fx, fy, fz, fsp[0], fsp[1], fsp[2]);
   hideProgress();
   $('empty3d').style.display = 'none';
@@ -1988,7 +2062,7 @@ class VolumeRenderer {
     this.dims = [nx, ny, nz];
     // 歯（骨以外）の外接箱にカメラを合わせる
     const lo = [nx, ny, nz], hi = [-1, -1, -1];
-    for (let z = 0, i = 0; z < nz; z++) for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++, i++) {
+    if (labels) for (let z = 0, i = 0; z < nz; z++) for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++, i++) {
       const L = labels[i]; if (!L || L === 4) continue;
       if (x < lo[0]) lo[0] = x; if (x > hi[0]) hi[0] = x; if (y < lo[1]) lo[1] = y; if (y > hi[1]) hi[1] = y;
       if (z < lo[2]) lo[2] = z; if (z > hi[2]) hi[2] = z;
@@ -2026,7 +2100,7 @@ class VolumeRenderer {
     gl.uniform3fv(u.uEye, eye); gl.uniform3fv(u.uHalf, this.half); gl.uniform3fv(u.uTexel, this.texel);
     const op = (id) => +$(id).value / 100;
     gl.uniform4f(u.uOpacity, op('opE'), op('opD'), op('opP'), op('opB'));
-    gl.uniform4f(u.uIso, 0.5, 0.5, 0.35, 0.5);
+    gl.uniform4f(u.uIso, 0.5, this.mode === 'ct' ? this.isoBody : 0.5, 0.35, 0.5);
     const g = op('glass');
     gl.uniform4f(u.uGlass, g, g, 0, Math.max(g, 0.6));
     gl.uniform3fv(u.uCol, [...hexRGB($('colE').value), ...hexRGB($('colD').value), ...hexRGB($('colP').value), ...hexRGB($('colB').value)]);
@@ -2049,7 +2123,7 @@ class VolumeRenderer {
     if (cv.width !== W) { cv.width = W; cv.height = W; }
     const c = cv.getContext('2d'); c.clearRect(0, 0, W, W);
     if (!this.has || !S.vol) return;
-    const D = (S.seg && S.seg.dirsL) || S.vol.dirs, R = W * 0.32, cx = W / 2, cy = W / 2;
+    const D = (this.mode !== 'ct' && S.seg && S.seg.dirsL) || S.vol.dirs, R = W * 0.32, cx = W / 2, cy = W / 2;
     const items = [['L', [1, 0, 0], '#ff5a5a'], ['R', [-1, 0, 0], '#ff5a5a'], ['P', [0, 1, 0], '#5b8cff'], ['A', [0, -1, 0], '#5b8cff'], ['S', [0, 0, 1], '#5ad17a'], ['I', [0, 0, -1], '#5ad17a']]
       .map(([t, P, col]) => {
         const w = D.map((d) => d[0] * P[0] + d[1] * P[1] + d[2] * P[2]);
@@ -2072,6 +2146,7 @@ function hexRGB(h) { return [1, 3, 5].map((i) => parseInt(h.substr(i, 2), 16) / 
  *  UI 結線
  * ===================================================================== */
 const views = [new SliceView($('cvAx'), 2, $('lblAx')), new SliceView($('cvCo'), 1, $('lblCo')), new SliceView($('cvSa'), 0, $('lblSa'))];
+views[0].info = $('infoAx'); views[1].info = $('infoCo'); views[2].info = $('infoSa');
 let renderer;
 try { renderer = new VolumeRenderer($('cv3d')); }
 catch (e) { renderer = { clear() {}, setData() {}, request() {}, setView() {} }; $('empty3d').textContent = '3D表示の初期化に失敗しました: ' + e.message; }
@@ -2118,12 +2193,48 @@ for (const id of ['tiltX', 'tiltY', 'tiltZ']) {
   $(id).addEventListener('input', () => { syncOut(id); renderAll(); });
   $(id).addEventListener('change', markDirty);
 }
-$('brushBtn').onclick = () => {
-  S.brush.on = !S.brush.on;
-  if (S.brush.on && S.meas.on) $('measBtn').click();
-  $('brushBtn').classList.toggle('primary', S.brush.on);
-  setStatus(S.brush.on ? '除外ブラシ：断面上で、抽出から外したい部分（骨・隣在歯など）をなぞってください。もう一度押すと終了します' : '除外ブラシを終了しました');
-};
+$('brushBtn').onclick = () => setTool(S.tool === 'brush' ? 'view' : 'brush');
+/** 操作モード：閲覧 / 歯を選択 / 距離 / 除外ブラシ */
+function setTool(t) {
+  S.tool = t; S.meas.on = t === 'meas'; S.brush.on = t === 'brush';
+  if (t === 'meas') S.meas.pts = [];
+  document.querySelectorAll('[data-tool]').forEach((b) => b.classList.toggle('on', b.dataset.tool === t));
+  $('measBtn').classList.toggle('primary', t === 'meas'); $('brushBtn').classList.toggle('primary', t === 'brush');
+  $('measOut').textContent = t === 'meas' ? '断面上で2点をクリック' : '';
+  for (const v of views) v.cv.style.cursor = { view: 'crosshair', seed: 'pointer', meas: 'crosshair', brush: 'cell' }[t];
+  setStatus({ view: '閲覧：クリック／ドラッグで十字線を移動、ホイールでスライス送り、右ドラッグで明るさ・コントラスト',
+    seed: '歯を選択：断面上で、抽出したい歯（象牙質）をクリックしてください',
+    meas: '距離：断面上で2点をクリックしてください', brush: '除外ブラシ：抽出から外したい部分（骨・隣在歯など）をなぞってください' }[t]);
+  renderAll();
+}
+document.querySelectorAll('[data-tool]').forEach((b) => (b.onclick = () => setTool(b.dataset.tool)));
+/** 1画面表示の切り替え（ダブルクリック／拡大ボタン） */
+function toggleSolo(el) {
+  const V = $('views'), on = !(V.classList.contains('solo') && el.classList.contains('solo-on'));
+  V.querySelectorAll('.view').forEach((x) => x.classList.remove('solo-on'));
+  V.classList.toggle('solo', on);
+  if (on) el.classList.add('solo-on');
+  $('max3d').textContent = on && el.classList.contains('v3d') ? '⤡ 戻す' : '⤢ 拡大';
+  renderer.request(); renderAll();
+}
+document.querySelectorAll('[data-wlp]').forEach((b) => (b.onclick = () => {
+  if (!S.vol) return;
+  const k = b.dataset.wlp, th = +$('thHard').value, te = +$('thEnamel').value;
+  if (k === 'auto') return autoWL();
+  const P = { bone: [Math.max(1500, (te - S.vol.p01) * 1.1), th + 300], tooth: [Math.max(500, (te - th) * 2.6), (th + te) / 2], soft: [600, S.vol.p01 + 0.35 * (th - S.vol.p01)] }[k];
+  setVal('ww', Math.round(P[0])); setVal('wl', Math.round(P[1])); readWL(); renderAll();
+}));
+$('resetViews').onclick = () => { for (const v of views) v.resetView(); renderAll(); };
+$('xhair').addEventListener('change', renderAll);
+// キーボード：↑↓/PageUp/PageDown でマウス下の断面をスライス送り、R で表示リセット
+window.addEventListener('keydown', (e) => {
+  if (!S.vol || /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) return;
+  const v = S.hoverView || views[0];
+  const d = { ArrowUp: 1, ArrowDown: -1, PageUp: 10, PageDown: -10 }[e.key];
+  if (d) { e.preventDefault(); S.cursor[v.axis] = clamp(S.cursor[v.axis] + d, 0, v.sliceCount() - 1); renderAll(); }
+  else if (e.key === 'r' || e.key === 'R') $('resetViews').click();
+  else if (e.key === 'Escape' && S.tool !== 'view') setTool('view');
+});
 $('brushUndo').onclick = () => { if (S.brush.groups.pop()) markDirty(); renderAll(); };
 $('brushClear').onclick = () => { const had = S.brush.groups.length; S.brush.groups = []; renderAll(); if (had) markDirty(); };
 $('brushR').addEventListener('input', () => syncOut('brushR'));
@@ -2207,11 +2318,63 @@ document.querySelectorAll('[data-preset]').forEach((b) => (b.onclick = () => {
   setVal('glass', b.dataset.preset === 'solid' ? 0 : 75);
   r3();
 }));
-$('max3d').onclick = () => {
-  const on = $('views').classList.toggle('max3d');
-  $('max3d').textContent = on ? '⤡ 戻す' : '⤢ 拡大';
-  renderer.request(); renderAll();
-};
+$('max3d').onclick = () => toggleSolo($('cv3d').parentElement);
+/** 3D表示の対象：抽出した歯 / CT全体（しきい値の等値面） */
+$('mode3d').addEventListener('change', () => {
+  const m = $('mode3d').value;
+  if (!S.vol) { $('mode3d').value = 'tooth'; return; }
+  if (m === 'ct') {
+    showProgress('CT全体の3Dを作成中…', 0.5);
+    setTimeout(() => {
+      const c = buildCtTexture();
+      renderer.mode = 'ct';
+      renderer.setData(c.rgba, null, c.nx, c.ny, c.nz, c.sx, c.sy, c.sz);
+      $('ctThWrap').hidden = false; setCtIso();
+      S.opSaved = ['opE', 'opD', 'glass'].map((id) => $(id).value);
+      setVal('opE', 100); setVal('opD', 100); setVal('glass', 0);
+      $('empty3d').style.display = 'none'; $('decideBar').hidden = true; hideProgress(); renderer.request(); updateLegend();
+    }, 30);
+  } else {
+    renderer.mode = 'tooth'; $('ctThWrap').hidden = true;
+    if (S.opSaved) { ['opE', 'opD', 'glass'].forEach((id, i) => setVal(id, S.opSaved[i])); S.opSaved = null; }
+    const F = S.seg && S.seg.fine;
+    if (F) renderer.setData(F.rgba, F.labels, F.nx, F.ny, F.nz, F.sp[0], F.sp[1], F.sp[2]);
+    else { renderer.clear(); $('empty3d').style.display = ''; }
+    renderer.request(); updateLegend();
+  }
+});
+/** CT全体を最大256程度に縮小（平均）して3D用テクスチャを作る。G=CT値(正規化), R=エナメル質らしさ（色用） */
+function buildCtTexture() {
+  const v = S.vol, f = Math.max(1, Math.ceil(Math.max(v.nx, v.ny, v.nz) / 256));
+  const nx = Math.floor(v.nx / f), ny = Math.floor(v.ny / f), nz = Math.floor(v.nz / f), n = nx * ny * nz;
+  const lo = v.p01, hi = Math.max(v.p999, lo + 1), te = +$('thEnamel').value, rgba = new Uint8Array(n * 4);
+  const acc = new Float32Array(nx * ny), inv = 1 / (f * f * f);
+  for (let k = 0; k < nz; k++) {
+    acc.fill(0);
+    for (let dz = 0; dz < f; dz++) {
+      const sl = v.slices[k * f + dz];
+      for (let j = 0; j < ny; j++) for (let dy = 0; dy < f; dy++) {
+        const row = (j * f + dy) * v.nx;
+        for (let i = 0; i < nx; i++) { let a = 0; for (let dx = 0; dx < f; dx++) a += sl[row + i * f + dx]; acc[j * nx + i] += a; }
+      }
+    }
+    for (let q = 0; q < nx * ny; q++) {
+      const val = acc[q] * inv, o = (k * nx * ny + q) * 4;
+      rgba[o] = Math.round(clamp((val - (te - 150)) / 300, 0, 1) * 255);
+      rgba[o + 1] = Math.round(clamp((val - lo) / (hi - lo), 0, 1) * 255);
+    }
+  }
+  S.ctRange = [lo, hi];
+  const ct = $('ctTh'); ct.min = Math.round(lo); ct.max = Math.round(hi);
+  if (!S.ctThSet) { ct.value = $('thHard').value; S.ctThSet = true; }
+  return { rgba, nx, ny, nz, sx: v.sx * f, sy: v.sy * f, sz: v.sz * f };
+}
+function setCtIso() {
+  const [lo, hi] = S.ctRange || [0, 1];
+  renderer.isoBody = clamp((+$('ctTh').value - lo) / (hi - lo), 0.01, 0.99);
+  $('ctThO').textContent = $('ctTh').value; renderer.request();
+}
+$('ctTh').addEventListener('input', setCtIso);
 document.querySelectorAll('[data-scheme]').forEach((b) => (b.onclick = () => {
   const P = { green: ['#e4e2b4', '#d6d09a', '#3ee08a'], red: ['#bfe8ff', '#f2d49b', '#ff2d3a'] }[b.dataset.scheme];
   ['colE', 'colD', 'colP'].forEach((id, i) => ($(id).value = P[i]));
@@ -2219,13 +2382,7 @@ document.querySelectorAll('[data-scheme]').forEach((b) => (b.onclick = () => {
   if (S.chart) drawCanalChart(...S.chart);
   r3(); renderAll();
 }));
-$('measBtn').onclick = () => {
-  S.meas.on = !S.meas.on; S.meas.pts = [];
-  if (S.meas.on && S.brush.on) $('brushBtn').click();
-  $('measBtn').classList.toggle('primary', S.meas.on);
-  $('measOut').textContent = S.meas.on ? '断面上で2点をクリック' : '';
-  renderAll();
-};
+$('measBtn').onclick = () => setTool(S.tool === 'meas' ? 'view' : 'meas');
 function addMeasPoint(p) {
   if (S.meas.pts.length >= 2) S.meas.pts = [];
   S.meas.pts.push(p);
@@ -2361,6 +2518,7 @@ $('shotBtn').onclick = () => {
   $('cv3d').toBlob((b) => { if (b) saveFile(name, b); }, 'image/png');
 };
 function updateLegend() {
+  $('legend').hidden = renderer.mode === 'ct';
   $('lgE').style.background = $('colE').value; $('lgD').style.background = $('colD').value;
   $('lgB').style.background = $('colB').value; $('lgBrow').style.display = +$('opB').value ? '' : 'none';
   const grad = $('pulpGrad').checked;
