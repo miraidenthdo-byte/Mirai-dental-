@@ -66,6 +66,11 @@ select, input[type=number] { background: var(--panel2); color: var(--text); bord
 .legend div { display: flex; align-items: center; gap: 6px; margin: 2px 0; }
 .legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
 .legend .grad { width: 12px; height: 12px; border-radius: 3px; background: linear-gradient(#ffe026, #ff2e26, #d933f2, #3373ff); }
+.decide { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; gap: 10px; align-items: center;
+  background: rgba(15,18,23,.92); border: 1px solid var(--accent); border-radius: 10px; padding: 8px 10px 8px 14px; z-index: 5;
+  box-shadow: 0 6px 24px rgba(0,0,0,.5); max-width: calc(100% - 24px); flex-wrap: wrap; justify-content: center; }
+.decide span { color: var(--text); font-size: 13px; }
+.decide button { font-size: 14px; padding: 8px 16px; }
 .empty3d button { pointer-events: auto; font-size: 15px; padding: 12px 22px; margin-top: 14px; }
 .empty3d { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
   color: var(--muted); line-height: 1.8; pointer-events: none; padding: 20px; }
@@ -130,9 +135,9 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 3
     <div class="row"><label>ROI 下方</label><input id="roiDn" type="range" min="2" max="40" step="0.5" value="24"><output id="roiDnO"></output></div>
     <div class="row"><label>傾き（コロナル）</label><input id="tiltY" type="range" min="-60" max="60" step="0.5" value="0"><output id="tiltYO"></output></div>
     <div class="row"><label>傾き（サジタル）</label><input id="tiltX" type="range" min="-60" max="60" step="0.5" value="0"><output id="tiltXO"></output></div>
-    <div class="row"><label>回転（アキシャル）</label><input id="tiltZ" type="range" min="-90" max="90" step="1" value="0"><output id="tiltZO"></output></div>
+    <div class="row"><label>回転（水平断）</label><input id="tiltZ" type="range" min="-90" max="90" step="1" value="0"><output id="tiltZO"></output></div>
     <div class="flex"><button id="axisAuto" disabled title="抽出した歯の形から歯軸を求め、枠を合わせて再抽出">🎯 歯軸を自動で合わせる</button><button id="tiltReset">傾きリセット</button></div>
-    <div class="hint">■ 枠の各面をドラッグ：その面だけを伸縮（左右・前後・上下を片側ずつ）<br>● 歯軸線の端をドラッグ：枠を歯軸に合わせて傾ける（コロナル・サジタル）</div>
+    <div class="hint">■ 枠の各面をドラッグ：その面だけを伸縮（左右・前後・上下を片側ずつ）<br>● 歯軸線の端をドラッグ：枠を歯軸に合わせて傾ける（コロナル・サジタル）<br>● 水平断の枠の横の●をドラッグ：水平面内で枠を回転<br>範囲が決まったら「✅ 範囲を決定して解析」（Enterキーでも可）</div>
     <div class="flex"><button id="brushBtn" title="断面上でなぞった部分を抽出対象から外す（くっついた骨・隣在歯など）">🖌 除外ブラシ</button>
       <button id="brushUndo" title="最後に塗った分を取り消す">1つ戻す</button><button id="brushClear">ブラシを全消去</button></div>
     <div class="row" id="brushRow"><label>ブラシ半径</label><input id="brushR" type="range" min="0.3" max="5" step="0.1" value="1.2"><output id="brushRO"></output></div>
@@ -151,12 +156,12 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 3
     <label class="check"><input id="boneSep" type="checkbox" checked>骨と歯の濃度差で分離（骨が歯根に密着している場合）</label>
     <label class="check"><input id="hiRes" type="checkbox" checked>高精度モード（サブボクセル補間・推奨）</label>
     <label class="check"><input id="preview" type="checkbox" checked>断面にオーバーレイ表示</label>
-    <label class="check"><input id="autoExtract" type="checkbox" checked>歯をクリックしたら自動で3D表示</label>
+    <label class="check"><input id="autoExtract" type="checkbox">歯をクリックしたらすぐ解析する（範囲の調整をしない場合）</label>
     <div class="flex"><button id="autoTh">ROIから自動設定</button></div>
     <div class="hint">・歯が骨とつながって抽出される → 「骨との分離」を上げる / ROIを狭める<br>
       ・根管が途切れる → 「根管感度」を上げる<br>
       ・歯に穴があく → 「歯質」しきい値を下げる</div>
-    <button id="extractBtn" class="primary" style="width:100%;margin-top:6px;padding:9px" disabled>🦷 選択した歯を抽出して3D表示</button>
+    <button id="extractBtn" class="primary" style="width:100%;margin-top:6px;padding:9px" disabled>✅ 範囲を決定して解析</button>
   </section>
 
   <section>
@@ -208,9 +213,10 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 3
       <div><i id="lgE"></i>エナメル質</div><div><i id="lgD"></i>象牙質</div>
       <div><i id="lgP"></i><span id="lgPtxt">歯髄・根管</span></div><div id="lgBrow"><i id="lgB"></i>周囲の骨</div>
     </div>
-    <div class="empty3d" id="empty3d"><div id="emptyMsg">① DICOMを開く → ② 断面で歯をクリック → ③ 自動で3D表示されます<br>
+    <div class="empty3d" id="empty3d"><div id="emptyMsg">① DICOMを開く → ② 断面で歯をクリック → ③ 範囲を調整 → ④「範囲を決定して解析」<br>
       ドラッグで回転 / ホイールで拡大縮小 / ダブルクリックでリセット</div>
-      <button id="go3d" class="primary" hidden>🦷 選択した歯を3D表示</button></div>
+      <button id="go3d" class="primary" hidden>✅ 範囲を決定して解析</button></div>
+    <div class="decide" id="decideBar" hidden><span>範囲を調整中です。決まったら押してください</span><button id="decideBtn" class="primary">✅ 範囲を決定して解析</button></div>
   </div>
 </div>
 </div>
@@ -683,6 +689,7 @@ function setVolume(vol, note) {
   S.chart = null; drawCanalChart(null);
   renderer.clear();
   $('empty3d').style.display = '';
+  S.dirty = false; $('decideBar').hidden = true;
   $('extractBtn').disabled = true; $('go3d').hidden = true; $('stlBtn').disabled = true; $('axisAuto').disabled = true;
   ['tiltX', 'tiltY', 'tiltZ'].forEach((id) => setVal(id, 0)); S.meas.pts = []; $('measOut').textContent = '';
   for (const v of views) v.resetView();
@@ -814,9 +821,9 @@ class SliceView {
     canvas.addEventListener('pointerdown', (e) => this.down(e));
     canvas.addEventListener('pointermove', (e) => this.move(e));
     canvas.addEventListener('pointerup', (e) => {
-      if (this.drag === 'tilt' || this.drag === 'face' || this.drag === 'brush') {
+      if (this.drag === 'tilt' || this.drag === 'rot' || this.drag === 'face' || this.drag === 'brush') {
         this.drag = null; canvas.releasePointerCapture(e.pointerId);
-        if (S.seed && $('autoExtract').checked) runExtract();
+        markDirty();
         return;
       }
       const picked = this.drag === 'pick';
@@ -824,7 +831,7 @@ class SliceView {
       if (!picked || !S.seed) return;
       // しきい値を手動で触っていなければ、選んだ歯の周囲から自動で決める
       if (!S.thManual) autoThreshold(true);
-      if ($('autoExtract').checked) runExtract();
+      if ($('autoExtract').checked) runExtract(); else markDirty();
     });
     canvas.addEventListener('wheel', (e) => this.wheel(e), { passive: false });
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -874,7 +881,7 @@ class SliceView {
     if (e.button === 0 && this.handles && S.seed) {
       const [, , sx, sy] = this.evtImg(e), dpr = this.cv.width / this.cv.getBoundingClientRect().width;
       const h = this.handles.find((q) => Math.hypot(q.x - sx, q.y - sy) < 12 * dpr);
-      if (h) { this.drag = 'tilt'; this.tiltEnd = h.end; return; }
+      if (h) { this.drag = h.end === 'rot' ? 'rot' : 'tilt'; this.tiltEnd = h.end; return; }
       const f = (this.faces || []).find((q) => Math.hypot(q.x - sx, q.y - sy) < 11 * dpr);
       if (f) { this.drag = 'face'; this.face = f; return; }
     }
@@ -885,6 +892,7 @@ class SliceView {
     if (!this.drag) return;
     if (this.drag === 'pick') this.pick(e);
     else if (this.drag === 'tilt') this.tilt(e);
+    else if (this.drag === 'rot') this.rotate(e);
     else if (this.drag === 'face') this.moveFace(e);
     else if (this.drag === 'brush') this.paint(e);
     else {
@@ -916,6 +924,20 @@ class SliceView {
     const last = grp[grp.length - 1];
     if (last && Math.hypot((last.c[0] - c[0]) * v.sx, (last.c[1] - c[1]) * v.sy, (last.c[2] - c[2]) * v.sz) < r * 0.4) return;
     grp.push({ c, r }); renderAll();
+  }
+  /** 水平断での回転：選択点からマウスへの向きに枠の左右方向（ローカルX）を合わせる */
+  rotate(e) {
+    const [i, j] = this.evtImg(e), q = this.toVox(i - 0.5, j - 0.5), v = S.vol;
+    const d = [(q[0] - S.seed[0]) * v.sx, (q[1] - S.seed[1]) * v.sy];
+    if (Math.hypot(d[0], d[1]) < 1) return;
+    const z0 = $('tiltZ').value; $('tiltZ').value = 0;
+    const R0 = tiltR(); $('tiltZ').value = z0;
+    // 回転前のローカルX・Y軸の水平面への投影に対するマウス方向の角度
+    const a = d[0] * R0[0] + d[1] * R0[3], b = d[0] * R0[1] + d[1] * R0[4];
+    let deg = Math.atan2(b, a) * 180 / Math.PI;
+    if (deg > 90) deg -= 180; if (deg < -90) deg += 180; // 枠は左右対称なので ±90° に収める
+    setVal('tiltZ', Math.round(deg));
+    renderAll();
   }
   tilt(e) {
     const [i, j] = this.evtImg(e), q = this.toVox(i - 0.5, j - 0.5), v = S.vol;
@@ -1010,6 +1032,16 @@ class SliceView {
       ctx.fillStyle = '#ffd23f';
       ctx.beginPath(); ctx.arc(sp[0], sp[1], 3.5 * dpr, 0, Math.PI * 2); ctx.fill();
       this.handles = [];
+      if (this.axis === 2) {
+        // 水平断：枠の外側の●をドラッグして水平面内で回転
+        const rp = scr(F.toVox(F.shx + F.hx + 3, F.shy, 0));
+        ctx.strokeStyle = 'rgba(255,210,63,0.7)'; ctx.lineWidth = 1.5 * dpr; ctx.setLineDash([4, 3]);
+        ctx.beginPath(); ctx.moveTo(...sp); ctx.lineTo(...rp); ctx.stroke(); ctx.setLineDash([]);
+        ctx.beginPath(); ctx.arc(rp[0], rp[1], 6 * dpr, 0, Math.PI * 2);
+        ctx.fillStyle = '#1e232c'; ctx.fill(); ctx.lineWidth = 2 * dpr; ctx.strokeStyle = '#ffd23f'; ctx.stroke();
+        ctx.beginPath(); ctx.arc(rp[0], rp[1], 2.5 * dpr, 0, Math.PI * 2); ctx.fillStyle = '#ffd23f'; ctx.fill();
+        this.handles.push({ x: rp[0], y: rp[1], end: 'rot' });
+      }
       if (this.axis !== 2) {
         for (const [pt, end] of [[top, 1], [bot, -1]]) {
           ctx.beginPath(); ctx.arc(pt[0], pt[1], 6 * dpr, 0, Math.PI * 2);
@@ -2074,7 +2106,8 @@ $('jaw').addEventListener('change', applyJaw);
 
 for (const id of ['ww', 'wl']) $(id).addEventListener('input', () => { syncOut(id); readWL(); renderAll(); });
 for (const id of ['roiX', 'roiY', 'roiUp', 'roiDn', 'thHard', 'thEnamel', 'thCanal', 'erode'])
-  $(id).addEventListener('input', () => { syncOut(id); renderAll(); });
+  $(id).addEventListener('input', () => { syncOut(id); renderAll(); markDirty(); });
+for (const id of ['smooth', 'splitNb', 'boneSep', 'hiRes']) $(id).addEventListener('change', markDirty);
 $('preview').addEventListener('change', renderAll);
 $('wlAuto').onclick = autoWL;
 $('wlTooth').onclick = () => {
@@ -2083,7 +2116,7 @@ $('wlTooth').onclick = () => {
 };
 for (const id of ['tiltX', 'tiltY', 'tiltZ']) {
   $(id).addEventListener('input', () => { syncOut(id); renderAll(); });
-  $(id).addEventListener('change', () => { if (S.seed && $('autoExtract').checked) runExtract(); });
+  $(id).addEventListener('change', markDirty);
 }
 $('brushBtn').onclick = () => {
   S.brush.on = !S.brush.on;
@@ -2091,10 +2124,10 @@ $('brushBtn').onclick = () => {
   $('brushBtn').classList.toggle('primary', S.brush.on);
   setStatus(S.brush.on ? '除外ブラシ：断面上で、抽出から外したい部分（骨・隣在歯など）をなぞってください。もう一度押すと終了します' : '除外ブラシを終了しました');
 };
-$('brushUndo').onclick = () => { if (S.brush.groups.pop() && S.seed && $('autoExtract').checked) runExtract(); renderAll(); };
-$('brushClear').onclick = () => { const had = S.brush.groups.length; S.brush.groups = []; renderAll(); if (had && S.seed && $('autoExtract').checked) runExtract(); };
+$('brushUndo').onclick = () => { if (S.brush.groups.pop()) markDirty(); renderAll(); };
+$('brushClear').onclick = () => { const had = S.brush.groups.length; S.brush.groups = []; renderAll(); if (had) markDirty(); };
 $('brushR').addEventListener('input', () => syncOut('brushR'));
-$('tiltReset').onclick = () => { ['tiltX', 'tiltY', 'tiltZ'].forEach((id) => setVal(id, 0)); renderAll(); if (S.seed && $('autoExtract').checked) runExtract(); };
+$('tiltReset').onclick = () => { ['tiltX', 'tiltY', 'tiltZ'].forEach((id) => setVal(id, 0)); renderAll(); markDirty(); };
 /** 抽出した歯の主軸（主成分分析）を歯軸として、枠の傾き・中心・長さを合わせて再抽出 */
 $('axisAuto').onclick = () => {
   const F = S.seg && S.seg.fine; if (!F) return;
@@ -2134,14 +2167,26 @@ $('axisAuto').onclick = () => {
 };
 $('autoTh').onclick = () => { S.thManual = false; autoThreshold(); };
 for (const id of ['thHard', 'thEnamel']) $(id).addEventListener('input', () => { S.thManual = true; });
+/** 範囲や条件を変えたら「決定」待ちにする（解析は決定ボタンを押したときだけ） */
+function markDirty() {
+  if (!S.seed) return;
+  S.dirty = true;
+  // 3D表示がまだ無いときは中央の大きなボタンで足りるので、下のバーは解析済みのときだけ
+  $('decideBar').hidden = $('empty3d').style.display !== 'none';
+}
 function runExtract() {
   if (S.busy || !S.seed) return;
-  S.busy = true;
+  S.busy = true; S.dirty = false; $('decideBar').hidden = true;
   extract().catch((e) => { hideProgress(); setStatus('抽出に失敗しました: ' + (e && e.message || e), true); console.error(e); })
     .finally(() => { S.busy = false; });
 }
 $('extractBtn').onclick = runExtract;
 $('go3d').onclick = runExtract;
+$('decideBtn').onclick = runExtract;
+// Enter キーでも決定
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && S.dirty && !/INPUT|SELECT|TEXTAREA|BUTTON/.test(document.activeElement.tagName)) runExtract();
+});
 // 想定外のエラーも必ず画面に表示する
 window.addEventListener('error', (e) => { hideProgress(); S.busy = false; setStatus('エラーが発生しました: ' + (e.message || e.error), true); });
 window.addEventListener('unhandledrejection', (e) => { hideProgress(); S.busy = false; setStatus('エラーが発生しました: ' + ((e.reason && e.reason.message) || e.reason), true); });
