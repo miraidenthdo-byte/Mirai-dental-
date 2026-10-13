@@ -65,7 +65,8 @@ select, input[type=number] { background: var(--panel2); color: var(--text); bord
 .legend div { display: flex; align-items: center; gap: 6px; margin: 2px 0; }
 .legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
 .legend .grad { width: 12px; height: 12px; border-radius: 3px; background: linear-gradient(#ffe026, #ff2e26, #d933f2, #3373ff); }
-.empty3d { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center;
+.empty3d button { pointer-events: auto; font-size: 15px; padding: 12px 22px; margin-top: 14px; }
+.empty3d { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
   color: var(--muted); line-height: 1.8; pointer-events: none; padding: 20px; }
 .dropzone { position: fixed; inset: 0; background: rgba(79,179,255,.12); border: 3px dashed var(--accent);
   display: none; align-items: center; justify-content: center; font-size: 22px; z-index: 50; pointer-events: none; }
@@ -140,6 +141,7 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 3
     <label class="check"><input id="splitNb" type="checkbox" checked>隣在歯との接触部を自動で分離</label>
     <label class="check"><input id="hiRes" type="checkbox" checked>高精度モード（サブボクセル補間・推奨）</label>
     <label class="check"><input id="preview" type="checkbox" checked>断面にオーバーレイ表示</label>
+    <label class="check"><input id="autoExtract" type="checkbox" checked>歯をクリックしたら自動で3D表示</label>
     <div class="flex"><button id="autoTh">ROIから自動設定</button></div>
     <div class="hint">・歯が骨とつながって抽出される → 「骨との分離」を上げる / ROIを狭める<br>
       ・根管が途切れる → 「根管感度」を上げる<br>
@@ -196,8 +198,9 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 3
       <div><i id="lgE"></i>エナメル質</div><div><i id="lgD"></i>象牙質</div>
       <div><i id="lgP"></i><span id="lgPtxt">歯髄・根管</span></div><div id="lgBrow"><i id="lgB"></i>周囲の骨</div>
     </div>
-    <div class="empty3d" id="empty3d">① DICOMを開く → ② 断面で歯をクリック → ③「抽出して3D表示」<br>
+    <div class="empty3d" id="empty3d"><div id="emptyMsg">① DICOMを開く → ② 断面で歯をクリック → ③ 自動で3D表示されます<br>
       ドラッグで回転 / ホイールで拡大縮小 / ダブルクリックでリセット</div>
+      <button id="go3d" class="primary" hidden>🦷 選択した歯を3D表示</button></div>
   </div>
 </div>
 </div>
@@ -633,7 +636,7 @@ function showProgress(t, p) { $('progress').classList.add('on'); $('progressText
 function hideProgress() { $('progress').classList.remove('on'); }
 
 function setVolume(vol, note) {
-  S.vol = vol; S.seg = null; S.seed = null;
+  S.vol = vol; S.seg = null; S.seed = null; S.thManual = false;
   S.cursor = [vol.nx >> 1, vol.ny >> 1, vol.nz >> 1];
   // 統計（サンプリング）
   const samp = [];
@@ -665,9 +668,9 @@ function setVolume(vol, note) {
   S.chart = null; drawCanalChart(null);
   renderer.clear();
   $('empty3d').style.display = '';
-  $('extractBtn').disabled = true; $('stlBtn').disabled = true; S.meas.pts = []; $('measOut').textContent = '';
+  $('extractBtn').disabled = true; $('go3d').hidden = true; $('stlBtn').disabled = true; S.meas.pts = []; $('measOut').textContent = '';
   for (const v of views) v.resetView();
-  if (vol.demoSeed) setSeed(vol.demoSeed);
+  if (vol.demoSeed) { setSeed(vol.demoSeed); autoThreshold(true); }
   else { updateSeedInfo(); renderAll(); }
   setStatus('読み込み完了: ' + note + '　→ 断面画像上で抽出したい歯をクリックしてください');
 }
@@ -708,7 +711,7 @@ function getROI() {
 }
 function setSeed(p) {
   S.seed = p.slice(); S.cursor = p.slice();
-  $('extractBtn').disabled = false;
+  $('extractBtn').disabled = false; $('go3d').hidden = false;
   updateSeedInfo(); renderAll();
 }
 function updateSeedInfo() {
@@ -729,7 +732,14 @@ class SliceView {
     this.zoom = 1; this.panX = 0; this.panY = 0;
     canvas.addEventListener('pointerdown', (e) => this.down(e));
     canvas.addEventListener('pointermove', (e) => this.move(e));
-    canvas.addEventListener('pointerup', (e) => { this.drag = null; canvas.releasePointerCapture(e.pointerId); });
+    canvas.addEventListener('pointerup', (e) => {
+      const picked = this.drag === 'pick';
+      this.drag = null; canvas.releasePointerCapture(e.pointerId);
+      if (!picked || !S.seed) return;
+      // しきい値を手動で触っていなければ、選んだ歯の周囲から自動で決める
+      if (!S.thManual) autoThreshold(true);
+      if ($('autoExtract').checked) runExtract();
+    });
     canvas.addEventListener('wheel', (e) => this.wheel(e), { passive: false });
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
     new ResizeObserver(() => this.render()).observe(canvas);
@@ -927,7 +937,7 @@ function roiValues(roi, smooth) {
   return f;
 }
 
-function autoThreshold() {
+function autoThreshold(quiet) {
   const roi = getROI();
   if (!roi) { setStatus('先に断面上で歯をクリックしてください', true); return; }
   const f = roiValues(roi, true);
@@ -940,7 +950,7 @@ function autoThreshold() {
   const [a, b] = hard.length > 100 ? multiOtsu(hard, 2) : [t2, t3];
   setVal('thHard', Math.round(a)); setVal('thEnamel', Math.round(Math.max(b, a + 50)));
   renderAll();
-  setStatus(`しきい値を自動設定しました（歯質 ${Math.round(a)} / エナメル質 ${Math.round(b)}）。緑のプレビューを確認してください`);
+  if (!quiet) setStatus(`しきい値を自動設定しました（歯質 ${Math.round(a)} / エナメル質 ${Math.round(b)}）。緑のプレビューを確認してください`);
 }
 
 function erode6(src, nx, ny, nz) {
@@ -1787,8 +1797,19 @@ $('wlTooth').onclick = () => {
   const th = +$('thHard').value, te = +$('thEnamel').value;
   setVal('ww', Math.round(Math.max(500, (te - th) * 2.6))); setVal('wl', Math.round((th + te) / 2)); readWL(); renderAll();
 };
-$('autoTh').onclick = autoThreshold;
-$('extractBtn').onclick = () => extract().catch((e) => { hideProgress(); setStatus('抽出に失敗しました: ' + e.message, true); console.error(e); });
+$('autoTh').onclick = () => { S.thManual = false; autoThreshold(); };
+for (const id of ['thHard', 'thEnamel']) $(id).addEventListener('input', () => { S.thManual = true; });
+function runExtract() {
+  if (S.busy || !S.seed) return;
+  S.busy = true;
+  extract().catch((e) => { hideProgress(); setStatus('抽出に失敗しました: ' + (e && e.message || e), true); console.error(e); })
+    .finally(() => { S.busy = false; });
+}
+$('extractBtn').onclick = runExtract;
+$('go3d').onclick = runExtract;
+// 想定外のエラーも必ず画面に表示する
+window.addEventListener('error', (e) => { hideProgress(); S.busy = false; setStatus('エラーが発生しました: ' + (e.message || e.error), true); });
+window.addEventListener('unhandledrejection', (e) => { hideProgress(); S.busy = false; setStatus('エラーが発生しました: ' + ((e.reason && e.reason.message) || e.reason), true); });
 
 const r3 = () => { renderer.request(); updateLegend(); };
 for (const id of ['opE', 'opD', 'opP', 'opB', 'glass', 'clipPos']) $(id).addEventListener('input', () => { syncOut(id); r3(); });
