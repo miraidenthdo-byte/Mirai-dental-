@@ -127,6 +127,11 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 3
     <div class="row"><label>ROI 幅 Y</label><input id="roiY" type="range" min="4" max="30" step="0.5" value="12"><output id="roiYO"></output></div>
     <div class="row"><label>ROI 上方</label><input id="roiUp" type="range" min="2" max="40" step="0.5" value="12"><output id="roiUpO"></output></div>
     <div class="row"><label>ROI 下方</label><input id="roiDn" type="range" min="2" max="40" step="0.5" value="24"><output id="roiDnO"></output></div>
+    <div class="row"><label>傾き（コロナル）</label><input id="tiltY" type="range" min="-60" max="60" step="0.5" value="0"><output id="tiltYO"></output></div>
+    <div class="row"><label>傾き（サジタル）</label><input id="tiltX" type="range" min="-60" max="60" step="0.5" value="0"><output id="tiltXO"></output></div>
+    <div class="row"><label>回転（アキシャル）</label><input id="tiltZ" type="range" min="-90" max="90" step="1" value="0"><output id="tiltZO"></output></div>
+    <div class="flex"><button id="axisAuto" disabled title="抽出した歯の形から歯軸を求め、枠を合わせて再抽出">🎯 歯軸を自動で合わせる</button><button id="tiltReset">傾きリセット</button></div>
+    <div class="hint">コロナル・サジタル断面の黄色い歯軸線の端（●）をドラッグすると、歯軸に合わせて枠を傾けられます。</div>
     <div id="seedInfo" class="hint">選択点: なし</div>
     <div class="flex"><button id="measBtn" title="断面上で2点をクリックして距離を測定">📏 距離計測</button><span id="measOut" class="hint" style="margin:0"></span></div>
   </section>
@@ -519,7 +524,12 @@ function makeDemoVolume(opt = window.DEMO_OPTS || {}) {
     return { ax: T.cx + R.dx + R.tx * u, ay: T.cy + R.dy + R.ty * u, rx: R.r * k + m, ry: R.ry * k + m, f, k0 };
   };
   // 0: 外, 1: エナメル, 2: 象牙質, 3: 歯髄
+  const tilt = (opt.tilt || 0) * Math.PI / 180, tc = Math.cos(tilt), ts = Math.sin(tilt);
   const label = (T, x, y, z, m) => {
+    if (tilt) { // 検証用：歯を近遠心方向に傾ける
+      const px = x - T.cx, pz = z - CEJ;
+      x = T.cx + tc * px - ts * pz; z = CEJ + ts * px + tc * pz;
+    }
     const dx = x - T.cx, dy = y - T.cy, h = z - CEJ;
     let outer = false, inCrown = false;
     if (h >= 0 && h <= T.crownH + m) {
@@ -668,7 +678,8 @@ function setVolume(vol, note) {
   S.chart = null; drawCanalChart(null);
   renderer.clear();
   $('empty3d').style.display = '';
-  $('extractBtn').disabled = true; $('go3d').hidden = true; $('stlBtn').disabled = true; S.meas.pts = []; $('measOut').textContent = '';
+  $('extractBtn').disabled = true; $('go3d').hidden = true; $('stlBtn').disabled = true; $('axisAuto').disabled = true;
+  ['tiltX', 'tiltY', 'tiltZ'].forEach((id) => setVal(id, 0)); S.meas.pts = []; $('measOut').textContent = '';
   for (const v of views) v.resetView();
   if (vol.demoSeed) { setSeed(vol.demoSeed); autoThreshold(true); }
   else { updateSeedInfo(); renderAll(); }
@@ -682,7 +693,7 @@ function syncOut(id) {
   const v = +$(id).value;
   const fmt = {
     roiX: v + 'mm', roiY: v + 'mm', roiUp: v + 'mm', roiDn: v + 'mm', thCanal: v + '%',
-    erode: ['なし', '弱', '中', '強', '最強'][v], opE: v + '%', opD: v + '%', opP: v + '%', opB: v + '%',
+    erode: ['なし', '弱', '中', '強', '最強'][v], tiltX: v + '°', tiltY: v + '°', tiltZ: v + '°', opE: v + '%', opD: v + '%', opP: v + '%', opB: v + '%',
     glass: v + '%', clipPos: v + '%',
   }[id];
   o.textContent = fmt !== undefined ? fmt : v;
@@ -706,8 +717,69 @@ function getROI() {
     z0: clamp(Math.round(z - dn), 0, v.nz - 1), z1: clamp(Math.round(z + up), 0, v.nz - 1),
   };
   r.nx = r.x1 - r.x0 + 1; r.ny = r.y1 - r.y0 + 1; r.nz = r.z1 - r.z0 + 1;
-  r.key = `${r.x0},${r.y0},${r.z0},${r.x1},${r.y1},${r.z1}`;
+  r.key = `${r.x0},${r.y0},${r.z0},${r.x1},${r.y1},${r.z1},${$('tiltX').value},${$('tiltY').value},${$('tiltZ').value}`;
   return r;
+}
+/** 歯軸の傾き：ローカル座標（z=歯軸）→ ボリューム座標(mm) の回転行列（行優先 3x3） */
+function tiltR() {
+  const d = Math.PI / 180, ax = +$('tiltX').value * d, ay = +$('tiltY').value * d, az = +$('tiltZ').value * d;
+  const cx = Math.cos(ax), sx = Math.sin(ax), cy = Math.cos(ay), sy = Math.sin(ay), cz = Math.cos(az), sz = Math.sin(az);
+  const Rx = [1, 0, 0, 0, cx, -sx, 0, sx, cx], Ry = [cy, 0, sy, 0, 1, 0, -sy, 0, cy], Rz = [cz, -sz, 0, sz, cz, 0, 0, 0, 1];
+  const mul = (A, B) => { const o = []; for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) o.push(A[r * 3] * B[c] + A[r * 3 + 1] * B[3 + c] + A[r * 3 + 2] * B[6 + c]); return o; };
+  return mul(mul(Ry, Rx), Rz);
+}
+function isTilted() { return +$('tiltX').value || +$('tiltY').value || +$('tiltZ').value; }
+/** 傾けた抽出枠：ボクセル座標 → ローカル(mm, 選択点が原点) の変換と、枠内判定 */
+function roiFrame() {
+  const v = S.vol; if (!v || !S.seed) return null;
+  const Rm = tiltR(), sm = [S.seed[0] * v.sx, S.seed[1] * v.sy, S.seed[2] * v.sz];
+  const hx = +$('roiX').value / 2, hy = +$('roiY').value / 2, up = +$('roiUp').value, dn = +$('roiDn').value;
+  const toLocal = (x, y, z) => {
+    const a = x * v.sx - sm[0], b = y * v.sy - sm[1], c = z * v.sz - sm[2];
+    return [Rm[0] * a + Rm[3] * b + Rm[6] * c, Rm[1] * a + Rm[4] * b + Rm[7] * c, Rm[2] * a + Rm[5] * b + Rm[8] * c];
+  };
+  const toVox = (lx, ly, lz) => [0, 1, 2].map((k) => (sm[k] + Rm[k * 3] * lx + Rm[k * 3 + 1] * ly + Rm[k * 3 + 2] * lz) / [v.sx, v.sy, v.sz][k]);
+  const inside = (x, y, z) => { const l = toLocal(x, y, z); return Math.abs(l[0]) <= hx && Math.abs(l[1]) <= hy && l[2] >= -dn && l[2] <= up; };
+  const corners = [];
+  for (const a of [-hx, hx]) for (const b of [-hy, hy]) for (const c of [-dn, up]) corners.push(toVox(a, b, c));
+  const lo = [0, 1, 2].map((k) => Math.max(0, Math.floor(Math.min(...corners.map((q) => q[k])))));
+  const hi = [0, 1, 2].map((k) => Math.min([v.nx, v.ny, v.nz][k] - 1, Math.ceil(Math.max(...corners.map((q) => q[k])))));
+  return { Rm, sm, hx, hy, up, dn, toLocal, toVox, inside, corners, lo, hi };
+}
+/** 傾けた枠に沿ってCTを三線形補間で再サンプリングしたローカルボリューム（等方ボクセル） */
+function buildLocalVolume(marginMm) {
+  const v = S.vol, F = roiFrame(), s = Math.min(v.sx, v.sy, v.sz);
+  const cx = Math.round((F.hx + marginMm) / s), cy = Math.round((F.hy + marginMm) / s);
+  const k0 = -Math.round(F.dn / s), k1 = Math.round(F.up / s);
+  const nx = 2 * cx + 1, ny = 2 * cy + 1, nz = k1 - k0 + 1, Rm = F.Rm, bg = v.p01 ?? -1000;
+  const slices = [];
+  for (let k = 0; k < nz; k++) {
+    const a = new Int16Array(nx * ny), lz = (k + k0) * s;
+    for (let j = 0; j < ny; j++) {
+      const ly = (j - cy) * s;
+      for (let i = 0; i < nx; i++) {
+        const lx = (i - cx) * s;
+        const X = (F.sm[0] + Rm[0] * lx + Rm[1] * ly + Rm[2] * lz) / v.sx;
+        const Y = (F.sm[1] + Rm[3] * lx + Rm[4] * ly + Rm[5] * lz) / v.sy;
+        const Z = (F.sm[2] + Rm[6] * lx + Rm[7] * ly + Rm[8] * lz) / v.sz;
+        a[j * nx + i] = sampleVol(v, X, Y, Z, bg);
+      }
+    }
+    slices.push(a);
+  }
+  return { nx, ny, nz, sx: s, sy: s, sz: s, slices, seedIdx: [cx, cy, -k0], mx: Math.round(marginMm / s), Rm, sm: F.sm, s };
+}
+function sampleVol(v, X, Y, Z, bg) {
+  const x0 = Math.floor(X), y0 = Math.floor(Y), z0 = Math.floor(Z);
+  if (x0 < 0 || y0 < 0 || z0 < 0 || x0 >= v.nx - 1 || y0 >= v.ny - 1 || z0 >= v.nz - 1) {
+    const xi = Math.round(X), yi = Math.round(Y), zi = Math.round(Z);
+    return xi >= 0 && yi >= 0 && zi >= 0 && xi < v.nx && yi < v.ny && zi < v.nz ? v.slices[zi][yi * v.nx + xi] : bg;
+  }
+  const fx = X - x0, fy = Y - y0, fz = Z - z0, nx = v.nx, a = v.slices[z0], b = v.slices[z0 + 1];
+  const i = y0 * nx + x0;
+  const c0 = (a[i] * (1 - fx) + a[i + 1] * fx) * (1 - fy) + (a[i + nx] * (1 - fx) + a[i + nx + 1] * fx) * fy;
+  const c1 = (b[i] * (1 - fx) + b[i + 1] * fx) * (1 - fy) + (b[i + nx] * (1 - fx) + b[i + nx + 1] * fx) * fy;
+  return Math.round(c0 * (1 - fz) + c1 * fz);
 }
 function setSeed(p) {
   S.seed = p.slice(); S.cursor = p.slice();
@@ -733,6 +805,7 @@ class SliceView {
     canvas.addEventListener('pointerdown', (e) => this.down(e));
     canvas.addEventListener('pointermove', (e) => this.move(e));
     canvas.addEventListener('pointerup', (e) => {
+      if (this.drag === 'tilt') { this.drag = null; canvas.releasePointerCapture(e.pointerId); if ($('autoExtract').checked) runExtract(); return; }
       const picked = this.drag === 'pick';
       this.drag = null; canvas.releasePointerCapture(e.pointerId);
       if (!picked || !S.seed) return;
@@ -784,17 +857,32 @@ class SliceView {
       if (i >= 0 && j >= 0 && i < g.w && j < g.h) addMeasPoint(this.toVox(Math.floor(i), Math.floor(j)));
       return;
     }
+    if (e.button === 0 && this.handles && S.seed) {
+      const [, , sx, sy] = this.evtImg(e), dpr = this.cv.width / this.cv.getBoundingClientRect().width;
+      const h = this.handles.find((q) => Math.hypot(q.x - sx, q.y - sy) < 12 * dpr);
+      if (h) { this.drag = 'tilt'; this.tiltEnd = h.end; return; }
+    }
     if (e.button === 0) { this.drag = 'pick'; this.pick(e); }
     else { this.drag = 'pan'; this.lastX = e.clientX; this.lastY = e.clientY; }
   }
   move(e) {
     if (!this.drag) return;
     if (this.drag === 'pick') this.pick(e);
+    else if (this.drag === 'tilt') this.tilt(e);
     else {
       const dpr = this.cv.width / this.cv.getBoundingClientRect().width;
       this.panX += (e.clientX - this.lastX) * dpr; this.panY += (e.clientY - this.lastY) * dpr;
       this.lastX = e.clientX; this.lastY = e.clientY; this.render();
     }
+  }
+  tilt(e) {
+    const [i, j] = this.evtImg(e), q = this.toVox(i - 0.5, j - 0.5), v = S.vol;
+    const d = [(q[0] - S.seed[0]) * v.sx, (q[1] - S.seed[1]) * v.sy, (this.axis === 2 ? 0 : (v.nz - 1 - (j - 0.5)) - S.seed[2]) * v.sz].map((x) => x * this.tiltEnd);
+    if (Math.hypot(d[0], d[1], d[2]) < 1) return;
+    const deg = 180 / Math.PI;
+    if (this.axis === 1) setVal('tiltY', clamp(Math.round(Math.atan2(d[0], d[2]) * deg * 2) / 2, -60, 60));
+    else setVal('tiltX', clamp(Math.round(-Math.atan2(d[1], d[2]) * deg * 2) / 2, -60, 60));
+    renderAll();
   }
   pick(e) {
     const [i, j] = this.evtImg(e), g = this.geom();
@@ -827,7 +915,7 @@ class SliceView {
       this.off.width = g.w; this.off.height = g.h; this.img = this.offCtx.createImageData(g.w, g.h);
     }
     const d = this.img.data, lo = S.wl - S.ww / 2, sc = 255 / Math.max(1, S.ww);
-    const roi = getROI(), seg = S.seg, showOv = $('preview').checked;
+    const roi = getROI(), seg = S.seg, showOv = $('preview').checked, F = roiFrame();
     const th = +$('thHard').value, te = +$('thEnamel').value;
     const pulpRGB = hexRGB($('colP').value).map((x) => x * 255);
     for (let j = 0; j < g.h; j++) {
@@ -837,10 +925,10 @@ class SliceView {
         const val = v.slices[z][y * v.nx + x];
         let gr = (val - lo) * sc; gr = gr < 0 ? 0 : gr > 255 ? 255 : gr;
         let r = gr, gg = gr, b = gr;
-        if (showOv && roi && x >= roi.x0 && x <= roi.x1 && y >= roi.y0 && y <= roi.y1 && z >= roi.z0 && z <= roi.z1) {
+        if (showOv && F && x >= F.lo[0] && x <= F.hi[0] && y >= F.lo[1] && y <= F.hi[1] && z >= F.lo[2] && z <= F.hi[2] && F.inside(x, y, z)) {
           let col = null, a = 0.45;
           if (seg && seg.roi === roi.key) {
-            const L = seg.labels[((z - roi.z0) * roi.ny + (y - roi.y0)) * roi.nx + (x - roi.x0)];
+            const L = seg.labelAt(x, y, z);
             if (L) { col = L === 3 ? pulpRGB : LABEL_COL[L]; a = L === 4 ? 0.25 : L === 3 ? 0.75 : 0.4; }
           } else if (val >= te) { col = [90, 200, 255]; a = 0.35; }
           else if (val >= th) { col = [60, 230, 120]; a = 0.35; }
@@ -862,16 +950,30 @@ class SliceView {
     ctx.moveTo(0, t.oy + (cj + 0.5) * t.py); ctx.lineTo(W, t.oy + (cj + 0.5) * t.py);
     ctx.stroke(); ctx.setLineDash([]);
     // ROI
-    if (roi) {
-      const [a0, b0] = this.toImg(roi.x0, roi.y0, roi.z1), [a1, b1] = this.toImg(roi.x1, roi.y1, roi.z0);
-      const inside = s >= [roi.x0, roi.y0, roi.z0][this.axis] && s <= [roi.x1, roi.y1, roi.z1][this.axis];
-      ctx.strokeStyle = inside ? '#ffd23f' : 'rgba(255,210,63,0.35)'; ctx.lineWidth = 1.5 * dpr;
+    if (roi && F) {
+      // 傾けた枠（直方体）の辺をこの断面へ投影して描く
+      const scr = (q) => { const [a, b] = this.toImg(q[0], q[1], q[2]); return [t.ox + (a + 0.5) * t.px, t.oy + (b + 0.5) * t.py]; };
+      const C = F.corners.map(scr);
+      const inside = s >= F.lo[this.axis] && s <= F.hi[this.axis];
+      ctx.strokeStyle = inside ? 'rgba(255,210,63,0.9)' : 'rgba(255,210,63,0.35)'; ctx.lineWidth = 1.3 * dpr;
       if (!inside) ctx.setLineDash([6, 4]);
-      ctx.strokeRect(t.ox + a0 * t.px, t.oy + b0 * t.py, (a1 - a0 + 1) * t.px, (b1 - b0 + 1) * t.py);
-      ctx.setLineDash([]);
-      const [si, sj] = this.toImg(...S.seed);
+      ctx.beginPath();
+      for (const [p0, p1] of [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]]) { ctx.moveTo(...C[p0]); ctx.lineTo(...C[p1]); }
+      ctx.stroke(); ctx.setLineDash([]);
+      // 歯軸線と、傾きを変えるハンドル（コロナル・サジタル）
+      const top = scr(F.toVox(0, 0, F.up)), bot = scr(F.toVox(0, 0, -F.dn)), sp = scr(S.seed);
+      ctx.strokeStyle = '#ffd23f'; ctx.lineWidth = 2 * dpr;
+      ctx.beginPath(); ctx.moveTo(...bot); ctx.lineTo(...top); ctx.stroke();
       ctx.fillStyle = '#ffd23f';
-      ctx.beginPath(); ctx.arc(t.ox + (si + 0.5) * t.px, t.oy + (sj + 0.5) * t.py, 3.5 * dpr, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(sp[0], sp[1], 3.5 * dpr, 0, Math.PI * 2); ctx.fill();
+      this.handles = [];
+      if (this.axis !== 2) {
+        for (const [pt, end] of [[top, 1], [bot, -1]]) {
+          ctx.beginPath(); ctx.arc(pt[0], pt[1], 6 * dpr, 0, Math.PI * 2);
+          ctx.fillStyle = '#1e232c'; ctx.fill(); ctx.lineWidth = 2 * dpr; ctx.strokeStyle = '#ffd23f'; ctx.stroke();
+          this.handles.push({ x: pt[0], y: pt[1], end });
+        }
+      }
     }
     // 距離計測
     if (S.meas.pts.length) {
@@ -911,12 +1013,6 @@ function multiOtsu(values, k) {
   return bt.map((t) => lo + t * bw);
 }
 
-function expandROI(roi, mm) {
-  const v = S.vol, mx = Math.round(mm / v.sx), my = Math.round(mm / v.sy);
-  const r = { x0: Math.max(0, roi.x0 - mx), x1: Math.min(v.nx - 1, roi.x1 + mx), y0: Math.max(0, roi.y0 - my), y1: Math.min(v.ny - 1, roi.y1 + my), z0: roi.z0, z1: roi.z1 };
-  r.nx = r.x1 - r.x0 + 1; r.ny = r.y1 - r.y0 + 1; r.nz = r.z1 - r.z0 + 1;
-  return r;
-}
 function cropROI(a, ext, roi, T) {
   const o = new T(roi.nx * roi.ny * roi.nz);
   let p = 0;
@@ -926,8 +1022,8 @@ function cropROI(a, ext, roi, T) {
   }
   return o;
 }
-function roiValues(roi, smooth) {
-  const v = S.vol, n = roi.nx * roi.ny * roi.nz, f = new Float32Array(n);
+function roiValues(roi, smooth, v = S.vol) {
+  const n = roi.nx * roi.ny * roi.nz, f = new Float32Array(n);
   let p = 0;
   for (let z = roi.z0; z <= roi.z1; z++) {
     const sl = v.slices[z];
@@ -1129,24 +1225,28 @@ function holes2D(tooth, nx, ny, nz) {
 }
 
 async function extract() {
-  const roi = getROI();
-  if (!roi) { setStatus('先に断面上で歯をクリックしてください', true); return; }
-  const v = S.vol, { nx, ny, nz } = roi, n = nx * ny * nz, nxy = nx * ny;
+  const roiG = getROI();
+  if (!roiG) { setStatus('先に断面上で歯をクリックしてください', true); return; }
   const th = +$('thHard').value, te = +$('thEnamel').value;
   const k = +$('erode').value;
   const split = $('splitNb').checked;
+  showProgress('歯を抽出中…（歯軸に沿って再サンプリング）', 0.05); await sleep0();
+  // 歯軸に合わせて傾けた枠でCTを再サンプリング。隣在歯の歯冠全体を含めて「くびれ」で分離できるよう、左右前後へ 5mm 広げる
+  const v = buildLocalVolume(split ? 5 : 0);
+  const ext = { x0: 0, y0: 0, z0: 0, x1: v.nx - 1, y1: v.ny - 1, z1: v.nz - 1, nx: v.nx, ny: v.ny, nz: v.nz };
+  const roi = { x0: v.mx, y0: v.mx, z0: 0, x1: v.nx - 1 - v.mx, y1: v.ny - 1 - v.mx, z1: v.nz - 1, key: roiG.key };
+  roi.nx = roi.x1 - roi.x0 + 1; roi.ny = roi.y1 - roi.y0 + 1; roi.nz = roi.z1 - roi.z0 + 1;
+  const { nx, ny, nz } = roi, n = nx * ny * nz, nxy = nx * ny;
   showProgress('歯を抽出中…（平滑化）', 0.1); await sleep0();
-  // 隣在歯の歯冠全体を含めて「くびれ」で分離できるよう、内部的に ROI を左右前後へ 5mm 広げて処理する
-  const ext = expandROI(roi, split ? 5 : 0);
   const ex = ext.nx, ey = ext.ny, ez = ext.nz, en = ex * ey * ez;
-  const fe = roiValues(ext, $('smooth').checked);
+  const fe = roiValues(ext, $('smooth').checked, v);
   showProgress('歯を抽出中…（領域拡張）', 0.3); await sleep0();
   const hardE = new Uint8Array(en);
   for (let i = 0; i < en; i++) if (fe[i] >= th) hardE[i] = 1;
   let core = hardE;
   for (let i = 0; i < k; i++) core = erode6(core, ex, ey, ez);
   // 選択点から最も近いコア画素を探す
-  const sx = S.seed[0] - ext.x0, sy = S.seed[1] - ext.y0, sz = S.seed[2] - ext.z0;
+  const [sx, sy, sz] = v.seedIdx;
   let seedIdx = -1, bestD = Infinity;
   const R = Math.ceil(4 / Math.min(v.sx, v.sy, v.sz));
   for (let dz = -R; dz <= R; dz++) for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
@@ -1195,7 +1295,7 @@ async function extract() {
   const fx = bnx * u, fy = bny * u, fz = bnz * u, fn = fx * fy * fz, fxy = fx * fy;
   const fsp = [v.sx / u, v.sy / u, v.sz / u], fvol = fsp[0] * fsp[1] * fsp[2], fmin = Math.min(...fsp);
   // 高精度ステージは平滑化前の値を使う（細い根管のコントラストを保つ。ノイズは実測σでしきい値に反映）
-  const I = upsample(roiValues(roi, false), nx, ny, nz, box, u);
+  const I = upsample(roiValues(roi, false, v), nx, ny, nz, box, u);
   const tf = new Float32Array(n); for (let i = 0; i < n; i++) tf[i] = tooth[i];
   const tm = upsample(tf, nx, ny, nz, box, u);
   showProgress('高精度処理中…（歯の輪郭）', 0.58); await sleep0();
@@ -1270,7 +1370,19 @@ async function extract() {
     if (any) { if (z < zmin) zmin = z; zmax = z; }
   }
   const origin = [(roi.x0 + box.x0 + 0.5 / u - 0.5) * v.sx, (roi.y0 + box.y0 + 0.5 / u - 0.5) * v.sy, (roi.z0 + box.z0 + 0.5 / u - 0.5) * v.sz];
-  S.seg = { roi: roi.key, roiObj: roi, labels, fine: { labels: labF, rgba, nx: fx, ny: fy, nz: fz, sp: fsp, origin, u, box, sigma, dMed } };
+  // ローカル(mm) → ボリューム(mm) の変換と、患者方向（3D の方向表示用）
+  const Rm = v.Rm, sIdxMm = v.seedIdx.map((q) => q * v.s);
+  const localToVolMm = (p) => [0, 1, 2].map((r) => v.sm[r] + Rm[r * 3] * (p[0] - sIdxMm[0]) + Rm[r * 3 + 1] * (p[1] - sIdxMm[1]) + Rm[r * 3 + 2] * (p[2] - sIdxMm[2]));
+  const D0 = S.vol.dirs, dirsL = [0, 1, 2].map((c) => [0, 1, 2].map((q) => Rm[c] * D0[0][q] + Rm[3 + c] * D0[1][q] + Rm[6 + c] * D0[2][q]));
+  const vs = [S.vol.sx, S.vol.sy, S.vol.sz];
+  const labelAt = (x, y, z) => { // 元ボリュームのボクセル → 高精度ラベル
+    const a = x * vs[0] - v.sm[0], b = y * vs[1] - v.sm[1], c = z * vs[2] - v.sm[2];
+    const l = [Rm[0] * a + Rm[3] * b + Rm[6] * c + sIdxMm[0], Rm[1] * a + Rm[4] * b + Rm[7] * c + sIdxMm[1], Rm[2] * a + Rm[5] * b + Rm[8] * c + sIdxMm[2]];
+    const i = Math.round((l[0] - origin[0]) / fsp[0]), j = Math.round((l[1] - origin[1]) / fsp[1]), kk = Math.round((l[2] - origin[2]) / fsp[2]);
+    return i < 0 || j < 0 || kk < 0 || i >= fx || j >= fy || kk >= fz ? 0 : labF[(kk * fy + j) * fx + i];
+  };
+  S.seg = { roi: roi.key, roiObj: roi, labels, labelAt, localToVolMm, dirsL, fine: { labels: labF, rgba, nx: fx, ny: fy, nz: fz, sp: fsp, origin, u, box, sigma, dMed } };
+  $('axisAuto').disabled = false;
   showProgress('3Dデータを作成中…', 0.9); await sleep0();
   renderer.setData(rgba, labF, fx, fy, fz, fsp[0], fsp[1], fsp[2]);
   hideProgress();
@@ -1733,7 +1845,7 @@ class VolumeRenderer {
     if (cv.width !== W) { cv.width = W; cv.height = W; }
     const c = cv.getContext('2d'); c.clearRect(0, 0, W, W);
     if (!this.has || !S.vol) return;
-    const D = S.vol.dirs, R = W * 0.32, cx = W / 2, cy = W / 2;
+    const D = (S.seg && S.seg.dirsL) || S.vol.dirs, R = W * 0.32, cx = W / 2, cy = W / 2;
     const items = [['L', [1, 0, 0], '#ff5a5a'], ['R', [-1, 0, 0], '#ff5a5a'], ['P', [0, 1, 0], '#5b8cff'], ['A', [0, -1, 0], '#5b8cff'], ['S', [0, 0, 1], '#5ad17a'], ['I', [0, 0, -1], '#5ad17a']]
       .map(([t, P, col]) => {
         const w = D.map((d) => d[0] * P[0] + d[1] * P[1] + d[2] * P[2]);
@@ -1796,6 +1908,48 @@ $('wlAuto').onclick = autoWL;
 $('wlTooth').onclick = () => {
   const th = +$('thHard').value, te = +$('thEnamel').value;
   setVal('ww', Math.round(Math.max(500, (te - th) * 2.6))); setVal('wl', Math.round((th + te) / 2)); readWL(); renderAll();
+};
+for (const id of ['tiltX', 'tiltY', 'tiltZ']) {
+  $(id).addEventListener('input', () => { syncOut(id); renderAll(); });
+  $(id).addEventListener('change', () => { if (S.seed && $('autoExtract').checked) runExtract(); });
+}
+$('tiltReset').onclick = () => { ['tiltX', 'tiltY', 'tiltZ'].forEach((id) => setVal(id, 0)); renderAll(); if (S.seed && $('autoExtract').checked) runExtract(); };
+/** 抽出した歯の主軸（主成分分析）を歯軸として、枠の傾き・中心・長さを合わせて再抽出 */
+$('axisAuto').onclick = () => {
+  const F = S.seg && S.seg.fine; if (!F) return;
+  const { labels, nx, ny, nz, sp, origin } = F;
+  let n = 0; const m = [0, 0, 0], C = [0, 0, 0, 0, 0, 0];
+  const st = Math.max(1, Math.round(Math.cbrt(labels.length / 400000)));
+  for (let z = 0; z < nz; z += st) for (let y = 0; y < ny; y += st) for (let x = 0; x < nx; x += st) {
+    const L = labels[(z * ny + y) * nx + x]; if (!L || L === 4) continue;
+    const p = [origin[0] + x * sp[0], origin[1] + y * sp[1], origin[2] + z * sp[2]];
+    n++; m[0] += p[0]; m[1] += p[1]; m[2] += p[2];
+    C[0] += p[0] * p[0]; C[1] += p[0] * p[1]; C[2] += p[0] * p[2]; C[3] += p[1] * p[1]; C[4] += p[1] * p[2]; C[5] += p[2] * p[2];
+  }
+  if (n < 50) return;
+  m.forEach((_, k) => (m[k] /= n));
+  const M = [[C[0] / n - m[0] * m[0], C[1] / n - m[0] * m[1], C[2] / n - m[0] * m[2]], [0, C[3] / n - m[1] * m[1], C[4] / n - m[1] * m[2]], [0, 0, C[5] / n - m[2] * m[2]]];
+  M[1][0] = M[0][1]; M[2][0] = M[0][2]; M[2][1] = M[1][2];
+  let e = [0, 0, 1];
+  for (let it = 0; it < 60; it++) { const w = M.map((r) => r[0] * e[0] + r[1] * e[1] + r[2] * e[2]); const l = Math.hypot(...w) || 1; e = w.map((x) => x / l); }
+  // ローカル → ボリューム方向
+  const c0 = S.seg.localToVolMm([0, 0, 0]), c1 = S.seg.localToVolMm(e);
+  let u = [c1[0] - c0[0], c1[1] - c0[1], c1[2] - c0[2]];
+  if (u[2] < 0) u = u.map((x) => -x);
+  const deg = 180 / Math.PI, ax = Math.asin(clamp(-u[1], -1, 1)), ay = Math.atan2(u[0], u[2]);
+  setVal('tiltX', clamp(Math.round(ax * deg * 2) / 2, -60, 60)); setVal('tiltY', clamp(Math.round(ay * deg * 2) / 2, -60, 60));
+  // 枠の中心を歯の重心へ、上下の長さを歯軸方向の広がり＋余裕に
+  const cm = S.seg.localToVolMm(m), v = S.vol;
+  let lo = Infinity, hi = -Infinity;
+  for (let z = 0; z < nz; z += st) for (let y = 0; y < ny; y += st) for (let x = 0; x < nx; x += st) {
+    const L = labels[(z * ny + y) * nx + x]; if (!L || L === 4) continue;
+    const q = S.seg.localToVolMm([origin[0] + x * sp[0], origin[1] + y * sp[1], origin[2] + z * sp[2]]);
+    const t = (q[0] - cm[0]) * u[0] + (q[1] - cm[1]) * u[1] + (q[2] - cm[2]) * u[2];
+    if (t < lo) lo = t; if (t > hi) hi = t;
+  }
+  S.seed = [Math.round(cm[0] / v.sx), Math.round(cm[1] / v.sy), Math.round(cm[2] / v.sz)]; S.cursor = S.seed.slice();
+  setVal('roiUp', clamp(Math.ceil(hi + 2.5), 2, 40)); setVal('roiDn', clamp(Math.ceil(-lo + 2.5), 2, 40));
+  renderAll(); runExtract();
 };
 $('autoTh').onclick = () => { S.thManual = false; autoThreshold(); };
 for (const id of ['thHard', 'thEnamel']) $(id).addEventListener('input', () => { S.thManual = true; });
@@ -1860,8 +2014,8 @@ $('stlBtn').onclick = () => {
   showProgress('STLを作成中…', 0.5);
   setTimeout(() => {
     const { rgba, nx, ny, nz, sp, origin } = F, v = S.vol, D = v.dirs, O = v.origin;
-    // ボリューム座標(mm) → 患者座標(DICOM, mm)
-    const toPat = (x, y, z) => [0, 1, 2].map((k) => O[k] + x * D[0][k] + y * D[1][k] + z * D[2][k]);
+    // ローカル(mm) → ボリューム(mm) → 患者座標(DICOM, mm)
+    const toPat = (x, y, z) => { const q = S.seg.localToVolMm([x, y, z]); return [0, 1, 2].map((k) => O[k] + q[0] * D[0][k] + q[1] * D[1][k] + q[2] * D[2][k]); };
     const tag = $('toothNo').value || 'tooth';
     const files = [], counts = [];
     const mk = (getv, iso, name) => {
@@ -2021,7 +2175,7 @@ window.addEventListener('drop', async (e) => {
   if (files.length) loadFiles(files);
 });
 
-['ww', 'wl', 'roiX', 'roiY', 'roiUp', 'roiDn', 'thHard', 'thEnamel', 'thCanal', 'erode', 'opE', 'opD', 'opP', 'opB', 'glass', 'clipPos'].forEach(syncOut);
+['tiltX', 'tiltY', 'tiltZ', 'ww', 'wl', 'roiX', 'roiY', 'roiUp', 'roiDn', 'thHard', 'thEnamel', 'thCanal', 'erode', 'opE', 'opD', 'opP', 'opB', 'glass', 'clipPos'].forEach(syncOut);
 updateLegend(); drawCanalChart(null); renderAll();
 </script>
 </body>
