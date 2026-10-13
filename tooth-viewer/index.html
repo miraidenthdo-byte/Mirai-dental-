@@ -1362,50 +1362,75 @@ async function extract() {
       if (dM - bM > 120) thSep = Math.min(Math.max(th, (dM + bM) / 2), dM - 60);
     }
   }
-  let hardS = hardE;
-  if (thSep > th) {
-    hardS = new Uint8Array(en);
-    for (let i = 0; i < en; i++) if (fe[i] >= thSep && !excl[i]) hardS[i] = 1;
-    core = hardS;
-    for (let i = 0; i < k; i++) core = erode6(core, ex, ey, ez);
-    let bd = Infinity, si2 = -1;
-    for (let i = 0; i < en; i++) if (core[i]) {
-      const d = (i % ex - sx) ** 2 + (((i / ex) | 0) % ey - sy) ** 2 + ((i / (ex * ey) | 0) - sz) ** 2;
-      if (d < bd) { bd = d; si2 = i; }
+  /** しきい値 thU で歯をつなぎ・隣在歯と分ける（粗い段階）。thU>th のときは骨との濃度差による分離 */
+  const core0 = core, seed0 = seedIdx;
+  const coarse = async (thU) => {
+    let hardS = hardE, core = core0, seedIdx = seed0;
+    if (thU > th) {
+      hardS = new Uint8Array(en);
+      for (let i = 0; i < en; i++) if (fe[i] >= thU && !excl[i]) hardS[i] = 1;
+      core = hardS;
+      // 濃度で骨と分けているので、収縮は弱めにする（細い歯根が消えないように）
+      for (let i = 0; i < Math.min(k, 1); i++) core = erode6(core, ex, ey, ez);
+      let bd = Infinity, si2 = -1;
+      for (let i = 0; i < en; i++) if (core[i]) {
+        const d = (i % ex - sx) ** 2 + (((i / ex) | 0) % ey - sy) ** 2 + ((i / (ex * ey) | 0) - sz) ** 2;
+        if (d < bd) { bd = d; si2 = i; }
+      }
+      if (si2 < 0) return null;
+      seedIdx = si2;
     }
-    if (si2 >= 0) seedIdx = si2; else { hardS = hardE; thSep = th; core = hardE; for (let i = 0; i < k; i++) core = erode6(core, ex, ey, ez); }
-  }
-  let toothE = floodFill(core, ex, ey, ez, seedIdx);
-  if (k > 0) toothE = dilateWithin(toothE, hardS, ex, ey, ez, k + 1);
-  // 濃度の高い基準で分けた後、歯の外層（部分容積で薄く写る約0.5mm）を本来のしきい値の範囲で取り戻す
-  // （外層は軟組織・歯根膜の近く＝硬組織の外側から0.35mm以内。骨と癒着した部分は硬組織の奥なので戻さない）
+    let toothE = floodFill(core, ex, ey, ez, seedIdx);
+    if (k > 0) toothE = dilateWithin(toothE, hardS, ex, ey, ez, (thU > th ? Math.min(k, 1) : k) + 1);
+    // 濃度の高い基準で分けた後、歯の外層（部分容積で薄く写る約0.5mm）を本来のしきい値の範囲で取り戻す
+    // （外層は軟組織・歯根膜の近く＝硬組織の外側から0.35mm以内。骨と癒着した部分は硬組織の奥なので戻さない）
+    if (thU > th) {
+      const dBg = distanceTransform(hardE, ex, ey, ez, v.s, v.s, v.s), rec = new Uint8Array(en);
+      for (let i = 0; i < en; i++) rec[i] = hardS[i] || (hardE[i] && dBg[i] <= 0.35) ? 1 : 0;
+      const coreT = toothE;
+      toothE = dilateWithin(toothE, rec, ex, ey, ez, Math.max(1, Math.round(2.5 / v.s)));
+      // 取り戻した外層のうち、骨髄腔のふちなどに沿って伸びた細いトゲ（2ボクセル未満）は除く（オープニング）
+      const opened = dilate6(erode6(toothE, ex, ey, ez), ex, ey, ez, 1);
+      for (let i = 0; i < en; i++) toothE[i] = coreT[i] || (toothE[i] && opened[i]) ? 1 : 0;
+    }
+    if (split) {
+      showProgress('歯を抽出中…（隣在歯との分離）', 0.45); await sleep0();
+      // 隣在歯の「全体」を競合させるため、収縮前の硬組織の連結領域で分水嶺を行い、結果を対象歯の領域に適用する
+      const full = floodFill(hardS, ex, ey, ez, seedIdx);
+      const h0 = holes2D(full, ex, ey, ez), dom = new Uint8Array(en);
+      for (let i = 0; i < en; i++) dom[i] = full[i] | h0[i];
+      const lab = splitNeighbors(dom, ex, ey, ez, [v.sx, v.sy, v.sz], seedIdx);
+      if (lab) {
+        // 分水嶺の対象外だった薄い外層は、近い側（対象歯／隣在歯・骨）に割り当てる
+        const A = new Uint8Array(en), Bm = new Uint8Array(en);
+        for (let i = 0; i < en; i++) { if (lab[i] === 1) A[i] = 1; else if (lab[i] === 2) Bm[i] = 1; }
+        const keep = competeGrow(A, Bm, toothE, ex, ey, ez, Math.round(2.0 / v.s));
+        for (let i = 0; i < en; i++) if (!keep[i]) toothE[i] = 0;
+        let s0 = seedIdx;
+        if (!toothE[s0]) for (let i = 0; i < en; i++) if (toothE[i]) { s0 = i; break; }
+        toothE = floodFill(toothE, ex, ey, ez, s0);
+      }
+    }
+    return { toothE, seedIdx };
+  };
+  let res = await coarse(th), usedSep = false;
   if (thSep > th) {
-    const dBg = distanceTransform(hardE, ex, ey, ez, v.s, v.s, v.s), rec = new Uint8Array(en);
-    for (let i = 0; i < en; i++) rec[i] = hardS[i] || (hardE[i] && dBg[i] <= 0.35) ? 1 : 0;
-    const coreT = toothE;
-    toothE = dilateWithin(toothE, rec, ex, ey, ez, Math.max(1, Math.round(1.2 / v.s)));
-    // 取り戻した外層のうち、骨髄腔のふちなどに沿って伸びた細いトゲ（2ボクセル未満）は除く（オープニング）
-    const opened = dilate6(erode6(toothE, ex, ey, ez), ex, ey, ez, 1);
-    for (let i = 0; i < en; i++) toothE[i] = coreT[i] || (toothE[i] && opened[i]) ? 1 : 0;
-  }
-  if (split) {
-    showProgress('歯を抽出中…（隣在歯との分離）', 0.45); await sleep0();
-    // 隣在歯の「全体」を競合させるため、収縮前の硬組織の連結領域で分水嶺を行い、結果を対象歯の領域に適用する
-    const full = floodFill(hardS, ex, ey, ez, seedIdx);
-    const h0 = holes2D(full, ex, ey, ez), dom = new Uint8Array(en);
-    for (let i = 0; i < en; i++) dom[i] = full[i] | h0[i];
-    const lab = splitNeighbors(dom, ex, ey, ez, [v.sx, v.sy, v.sz], seedIdx);
-    if (lab) {
-      // 分水嶺の対象外だった薄い外層は、近い側（対象歯／隣在歯・骨）に割り当てる
-      const A = new Uint8Array(en), Bm = new Uint8Array(en);
-      for (let i = 0; i < en; i++) { if (lab[i] === 1) A[i] = 1; else if (lab[i] === 2) Bm[i] = 1; }
-      const keep = competeGrow(A, Bm, toothE, ex, ey, ez, Math.round(2.0 / v.s));
-      for (let i = 0; i < en; i++) if (!keep[i]) toothE[i] = 0;
-      let s0 = seedIdx;
-      if (!toothE[s0]) for (let i = 0; i < en; i++) if (toothE[i]) { s0 = i; break; }
-      toothE = floodFill(toothE, ex, ey, ez, s0);
+    // 通常の結果と、骨との濃度差で分けた結果を比べ、通常の結果が歯根を失った（小さい）か骨を取り込んだ（大きすぎる）ときだけ後者を使う
+    showProgress('歯を抽出中…（骨との分離を確認）', 0.47); await sleep0();
+    const alt = await coarse(thSep);
+    // 判定：歯の「奥」（硬組織の外側から0.6mm以上）に象牙質より明らかに暗い部分が多い ＝ 骨を含んでいる
+    const dBg = distanceTransform(hardE, ex, ey, ez, v.s, v.s, v.s);
+    const deepLow = (t) => { let c = 0, n = 0; for (let i = 0; i < en; i++) if (t[i]) { n++; if (dBg[i] > 0.6 && fe[i] < thSep) c++; } return n ? c / n : 0; };
+    if (alt) {
+      const f0 = deepLow(res.toothE), f1 = deepLow(alt.toothE);
+      // 判定2：濃度差で分けた結果の方が歯軸方向に2mm以上長い ＝ 通常の結果は歯根を骨側に取られている
+      const zLen = (t) => { let lo = -1, hi = -1; const exy = ex * ey; for (let z = 0; z < ez; z++) { let c = 0; for (let i = z * exy, e = i + exy; i < e; i++) c += t[i]; if (c >= 4) { if (lo < 0) lo = z; hi = z; } } return lo < 0 ? 0 : (hi - lo + 1) * v.s; };
+      const l0 = zLen(res.toothE), l1 = zLen(alt.toothE);
+      if (window.DEBUG_SEP) console.log('sep', thSep, f0, f1, l0, l1);
+      if ((f0 > 0.04 && f1 < f0 * 0.5) || (l1 - l0 > 2.0 && f1 < 0.04)) { res = alt; usedSep = true; }
     }
   }
+  let toothE = res.toothE; seedIdx = res.seedIdx;
   const f = cropROI(fe, ext, roi, Float32Array), hard = cropROI(hardE, ext, roi, Uint8Array);
   const tooth = cropROI(toothE, ext, roi, Uint8Array);
   // ================= 高精度ステージ（サブボクセル） =================
@@ -1539,7 +1564,7 @@ async function extract() {
   S.chart = [canalCounts, fsp[2], zmin, zmax];
   drawCanalChart(...S.chart);
   renderAll();
-  setStatus('抽出完了。' + (touches ? '⚠ 歯がROIの枠に接しています。ROIを広げるか、隣在歯・骨とつながっていないか確認してください。' : '3Dビューをドラッグして回転できます。'), touches);
+  setStatus('抽出完了。' + (usedSep ? '（骨が歯根に密着していたため、骨との濃度差で分離しました）' : '') + (touches ? '⚠ 歯がROIの枠に接しています。ROIを広げるか、隣在歯・骨とつながっていないか確認してください。' : '3Dビューをドラッグして回転できます。'), touches);
 }
 
 /** ROI内の box 領域を u 倍に三線形補間 */
