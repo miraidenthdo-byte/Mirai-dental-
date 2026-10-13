@@ -18,6 +18,7 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
   font-family: "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, sans-serif; font-size: 13px; }
 header { height: 48px; display: flex; align-items: center; gap: 10px; padding: 0 14px;
@@ -123,15 +124,18 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 3
         <option value="both">上下均等</option>
       </select>
     </div>
-    <div class="row"><label>ROI 幅 X</label><input id="roiX" type="range" min="4" max="30" step="0.5" value="12"><output id="roiXO"></output></div>
-    <div class="row"><label>ROI 幅 Y</label><input id="roiY" type="range" min="4" max="30" step="0.5" value="12"><output id="roiYO"></output></div>
+    <div class="row"><label>ROI 幅 X</label><input id="roiX" type="range" min="2" max="40" step="0.5" value="12"><output id="roiXO"></output></div>
+    <div class="row"><label>ROI 幅 Y</label><input id="roiY" type="range" min="2" max="40" step="0.5" value="12"><output id="roiYO"></output></div>
     <div class="row"><label>ROI 上方</label><input id="roiUp" type="range" min="2" max="40" step="0.5" value="12"><output id="roiUpO"></output></div>
     <div class="row"><label>ROI 下方</label><input id="roiDn" type="range" min="2" max="40" step="0.5" value="24"><output id="roiDnO"></output></div>
     <div class="row"><label>傾き（コロナル）</label><input id="tiltY" type="range" min="-60" max="60" step="0.5" value="0"><output id="tiltYO"></output></div>
     <div class="row"><label>傾き（サジタル）</label><input id="tiltX" type="range" min="-60" max="60" step="0.5" value="0"><output id="tiltXO"></output></div>
     <div class="row"><label>回転（アキシャル）</label><input id="tiltZ" type="range" min="-90" max="90" step="1" value="0"><output id="tiltZO"></output></div>
     <div class="flex"><button id="axisAuto" disabled title="抽出した歯の形から歯軸を求め、枠を合わせて再抽出">🎯 歯軸を自動で合わせる</button><button id="tiltReset">傾きリセット</button></div>
-    <div class="hint">コロナル・サジタル断面の黄色い歯軸線の端（●）をドラッグすると、歯軸に合わせて枠を傾けられます。</div>
+    <div class="hint">■ 枠の各面をドラッグ：その面だけを伸縮（左右・前後・上下を片側ずつ）<br>● 歯軸線の端をドラッグ：枠を歯軸に合わせて傾ける（コロナル・サジタル）</div>
+    <div class="flex"><button id="brushBtn" title="断面上でなぞった部分を抽出対象から外す（くっついた骨・隣在歯など）">🖌 除外ブラシ</button>
+      <button id="brushUndo" title="最後に塗った分を取り消す">1つ戻す</button><button id="brushClear">ブラシを全消去</button></div>
+    <div class="row" id="brushRow"><label>ブラシ半径</label><input id="brushR" type="range" min="0.3" max="5" step="0.1" value="1.2"><output id="brushRO"></output></div>
     <div id="seedInfo" class="hint">選択点: なし</div>
     <div class="flex"><button id="measBtn" title="断面上で2点をクリックして距離を測定">📏 距離計測</button><span id="measOut" class="hint" style="margin:0"></span></div>
   </section>
@@ -144,6 +148,7 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 3
     <div class="row"><label>骨との分離</label><input id="erode" type="range" min="0" max="4" value="2"><output id="erodeO"></output></div>
     <label class="check"><input id="smooth" type="checkbox" checked>ノイズ除去（平滑化）してから抽出</label>
     <label class="check"><input id="splitNb" type="checkbox" checked>隣在歯との接触部を自動で分離</label>
+    <label class="check"><input id="boneSep" type="checkbox" checked>骨と歯の濃度差で分離（骨が歯根に密着している場合）</label>
     <label class="check"><input id="hiRes" type="checkbox" checked>高精度モード（サブボクセル補間・推奨）</label>
     <label class="check"><input id="preview" type="checkbox" checked>断面にオーバーレイ表示</label>
     <label class="check"><input id="autoExtract" type="checkbox" checked>歯をクリックしたら自動で3D表示</label>
@@ -159,7 +164,7 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 3
     <div class="struct"><input type="color" id="colE" value="#e4e2b4"><span>エナメル質</span><input type="range" id="opE" min="0" max="100" value="55"><output id="opEO"></output></div>
     <div class="struct"><input type="color" id="colD" value="#d6d09a"><span>象牙質</span><input type="range" id="opD" min="0" max="100" value="55"><output id="opDO"></output></div>
     <div class="struct"><input type="color" id="colP" value="#3ee08a"><span>歯髄・根管</span><input type="range" id="opP" min="0" max="100" value="100"><output id="opPO"></output></div>
-    <div class="struct"><input type="color" id="colB" value="#8fa3b8"><span>周囲の骨</span><input type="range" id="opB" min="0" max="100" value="0"><output id="opBO"></output></div>
+    <div class="struct" hidden><input type="color" id="colB" value="#8fa3b8"><span>周囲の骨</span><input type="range" id="opB" min="0" max="100" value="0"><output id="opBO"></output></div>
     <div class="row"><label>透かし表示</label><input id="glass" type="range" min="0" max="100" value="75"><output id="glassO"></output></div>
     <label class="check"><input id="pulpGrad" type="checkbox">根管を高さで色分け（走行が分かりやすい）</label>
     <div class="flex" style="margin:6px 0">
@@ -591,7 +596,7 @@ function makeDemoVolume(opt = window.DEMO_OPTS || {}) {
         let v;
         const by = Math.abs(y - CY);
         if (z < CEJ - 1.5 && by < 7.5) {
-          v = by > 6.4 || z < 1.5 ? 1250 : 620 + 260 * Math.sin(x * 2.3 + z) * Math.sin(y * 1.9 - z * 0.7) * Math.sin(z * 2.1 + x * 0.6);
+          v = by > 6.4 || z < 1.5 ? 1250 : (opt.bone || 620) + 260 * Math.sin(x * 2.3 + z) * Math.sin(y * 1.9 - z * 0.7) * Math.sin(z * 2.1 + x * 0.6);
         } else if (z < CEJ + 1.5 && by < 8.5) v = 40;
         else v = -1000;
         let lab = 0;
@@ -599,7 +604,7 @@ function makeDemoVolume(opt = window.DEMO_OPTS || {}) {
           if (Math.abs(x - T.cx) > T.rx + 4 || Math.abs(y - T.cy) > T.ry + 3) continue;
           lab = label(T, x, y, z, 0);
           if (lab) break;
-          if (v > 300 && label(T, x, y, z, 0.25)) v = 60; // 歯根膜腔
+          if (v > 300 && label(T, x, y, z, opt.pdl ?? 0.25)) v = 60; // 歯根膜腔
         }
         if (lab === 1) v = 2600; else if (lab === 2) v = 1550; else if (lab === 3) v = 90;
         f[(k * ny + j) * nx + i] = v;
@@ -637,7 +642,7 @@ function blur3(f, nx, ny, nz, w = [0.25, 0.5, 0.25]) {
  *  アプリ状態
  * ===================================================================== */
 const S = {
-  vol: null, cursor: [0, 0, 0], seed: null, seg: null, ww: 3000, wl: 800, meas: { on: false, pts: [] },
+  vol: null, cursor: [0, 0, 0], seed: null, seg: null, ww: 3000, wl: 800, meas: { on: false, pts: [] }, shift: [0, 0], brush: { on: false, groups: [] },
 };
 function vget(x, y, z) { return S.vol.slices[z][y * S.vol.nx + x]; }
 
@@ -646,7 +651,7 @@ function showProgress(t, p) { $('progress').classList.add('on'); $('progressText
 function hideProgress() { $('progress').classList.remove('on'); }
 
 function setVolume(vol, note) {
-  S.vol = vol; S.seg = null; S.seed = null; S.thManual = false;
+  S.vol = vol; S.seg = null; S.seed = null; S.thManual = false; S.shift = [0, 0]; S.brush.groups = [];
   S.cursor = [vol.nx >> 1, vol.ny >> 1, vol.nz >> 1];
   // 統計（サンプリング）
   const samp = [];
@@ -693,7 +698,7 @@ function syncOut(id) {
   const v = +$(id).value;
   const fmt = {
     roiX: v + 'mm', roiY: v + 'mm', roiUp: v + 'mm', roiDn: v + 'mm', thCanal: v + '%',
-    erode: ['なし', '弱', '中', '強', '最強'][v], tiltX: v + '°', tiltY: v + '°', tiltZ: v + '°', opE: v + '%', opD: v + '%', opP: v + '%', opB: v + '%',
+    erode: ['なし', '弱', '中', '強', '最強'][v], tiltX: v + '°', tiltY: v + '°', tiltZ: v + '°', brushR: v + 'mm', opE: v + '%', opD: v + '%', opP: v + '%', opB: v + '%',
     glass: v + '%', clipPos: v + '%',
   }[id];
   o.textContent = fmt !== undefined ? fmt : v;
@@ -717,7 +722,7 @@ function getROI() {
     z0: clamp(Math.round(z - dn), 0, v.nz - 1), z1: clamp(Math.round(z + up), 0, v.nz - 1),
   };
   r.nx = r.x1 - r.x0 + 1; r.ny = r.y1 - r.y0 + 1; r.nz = r.z1 - r.z0 + 1;
-  r.key = `${r.x0},${r.y0},${r.z0},${r.x1},${r.y1},${r.z1},${$('tiltX').value},${$('tiltY').value},${$('tiltZ').value}`;
+  r.key = `${r.x0},${r.y0},${r.z0},${r.x1},${r.y1},${r.z1},${$('tiltX').value},${$('tiltY').value},${$('tiltZ').value},${S.shift},${S.brush.groups.length}`;
   return r;
 }
 /** 歯軸の傾き：ローカル座標（z=歯軸）→ ボリューム座標(mm) の回転行列（行優先 3x3） */
@@ -739,19 +744,23 @@ function roiFrame() {
     return [Rm[0] * a + Rm[3] * b + Rm[6] * c, Rm[1] * a + Rm[4] * b + Rm[7] * c, Rm[2] * a + Rm[5] * b + Rm[8] * c];
   };
   const toVox = (lx, ly, lz) => [0, 1, 2].map((k) => (sm[k] + Rm[k * 3] * lx + Rm[k * 3 + 1] * ly + Rm[k * 3 + 2] * lz) / [v.sx, v.sy, v.sz][k]);
-  const inside = (x, y, z) => { const l = toLocal(x, y, z); return Math.abs(l[0]) <= hx && Math.abs(l[1]) <= hy && l[2] >= -dn && l[2] <= up; };
+  const [shx, shy] = S.shift;
+  const inside = (x, y, z) => { const l = toLocal(x, y, z); return Math.abs(l[0] - shx) <= hx && Math.abs(l[1] - shy) <= hy && l[2] >= -dn && l[2] <= up; };
   const corners = [];
-  for (const a of [-hx, hx]) for (const b of [-hy, hy]) for (const c of [-dn, up]) corners.push(toVox(a, b, c));
+  for (const a of [shx - hx, shx + hx]) for (const b of [shy - hy, shy + hy]) for (const c of [-dn, up]) corners.push(toVox(a, b, c));
   const lo = [0, 1, 2].map((k) => Math.max(0, Math.floor(Math.min(...corners.map((q) => q[k])))));
   const hi = [0, 1, 2].map((k) => Math.min([v.nx, v.ny, v.nz][k] - 1, Math.ceil(Math.max(...corners.map((q) => q[k])))));
-  return { Rm, sm, hx, hy, up, dn, toLocal, toVox, inside, corners, lo, hi };
+  return { Rm, sm, hx, hy, up, dn, shx, shy, toLocal, toVox, inside, corners, lo, hi };
 }
 /** 傾けた枠に沿ってCTを三線形補間で再サンプリングしたローカルボリューム（等方ボクセル） */
 function buildLocalVolume(marginMm) {
   const v = S.vol, F = roiFrame(), s = Math.min(v.sx, v.sy, v.sz);
-  const cx = Math.round((F.hx + marginMm) / s), cy = Math.round((F.hy + marginMm) / s);
+  // 選択点（ローカル原点）が格子点に乗るように、ずらした枠の範囲を整数格子で表す
+  const i0 = Math.round((F.shx - F.hx - marginMm) / s), i1 = Math.round((F.shx + F.hx + marginMm) / s);
+  const j0 = Math.round((F.shy - F.hy - marginMm) / s), j1 = Math.round((F.shy + F.hy + marginMm) / s);
+  const cx = -i0, cy = -j0;
   const k0 = -Math.round(F.dn / s), k1 = Math.round(F.up / s);
-  const nx = 2 * cx + 1, ny = 2 * cy + 1, nz = k1 - k0 + 1, Rm = F.Rm, bg = v.p01 ?? -1000;
+  const nx = i1 - i0 + 1, ny = j1 - j0 + 1, nz = k1 - k0 + 1, Rm = F.Rm, bg = v.p01 ?? -1000;
   const slices = [];
   for (let k = 0; k < nz; k++) {
     const a = new Int16Array(nx * ny), lz = (k + k0) * s;
@@ -767,7 +776,7 @@ function buildLocalVolume(marginMm) {
     }
     slices.push(a);
   }
-  return { nx, ny, nz, sx: s, sy: s, sz: s, slices, seedIdx: [cx, cy, -k0], mx: Math.round(marginMm / s), Rm, sm: F.sm, s };
+  return { nx, ny, nz, sx: s, sy: s, sz: s, slices, seedIdx: [cx, cy, -k0], mx: Math.round(marginMm / s), Rm, sm: F.sm, s, F };
 }
 function sampleVol(v, X, Y, Z, bg) {
   const x0 = Math.floor(X), y0 = Math.floor(Y), z0 = Math.floor(Z);
@@ -805,7 +814,11 @@ class SliceView {
     canvas.addEventListener('pointerdown', (e) => this.down(e));
     canvas.addEventListener('pointermove', (e) => this.move(e));
     canvas.addEventListener('pointerup', (e) => {
-      if (this.drag === 'tilt') { this.drag = null; canvas.releasePointerCapture(e.pointerId); if ($('autoExtract').checked) runExtract(); return; }
+      if (this.drag === 'tilt' || this.drag === 'face' || this.drag === 'brush') {
+        this.drag = null; canvas.releasePointerCapture(e.pointerId);
+        if (S.seed && $('autoExtract').checked) runExtract();
+        return;
+      }
       const picked = this.drag === 'pick';
       this.drag = null; canvas.releasePointerCapture(e.pointerId);
       if (!picked || !S.seed) return;
@@ -857,10 +870,13 @@ class SliceView {
       if (i >= 0 && j >= 0 && i < g.w && j < g.h) addMeasPoint(this.toVox(Math.floor(i), Math.floor(j)));
       return;
     }
+    if (e.button === 0 && S.brush.on) { this.drag = 'brush'; S.brush.groups.push([]); this.paint(e); return; }
     if (e.button === 0 && this.handles && S.seed) {
       const [, , sx, sy] = this.evtImg(e), dpr = this.cv.width / this.cv.getBoundingClientRect().width;
       const h = this.handles.find((q) => Math.hypot(q.x - sx, q.y - sy) < 12 * dpr);
       if (h) { this.drag = 'tilt'; this.tiltEnd = h.end; return; }
+      const f = (this.faces || []).find((q) => Math.hypot(q.x - sx, q.y - sy) < 11 * dpr);
+      if (f) { this.drag = 'face'; this.face = f; return; }
     }
     if (e.button === 0) { this.drag = 'pick'; this.pick(e); }
     else { this.drag = 'pan'; this.lastX = e.clientX; this.lastY = e.clientY; }
@@ -869,11 +885,37 @@ class SliceView {
     if (!this.drag) return;
     if (this.drag === 'pick') this.pick(e);
     else if (this.drag === 'tilt') this.tilt(e);
+    else if (this.drag === 'face') this.moveFace(e);
+    else if (this.drag === 'brush') this.paint(e);
     else {
       const dpr = this.cv.width / this.cv.getBoundingClientRect().width;
       this.panX += (e.clientX - this.lastX) * dpr; this.panY += (e.clientY - this.lastY) * dpr;
       this.lastX = e.clientX; this.lastY = e.clientY; this.render();
     }
+  }
+  /** 枠の1面だけを動かす（反対側の面は固定。選択点は常に枠の内側） */
+  moveFace(e) {
+    const [i, j] = this.evtImg(e), F = roiFrame(); if (!F) return;
+    const l = F.toLocal(...this.toVox(i - 0.5, j - 0.5)), { k, sg } = this.face;
+    if (k < 2) {
+      const half = k === 0 ? F.hx : F.hy, c = k === 0 ? F.shx : F.shy;
+      let lo = c - half, hi = c + half;
+      if (sg > 0) hi = Math.max(l[k], 0.5, lo + 2); else lo = Math.min(l[k], -0.5, hi - 2);
+      const w = clamp(Math.round((hi - lo) * 2) / 2, 2, 40);
+      setVal(k === 0 ? 'roiX' : 'roiY', w);
+      S.shift[k] = sg > 0 ? lo + w / 2 : hi - w / 2;
+    } else if (sg > 0) setVal('roiUp', clamp(Math.round(l[2] * 2) / 2, 1, 40));
+    else setVal('roiDn', clamp(Math.round(-l[2] * 2) / 2, 1, 40));
+    renderAll();
+  }
+  /** 除外ブラシ：なぞった位置に球を置く */
+  paint(e) {
+    const [i, j] = this.evtImg(e), g = this.geom();
+    if (i < 0 || j < 0 || i >= g.w || j >= g.h) return;
+    const c = this.toVox(i - 0.5, j - 0.5), r = +$('brushR').value, grp = S.brush.groups[S.brush.groups.length - 1], v = S.vol;
+    const last = grp[grp.length - 1];
+    if (last && Math.hypot((last.c[0] - c[0]) * v.sx, (last.c[1] - c[1]) * v.sy, (last.c[2] - c[2]) * v.sz) < r * 0.4) return;
+    grp.push({ c, r }); renderAll();
   }
   tilt(e) {
     const [i, j] = this.evtImg(e), q = this.toVox(i - 0.5, j - 0.5), v = S.vol;
@@ -887,6 +929,7 @@ class SliceView {
   pick(e) {
     const [i, j] = this.evtImg(e), g = this.geom();
     if (i < 0 || j < 0 || i >= g.w || j >= g.h) return;
+    S.shift = [0, 0];
     setSeed(this.toVox(Math.floor(i), Math.floor(j)));
   }
   wheel(e) {
@@ -929,7 +972,7 @@ class SliceView {
           let col = null, a = 0.45;
           if (seg && seg.roi === roi.key) {
             const L = seg.labelAt(x, y, z);
-            if (L) { col = L === 3 ? pulpRGB : LABEL_COL[L]; a = L === 4 ? 0.25 : L === 3 ? 0.75 : 0.4; }
+            if (L && L !== 4) { col = L === 3 ? pulpRGB : LABEL_COL[L]; a = L === 3 ? 0.75 : 0.4; }
           } else if (val >= te) { col = [90, 200, 255]; a = 0.35; }
           else if (val >= th) { col = [60, 230, 120]; a = 0.35; }
           if (col) { r = r * (1 - a) + col[0] * a; gg = gg * (1 - a) + col[1] * a; b = b * (1 - a) + col[2] * a; }
@@ -961,7 +1004,7 @@ class SliceView {
       for (const [p0, p1] of [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]]) { ctx.moveTo(...C[p0]); ctx.lineTo(...C[p1]); }
       ctx.stroke(); ctx.setLineDash([]);
       // 歯軸線と、傾きを変えるハンドル（コロナル・サジタル）
-      const top = scr(F.toVox(0, 0, F.up)), bot = scr(F.toVox(0, 0, -F.dn)), sp = scr(S.seed);
+      const top = scr(F.toVox(F.shx, F.shy, F.up + 3)), bot = scr(F.toVox(F.shx, F.shy, -F.dn - 3)), sp = scr(S.seed);
       ctx.strokeStyle = '#ffd23f'; ctx.lineWidth = 2 * dpr;
       ctx.beginPath(); ctx.moveTo(...bot); ctx.lineTo(...top); ctx.stroke();
       ctx.fillStyle = '#ffd23f';
@@ -973,6 +1016,28 @@ class SliceView {
           ctx.fillStyle = '#1e232c'; ctx.fill(); ctx.lineWidth = 2 * dpr; ctx.strokeStyle = '#ffd23f'; ctx.stroke();
           this.handles.push({ x: pt[0], y: pt[1], end });
         }
+      }
+      // 面ハンドル（■）：この断面にほぼ平行に見えている面だけ
+      this.faces = [];
+      const mz = (F.up - F.dn) / 2, va = this.axis;
+      for (const [k, sg, L] of [[0, 1, [F.shx + F.hx, F.shy, mz]], [0, -1, [F.shx - F.hx, F.shy, mz]], [1, 1, [F.shx, F.shy + F.hy, mz]], [1, -1, [F.shx, F.shy - F.hy, mz]], [2, 1, [F.shx, F.shy, F.up]], [2, -1, [F.shx, F.shy, -F.dn]]]) {
+        const nrm = F.Rm[va * 3 + k];
+        if (Math.sqrt(Math.max(0, 1 - nrm * nrm)) < 0.5) continue;
+        const pt = scr(F.toVox(...L)), hs = 5 * dpr;
+        ctx.fillStyle = '#ffd23f'; ctx.fillRect(pt[0] - hs, pt[1] - hs, 2 * hs, 2 * hs);
+        ctx.strokeStyle = '#1e232c'; ctx.lineWidth = 1.5 * dpr; ctx.strokeRect(pt[0] - hs, pt[1] - hs, 2 * hs, 2 * hs);
+        this.faces.push({ x: pt[0], y: pt[1], k, sg });
+      }
+    }
+    // 除外ブラシ（球の断面を赤で表示）
+    if (S.brush.groups.length) {
+      const sp3 = [v.sx, v.sy, v.sz], mmPx = t.px / g.pw;
+      ctx.fillStyle = 'rgba(255,70,70,0.35)';
+      for (const grp of S.brush.groups) for (const b of grp) {
+        const dd = (b.c[this.axis] - s) * sp3[this.axis];
+        if (Math.abs(dd) >= b.r) continue;
+        const [a0, b0] = this.toImg(...b.c), rr = Math.sqrt(b.r * b.r - dd * dd) * mmPx;
+        ctx.beginPath(); ctx.arc(t.ox + (a0 + 0.5) * t.px, t.oy + (b0 + 0.5) * t.py, rr, 0, Math.PI * 2); ctx.fill();
       }
     }
     // 距離計測
@@ -1168,7 +1233,7 @@ function splitNeighbors(domain, nx, ny, nz, sp, seedIdx) {
       for (const j of nb) if (j >= 0 && domain[j] && !comp[j] && dist[j] >= D) { comp[j] = nc; stack[sp2++] = j; }
     }
   }
-  if (nc < 2) return null;
+  if (nc < 1) return null;
   const csize = new Int32Array(nc + 1);
   for (let i = 0; i < n; i++) csize[comp[i]]++;
   const minCore = Math.round(3 / (sp[0] * sp[1] * sp[2])); // 3mm³ 未満の核は無視
@@ -1190,6 +1255,12 @@ function splitNeighbors(domain, nx, ny, nz, sp, seedIdx) {
     const other = comp[i] !== seedComp && csize[comp[i]] >= minCore;
     lab[i] = other ? 2 : 1; if (other) others++;
     buckets[bOf(i)].push(i);
+  }
+  // 枠の側面（外周）に接する硬組織 ＝ 骨・隣在歯 とみなして競合させる（歯根に密着した骨を切り分ける）
+  for (let z = 0; z < nz; z++) for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) {
+    if (x > 1 && y > 1 && x < nx - 2 && y < ny - 2) continue;
+    const i = (z * ny + y) * nx + x;
+    if (domain[i] && !lab[i]) { lab[i] = 2; others++; buckets[bOf(i)].push(i); }
   }
   if (!others) return null;
   for (let lv = nb - 1; lv >= 0; lv--) {
@@ -1241,8 +1312,17 @@ async function extract() {
   const ex = ext.nx, ey = ext.ny, ez = ext.nz, en = ex * ey * ez;
   const fe = roiValues(ext, $('smooth').checked, v);
   showProgress('歯を抽出中…（領域拡張）', 0.3); await sleep0();
+  // 除外ブラシ（球）をローカル格子へ書き込む
+  const excl = new Uint8Array(en);
+  for (const g of S.brush.groups) for (const b of g) {
+    const l = v.F.toLocal(...b.c), c = l.map((q, k2) => q / v.s + v.seedIdx[k2]), rr = b.r / v.s;
+    for (let z = Math.max(0, Math.floor(c[2] - rr)); z <= Math.min(ez - 1, Math.ceil(c[2] + rr)); z++)
+      for (let y = Math.max(0, Math.floor(c[1] - rr)); y <= Math.min(ey - 1, Math.ceil(c[1] + rr)); y++)
+        for (let x = Math.max(0, Math.floor(c[0] - rr)); x <= Math.min(ex - 1, Math.ceil(c[0] + rr)); x++)
+          if ((x - c[0]) ** 2 + (y - c[1]) ** 2 + (z - c[2]) ** 2 <= rr * rr) excl[(z * ey + y) * ex + x] = 1;
+  }
   const hardE = new Uint8Array(en);
-  for (let i = 0; i < en; i++) if (fe[i] >= th) hardE[i] = 1;
+  for (let i = 0; i < en; i++) if (fe[i] >= th && !excl[i]) hardE[i] = 1;
   let core = hardE;
   for (let i = 0; i < k; i++) core = erode6(core, ex, ey, ez);
   // 選択点から最も近いコア画素を探す
@@ -1262,17 +1342,65 @@ async function extract() {
     setStatus('選択点の近く（4mm以内）に歯質が見つかりません。歯の象牙質をクリックするか、しきい値を下げてください', true);
     return;
   }
+  // 骨と象牙質の濃度差による分離：枠の外周の硬組織（≒骨）と、選択点付近の象牙質の濃度を比べ、
+  // 差があれば両者の中間を「つながり判定用」のしきい値にする（骨が歯根に密着していても分けられる）
+  let thSep = th;
+  if ($('boneSep').checked) {
+    const dS = [], bS = [], rr = Math.ceil(2.5 / v.s), [cx0, cy0, cz0] = [seedIdx % ex, ((seedIdx / ex) | 0) % ey, (seedIdx / (ex * ey)) | 0];
+    for (let dz = -rr; dz <= rr; dz++) for (let dy = -rr; dy <= rr; dy++) for (let dx = -rr; dx <= rr; dx++) {
+      const x = cx0 + dx, y = cy0 + dy, z = cz0 + dz;
+      if (x < 0 || y < 0 || z < 0 || x >= ex || y >= ey || z >= ez || dx * dx + dy * dy + dz * dz > rr * rr) continue;
+      const i = (z * ey + y) * ex + x; if (core[i] && fe[i] < te) dS.push(fe[i]);
+    }
+    for (let z = 0; z < ez; z++) for (let y = 0; y < ey; y++) for (let x = 0; x < ex; x++) {
+      if (x > 2 && y > 2 && x < ex - 3 && y < ey - 3) continue;
+      const i = (z * ey + y) * ex + x; if (hardE[i] && fe[i] < te) bS.push(fe[i]);
+    }
+    const med = (a, q = 0.5) => { a.sort((p, q2) => p - q2); return a[Math.floor(q * (a.length - 1))]; };
+    if (dS.length > 30 && bS.length > 200) {
+      const dM = med(dS), bM = med(bS, 0.6);
+      if (dM - bM > 120) thSep = Math.min(Math.max(th, (dM + bM) / 2), dM - 60);
+    }
+  }
+  let hardS = hardE;
+  if (thSep > th) {
+    hardS = new Uint8Array(en);
+    for (let i = 0; i < en; i++) if (fe[i] >= thSep && !excl[i]) hardS[i] = 1;
+    core = hardS;
+    for (let i = 0; i < k; i++) core = erode6(core, ex, ey, ez);
+    let bd = Infinity, si2 = -1;
+    for (let i = 0; i < en; i++) if (core[i]) {
+      const d = (i % ex - sx) ** 2 + (((i / ex) | 0) % ey - sy) ** 2 + ((i / (ex * ey) | 0) - sz) ** 2;
+      if (d < bd) { bd = d; si2 = i; }
+    }
+    if (si2 >= 0) seedIdx = si2; else { hardS = hardE; thSep = th; core = hardE; for (let i = 0; i < k; i++) core = erode6(core, ex, ey, ez); }
+  }
   let toothE = floodFill(core, ex, ey, ez, seedIdx);
-  if (k > 0) toothE = dilateWithin(toothE, hardE, ex, ey, ez, k + 1);
+  if (k > 0) toothE = dilateWithin(toothE, hardS, ex, ey, ez, k + 1);
+  // 濃度の高い基準で分けた後、歯の外層（部分容積で薄く写る約0.5mm）を本来のしきい値の範囲で取り戻す
+  // （外層は軟組織・歯根膜の近く＝硬組織の外側から0.35mm以内。骨と癒着した部分は硬組織の奥なので戻さない）
+  if (thSep > th) {
+    const dBg = distanceTransform(hardE, ex, ey, ez, v.s, v.s, v.s), rec = new Uint8Array(en);
+    for (let i = 0; i < en; i++) rec[i] = hardS[i] || (hardE[i] && dBg[i] <= 0.35) ? 1 : 0;
+    const coreT = toothE;
+    toothE = dilateWithin(toothE, rec, ex, ey, ez, Math.max(1, Math.round(1.2 / v.s)));
+    // 取り戻した外層のうち、骨髄腔のふちなどに沿って伸びた細いトゲ（2ボクセル未満）は除く（オープニング）
+    const opened = dilate6(erode6(toothE, ex, ey, ez), ex, ey, ez, 1);
+    for (let i = 0; i < en; i++) toothE[i] = coreT[i] || (toothE[i] && opened[i]) ? 1 : 0;
+  }
   if (split) {
     showProgress('歯を抽出中…（隣在歯との分離）', 0.45); await sleep0();
     // 隣在歯の「全体」を競合させるため、収縮前の硬組織の連結領域で分水嶺を行い、結果を対象歯の領域に適用する
-    const full = floodFill(hardE, ex, ey, ez, seedIdx);
+    const full = floodFill(hardS, ex, ey, ez, seedIdx);
     const h0 = holes2D(full, ex, ey, ez), dom = new Uint8Array(en);
     for (let i = 0; i < en; i++) dom[i] = full[i] | h0[i];
     const lab = splitNeighbors(dom, ex, ey, ez, [v.sx, v.sy, v.sz], seedIdx);
     if (lab) {
-      for (let i = 0; i < en; i++) if (lab[i] !== 1) toothE[i] = 0;
+      // 分水嶺の対象外だった薄い外層は、近い側（対象歯／隣在歯・骨）に割り当てる
+      const A = new Uint8Array(en), Bm = new Uint8Array(en);
+      for (let i = 0; i < en; i++) { if (lab[i] === 1) A[i] = 1; else if (lab[i] === 2) Bm[i] = 1; }
+      const keep = competeGrow(A, Bm, toothE, ex, ey, ez, Math.round(2.0 / v.s));
+      for (let i = 0; i < en; i++) if (!keep[i]) toothE[i] = 0;
       let s0 = seedIdx;
       if (!toothE[s0]) for (let i = 0; i < en; i++) if (toothE[i]) { s0 = i; break; }
       toothE = floodFill(toothE, ex, ey, ez, s0);
@@ -1298,9 +1426,10 @@ async function extract() {
   const I = upsample(roiValues(roi, false, v), nx, ny, nz, box, u);
   const tf = new Float32Array(n); for (let i = 0; i < n; i++) tf[i] = tooth[i];
   const tm = upsample(tf, nx, ny, nz, box, u);
+  const xm = upsample(cropROI(Float32Array.from(excl), ext, roi, Float32Array), nx, ny, nz, box, u);
   showProgress('高精度処理中…（歯の輪郭）', 0.58); await sleep0();
   let toothF = new Uint8Array(fn);
-  for (let i = 0; i < fn; i++) toothF[i] = tm[i] > 0.15 && I[i] >= th ? 1 : 0;
+  for (let i = 0; i < fn; i++) toothF[i] = tm[i] > 0.15 && I[i] >= th && xm[i] < 0.5 ? 1 : 0;
   toothF = keepLargest(toothF, fx, fy, fz);
   const holesF = holes2D(toothF, fx, fy, fz);
   const solidF = new Uint8Array(fn);
@@ -1506,6 +1635,24 @@ function filterComponents(mask, nx, ny, nz, minSize, minZ) {
   let best = 0; for (let k = 1; k < c.size.length; k++) if (c.size[k] > c.size[best]) best = k;
   const keep = c.size.map((sz, k) => k === best || (sz >= minSize && c.zhi[k] - c.zlo[k] + 1 >= minZ));
   for (let i = 0; i < mask.length; i++) if (mask[i] && !keep[c.lab[i]]) mask[i] = 0;
+}
+/** 2つの領域を mask 内で同時に幅優先で広げ、先に届いた側に割り当てる（a 側の結果を返す） */
+function competeGrow(a, b, mask, nx, ny, nz, maxSteps) {
+  const n = a.length, nxy = nx * ny, lab = new Uint8Array(n);
+  let cur = [];
+  for (let i = 0; i < n; i++) { if (a[i]) { lab[i] = 1; cur.push(i); } else if (b[i]) { lab[i] = 2; cur.push(i); } }
+  for (let st = 0; st < maxSteps && cur.length; st++) {
+    const nxt = [];
+    for (const i of cur) {
+      const x = i % nx, y = ((i / nx) | 0) % ny, z = (i / nxy) | 0, L = lab[i];
+      const nbs = [x > 0 ? i - 1 : -1, x < nx - 1 ? i + 1 : -1, y > 0 ? i - nx : -1, y < ny - 1 ? i + nx : -1, z > 0 ? i - nxy : -1, z < nz - 1 ? i + nxy : -1];
+      for (const j of nbs) if (j >= 0 && mask[j] && !lab[j]) { lab[j] = L; nxt.push(j); }
+    }
+    cur = nxt;
+  }
+  const out = new Uint8Array(n);
+  for (let i = 0; i < n; i++) out[i] = lab[i] === 1 ? 1 : 0;
+  return out;
 }
 /** ヒステリシス：強い候補から、弱い候補の中を26近傍でつながる範囲へ拡張 */
 function hysteresis(strong, weak, nx, ny, nz) {
@@ -1913,6 +2060,15 @@ for (const id of ['tiltX', 'tiltY', 'tiltZ']) {
   $(id).addEventListener('input', () => { syncOut(id); renderAll(); });
   $(id).addEventListener('change', () => { if (S.seed && $('autoExtract').checked) runExtract(); });
 }
+$('brushBtn').onclick = () => {
+  S.brush.on = !S.brush.on;
+  if (S.brush.on && S.meas.on) $('measBtn').click();
+  $('brushBtn').classList.toggle('primary', S.brush.on);
+  setStatus(S.brush.on ? '除外ブラシ：断面上で、抽出から外したい部分（骨・隣在歯など）をなぞってください。もう一度押すと終了します' : '除外ブラシを終了しました');
+};
+$('brushUndo').onclick = () => { if (S.brush.groups.pop() && S.seed && $('autoExtract').checked) runExtract(); renderAll(); };
+$('brushClear').onclick = () => { const had = S.brush.groups.length; S.brush.groups = []; renderAll(); if (had && S.seed && $('autoExtract').checked) runExtract(); };
+$('brushR').addEventListener('input', () => syncOut('brushR'));
 $('tiltReset').onclick = () => { ['tiltX', 'tiltY', 'tiltZ'].forEach((id) => setVal(id, 0)); renderAll(); if (S.seed && $('autoExtract').checked) runExtract(); };
 /** 抽出した歯の主軸（主成分分析）を歯軸として、枠の傾き・中心・長さを合わせて再抽出 */
 $('axisAuto').onclick = () => {
@@ -1947,7 +2103,7 @@ $('axisAuto').onclick = () => {
     const t = (q[0] - cm[0]) * u[0] + (q[1] - cm[1]) * u[1] + (q[2] - cm[2]) * u[2];
     if (t < lo) lo = t; if (t > hi) hi = t;
   }
-  S.seed = [Math.round(cm[0] / v.sx), Math.round(cm[1] / v.sy), Math.round(cm[2] / v.sz)]; S.cursor = S.seed.slice();
+  S.seed = [Math.round(cm[0] / v.sx), Math.round(cm[1] / v.sy), Math.round(cm[2] / v.sz)]; S.cursor = S.seed.slice(); S.shift = [0, 0];
   setVal('roiUp', clamp(Math.ceil(hi + 2.5), 2, 40)); setVal('roiDn', clamp(Math.ceil(-lo + 2.5), 2, 40));
   renderAll(); runExtract();
 };
@@ -1995,6 +2151,7 @@ document.querySelectorAll('[data-scheme]').forEach((b) => (b.onclick = () => {
 }));
 $('measBtn').onclick = () => {
   S.meas.on = !S.meas.on; S.meas.pts = [];
+  if (S.meas.on && S.brush.on) $('brushBtn').click();
   $('measBtn').classList.toggle('primary', S.meas.on);
   $('measOut').textContent = S.meas.on ? '断面上で2点をクリック' : '';
   renderAll();
@@ -2175,7 +2332,7 @@ window.addEventListener('drop', async (e) => {
   if (files.length) loadFiles(files);
 });
 
-['tiltX', 'tiltY', 'tiltZ', 'ww', 'wl', 'roiX', 'roiY', 'roiUp', 'roiDn', 'thHard', 'thEnamel', 'thCanal', 'erode', 'opE', 'opD', 'opP', 'opB', 'glass', 'clipPos'].forEach(syncOut);
+['brushR', 'tiltX', 'tiltY', 'tiltZ', 'ww', 'wl', 'roiX', 'roiY', 'roiUp', 'roiDn', 'thHard', 'thEnamel', 'thCanal', 'erode', 'opE', 'opD', 'opP', 'opB', 'glass', 'clipPos'].forEach(syncOut);
 updateLegend(); drawCanalChart(null); renderAll();
 </script>
 </body>
