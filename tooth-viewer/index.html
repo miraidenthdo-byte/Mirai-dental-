@@ -161,7 +161,10 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 3
     <div class="row"><label>歯質（硬組織）</label><input id="thHard" type="range" min="-1000" max="4000" value="900"><output id="thHardO"></output></div>
     <div class="row"><label>エナメル質</label><input id="thEnamel" type="range" min="-1000" max="5000" value="2000"><output id="thEnamelO"></output></div>
     <div class="row"><label>根管感度</label><input id="thCanal" type="range" min="0" max="100" value="45"><output id="thCanalO"></output></div>
-    <div class="row"><label>骨との分離</label><input id="erode" type="range" min="0" max="4" value="2"><output id="erodeO"></output></div>
+    <div class="row"><label>くびれで切る</label><input id="erode" type="range" min="0" max="4" value="2"><output id="erodeO"></output></div>
+    <div class="row"><label>骨／歯の境界</label><input id="sepTh" type="range" min="-1000" max="4000" value="1400" disabled><output id="sepThO"></output></div>
+    <label class="check"><input id="sepAuto" type="checkbox" checked>骨／歯の境界を自動で決める</label>
+    <div class="hint">外すと手動。断面のプレビューで <b style="color:#ffa94d">オレンジ＝骨とみなす部分</b>、<b style="color:#3ce678">緑＝歯</b>、<b style="color:#5ac8ff">水色＝エナメル質</b>。</div>
     <label class="check"><input id="smooth" type="checkbox" checked>ノイズ除去（平滑化）してから抽出</label>
     <label class="check"><input id="splitNb" type="checkbox" checked>隣在歯との接触部を自動で分離</label>
     <label class="check"><input id="boneSep" type="checkbox" checked>骨と歯の濃度差で分離（骨が歯根に密着している場合）</label>
@@ -169,9 +172,10 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 3
     <label class="check"><input id="preview" type="checkbox" checked>断面にオーバーレイ表示</label>
     <label class="check"><input id="autoExtract" type="checkbox">歯をクリックしたらすぐ解析する（範囲の調整をしない場合）</label>
     <div class="flex"><button id="autoTh">ROIから自動設定</button></div>
-    <div class="hint">・歯が骨とつながって抽出される → 「骨との分離」を上げる / ROIを狭める<br>
+    <div class="hint">・歯が骨とつながって抽出される → 「骨／歯の境界」の自動を外し、骨がオレンジ・歯が緑になるまで上げる／ROIを狭める<br>
       ・根管が途切れる → 「根管感度」を上げる<br>
       ・歯に穴があく → 「歯質」しきい値を下げる</div>
+    <div id="diagOut" class="hint" style="color:var(--accent2)"></div>
     <button id="extractBtn" class="primary" style="width:100%;margin-top:6px;padding:9px" disabled>✅ 範囲を決定して解析</button>
   </section>
 
@@ -688,7 +692,7 @@ function showProgress(t, p) { $('progress').classList.add('on'); $('progressText
 function hideProgress() { $('progress').classList.remove('on'); }
 
 function setVolume(vol, note) {
-  S.vol = vol; S.seg = null; S.seed = null; S.thManual = false; S.shift = [0, 0]; S.brush.groups = [];
+  S.vol = vol; S.seg = null; S.seed = null; S.thManual = false; S.diag = null; $('diagOut').textContent = ''; S.shift = [0, 0]; S.brush.groups = [];
   S.cursor = [vol.nx >> 1, vol.ny >> 1, vol.nz >> 1]; S.mpr = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
   // 統計（サンプリング）
   const samp = [];
@@ -703,7 +707,7 @@ function setVolume(vol, note) {
   const pct = (p) => samp[Math.min(samp.length - 1, Math.floor(p * samp.length))];
   vol.p01 = pct(0.01); vol.p999 = pct(0.999); vol.min = samp[0]; vol.max = samp[samp.length - 1];
   const lo = Math.min(vol.min, -1000), hi = Math.max(vol.max, 1000);
-  for (const id of ['wl', 'thHard', 'thEnamel']) { $(id).min = lo; $(id).max = hi; }
+  for (const id of ['wl', 'thHard', 'thEnamel', 'sepTh']) { $(id).min = lo; $(id).max = hi; }
   $('ww').max = Math.max(100, hi - lo);
   autoWL();
   // 初期しきい値（全体の分布から推定）
@@ -736,7 +740,7 @@ function syncOut(id) {
   const v = +$(id).value;
   const fmt = {
     roiX: v + 'mm', roiY: v + 'mm', roiUp: v + 'mm', roiDn: v + 'mm', thCanal: v + '%',
-    erode: ['なし', '弱', '中', '強', '最強'][v], tiltX: v + '°', tiltY: v + '°', tiltZ: v + '°', brushR: v + 'mm', opE: v + '%', opD: v + '%', opP: v + '%', opB: v + '%',
+    erode: ['なし', '弱', '中', '強', '最強'][v], sepTh: $('sepAuto') && $('sepAuto').checked ? '自動' : v, tiltX: v + '°', tiltY: v + '°', tiltZ: v + '°', brushR: v + 'mm', opE: v + '%', opD: v + '%', opP: v + '%', opB: v + '%',
     glass: v + '%', clipPos: v + '%',
   }[id];
   o.textContent = fmt !== undefined ? fmt : v;
@@ -1103,6 +1107,7 @@ class SliceView {
     const roi = getROI(), seg = S.seg, showOv = $('preview').checked, F = roiFrame();
     const th = +$('thHard').value, te = +$('thEnamel').value;
     const pulpRGB = hexRGB($('colP').value).map((x) => x * 255);
+    const sepMan = !$('sepAuto').checked, sepV = +$('sepTh').value;
     // 画素ごとのボクセル座標を増分で計算し、三線形補間でサンプリング（オブリーク断面対応）
     const du = P.u.map((x, k) => x * P.s / P.sp[k]), dv = P.v.map((x, k) => x * P.s / P.sp[k]);
     const p0 = [0, 1, 2].map((k) => (P.O[k] + 0.5 * P.s * (P.u[k] + P.v[k])) / P.sp[k]);
@@ -1129,10 +1134,11 @@ class SliceView {
         let r = gr, gg = gr, bl = gr;
         if (showOv && F && X >= F.lo[0] && X <= F.hi[0] && Y >= F.lo[1] && Y <= F.hi[1] && Z >= F.lo[2] && Z <= F.hi[2] && F.inside(X, Y, Z)) {
           let col = null, al = 0.45;
-          if (seg && seg.roi === roi.key) {
+          if (seg && seg.roi === roi.key && !S.dirty) {
             const L = seg.labelAt(X, Y, Z);
             if (L && L !== 4) { col = L === 3 ? pulpRGB : LABEL_COL[L]; al = L === 3 ? 0.75 : 0.4; }
           } else if (val >= te) { col = [90, 200, 255]; al = 0.35; }
+          else if (sepMan && val >= th && val < sepV) { col = [255, 169, 77]; al = 0.45; }
           else if (val >= th) { col = [60, 230, 120]; al = 0.35; }
           if (col) { r = r * (1 - al) + col[0] * al; gg = gg * (1 - al) + col[1] * al; bl = bl * (1 - al) + col[2] * al; }
         }
@@ -1540,7 +1546,8 @@ async function extract() {
   // 骨と象牙質の濃度差による分離：枠の外周の硬組織（≒骨）と、選択点付近の象牙質の濃度を比べ、
   // 差があれば両者の中間を「つながり判定用」のしきい値にする（骨が歯根に密着していても分けられる）
   let thSep = th, dentinM = null;
-  if ($('boneSep').checked) {
+  const sepManual = !$('sepAuto').checked;
+  if ($('boneSep').checked || sepManual) {
     const dS = [], bS = [], rr = Math.ceil(2.5 / v.s), [cx0, cy0, cz0] = [seedIdx % ex, ((seedIdx / ex) | 0) % ey, (seedIdx / (ex * ey)) | 0];
     for (let dz = -rr; dz <= rr; dz++) for (let dy = -rr; dy <= rr; dy++) for (let dx = -rr; dx <= rr; dx++) {
       const x = cx0 + dx, y = cy0 + dy, z = cz0 + dz;
@@ -1559,6 +1566,7 @@ async function extract() {
       if (dM - bM > 120) thSep = Math.min(Math.max(th, (dM + bM) / 2), dM - 60);
     }
   }
+  if (sepManual) thSep = Math.max(th, +$('sepTh').value);
   /** しきい値 thU で歯をつなぎ・隣在歯と分ける（粗い段階）。thU>th のときは骨との濃度差による分離 */
   const core0 = core, seed0 = seedIdx;
   const coarse = async (thU) => {
@@ -1611,7 +1619,10 @@ async function extract() {
     return { toothE, seedIdx };
   };
   let res = await coarse(th), usedSep = false;
-  if (thSep > th && !window.DEBUG_NOSEP) {
+  if (sepManual && thSep > th) {
+    const alt = await coarse(thSep);
+    if (alt) { res = alt; usedSep = true; }
+  } else if (thSep > th && !window.DEBUG_NOSEP) {
     // 通常の結果と、骨との濃度差で分けた結果を比べ、通常の結果が歯根を失った（小さい）か骨を取り込んだ（大きすぎる）ときだけ後者を使う
     showProgress('歯を抽出中…（骨との分離を確認）', 0.47); await sleep0();
     const alt = await coarse(thSep);
@@ -1639,7 +1650,7 @@ async function extract() {
   };
   let leakFixed = 0;
   const wf0 = wallFrac(res.toothE);
-  if ($('boneSep').checked && dentinM && wf0 > 0.03) {
+  if (!sepManual && $('boneSep').checked && dentinM && wf0 > 0.03) {
     showProgress('歯を抽出中…（骨への漏れを修正）', 0.48); await sleep0();
     let best = { r: res, wf: wf0, t: 0 };
     for (const fr of [0.35, 0.5, 0.65, 0.8, 0.9]) {
@@ -1655,6 +1666,9 @@ async function extract() {
     if (best.r !== res) { res = best.r; leakFixed = Math.round(best.t); usedSep = false; }
   }
   let toothE = res.toothE; seedIdx = res.seedIdx;
+  const usedTh = leakFixed || (usedSep ? Math.round(thSep) : Math.round(th));
+  S.diag = { th: Math.round(th), sep: usedTh, wall: wallFrac(toothE), dentin: dentinM && Math.round(dentinM), manual: sepManual };
+  if (!sepManual) setVal('sepTh', usedTh);
   const f = cropROI(fe, ext, roi, Float32Array), hard = cropROI(hardE, ext, roi, Uint8Array);
   const tooth = cropROI(toothE, ext, roi, Uint8Array);
   // ================= 高精度ステージ（サブボクセル） =================
@@ -1812,6 +1826,8 @@ async function extract() {
   S.chart = [canalCounts, fsp[2], zmin, zmax];
   drawCanalChart(...S.chart);
   renderAll();
+  const dg = S.diag;
+  $('diagOut').textContent = `判定：歯質しきい値 ${dg.th} ／ 骨・歯の境界 ${dg.sep}${dg.manual ? '（手動）' : '（自動）'} ／ 象牙質の代表値 ${dg.dentin ?? '-'} ／ 枠の側面への接触 ${(dg.wall * 100).toFixed(1)}%` + (dg.wall > 0.03 ? ' → 骨・隣在歯へ漏れている可能性があります。「骨／歯の境界」を手動で上げてください' : '');
   setStatus('抽出完了。' + (leakFixed ? `（骨とつながっていたため、つながり判定の基準を ${leakFixed} に上げて分離しました）` : '') + (usedSep ? '（骨が歯根に密着していたため、骨との濃度差で分離しました）' : '') + (touches ? '⚠ 歯がROIの枠に接しています。ROIを広げるか、隣在歯・骨とつながっていないか確認してください。' : '3Dビューをドラッグして回転できます。'), touches);
 }
 
@@ -2322,7 +2338,12 @@ function applyJaw() {
 $('jaw').addEventListener('change', applyJaw);
 
 for (const id of ['ww', 'wl']) $(id).addEventListener('input', () => { syncOut(id); readWL(); renderAll(); });
-for (const id of ['roiX', 'roiY', 'roiUp', 'roiDn', 'thHard', 'thEnamel', 'thCanal', 'erode'])
+$('sepAuto').addEventListener('change', () => {
+  $('sepTh').disabled = $('sepAuto').checked; syncOut('sepTh');
+  if (!$('sepAuto').checked && !S.diag) setVal('sepTh', Math.round(+$('thHard').value + (+$('thEnamel').value - +$('thHard').value) * 0.4));
+  renderAll(); markDirty();
+});
+for (const id of ['roiX', 'roiY', 'roiUp', 'roiDn', 'thHard', 'thEnamel', 'thCanal', 'erode', 'sepTh'])
   $(id).addEventListener('input', () => { syncOut(id); renderAll(); markDirty(); });
 for (const id of ['smooth', 'splitNb', 'boneSep', 'hiRes']) $(id).addEventListener('change', markDirty);
 $('preview').addEventListener('change', renderAll);
@@ -2703,7 +2724,7 @@ window.addEventListener('drop', async (e) => {
   if (files.length) loadFiles(files);
 });
 
-['brushR', 'tiltX', 'tiltY', 'tiltZ', 'ww', 'wl', 'roiX', 'roiY', 'roiUp', 'roiDn', 'thHard', 'thEnamel', 'thCanal', 'erode', 'opE', 'opD', 'opP', 'opB', 'glass', 'clipPos'].forEach(syncOut);
+['brushR', 'tiltX', 'tiltY', 'tiltZ', 'ww', 'wl', 'roiX', 'roiY', 'roiUp', 'roiDn', 'thHard', 'thEnamel', 'thCanal', 'erode', 'sepTh', 'opE', 'opD', 'opP', 'opB', 'glass', 'clipPos'].forEach(syncOut);
 updateLegend(); drawCanalChart(null); renderAll();
 </script>
 </body>
