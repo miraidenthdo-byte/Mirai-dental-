@@ -32,7 +32,11 @@ const CASES = [
     }, c.tooth);
     await page.click('#autoTh');
     await page.click('#extractBtn');
-    await page.waitForFunction(() => !S.busy && document.getElementById('empty3d').style.display === 'none', null, { timeout: 180000 });
+    // 枠の自動調整で解析し直すことがあるので、落ち着くまで待つ
+    for (let k = 0; k < 3; k++) {
+      await page.waitForTimeout(300);
+      await page.waitForFunction(() => !S.busy && !S.rerun && document.getElementById('empty3d').style.display === 'none', null, { timeout: 180000 });
+    }
     if (c.autoAxis) {
       await page.click('#axisAuto');
       await page.waitForTimeout(300);
