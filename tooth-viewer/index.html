@@ -1731,6 +1731,24 @@ async function extract() {
     if (strong[i] || (d >= dW && hat > kLow * sigma && hat >= 0.62 * Hm[i])) weak[i] = 1;
   }
   const canalF = hysteresis(strong, weak, fx, fy, fz);
+  // 根管の途切れをつなぐ：根管はほぼ歯軸（ローカルz）方向に走るので、z方向に約1mmまでの隙間を閉じる。
+  // ただし象牙質より暗い（トップハットが弱い陽性の）画素に限る
+  {
+    const rz = Math.max(1, Math.round(0.5 / fsp[2])), col = new Uint8Array(fz), tmp = new Uint8Array(fz);
+    const hatMin = 0.5 * kLow * sigma;
+    for (let y = 0; y < fy; y++) for (let x = 0; x < fx; x++) {
+      const b0 = y * fx + x;
+      let any = false;
+      for (let z = 0; z < fz; z++) { col[z] = canalF[b0 + z * fxy]; if (col[z]) any = true; }
+      if (!any) continue;
+      for (let z = 0; z < fz; z++) { let m = 0; for (let k = Math.max(0, z - rz); k <= Math.min(fz - 1, z + rz) && !m; k++) m = col[k]; tmp[z] = m; }   // 膨張
+      for (let z = 0; z < fz; z++) {                                                                                                    // 収縮
+        let m = 1; for (let k = Math.max(0, z - rz); k <= Math.min(fz - 1, z + rz) && m; k++) m = tmp[k];
+        const i = b0 + z * fxy;
+        if (m && !canalF[i] && solidF[i] && depth[i] >= dW && C[i] - B[i] > hatMin) canalF[i] = 1;
+      }
+    }
+  }
   // 小さな孤立成分（ノイズ）を除去：最大成分（歯髄腔）＋ 長さ1mm以上の成分のみ残す
   filterComponents(canalF, fx, fy, fz, Math.max(6, Math.round(0.015 / fvol)), Math.round(1.0 / fsp[2]));
   // 根管は象牙質に囲まれているはず：周囲（約0.3mmの殻）の濃度が象牙質より明らかに低い成分は、
@@ -1769,7 +1787,7 @@ async function extract() {
   // 骨は歯から少し離れたものだけ（接触面のちらつき防止）
   const nearT = dilate6(solidF, fx, fy, fz, 1);
   for (let i = 0; i < fn; i++) if (labF[i] === 4 && nearT[i]) { labF[i] = 0; cnt[4]--; cnt[0]++; }
-  const rgba = buildFields(I, labF, solidF, fx, fy, fz, th, te, dMed);
+  const rgba = buildFields(I, labF, solidF, fx, fy, fz, th, te, dMed, fmin);
   // 断面オーバーレイ用に元解像度のラベルへ戻す
   const labels = new Uint8Array(n);
   for (let i = 0; i < n; i++) if (hard[i] && !tooth[i]) labels[i] = 4;
@@ -1968,7 +1986,7 @@ function hysteresis(strong, weak, nx, ny, nz) {
  * 3D表示用フィールド（RGBA8）: R=エナメル質の割合, G=歯の外形, B=歯髄・根管, A=骨
  * 歯の外形はCT値そのものを使い、しきい値位置にサブボクセル精度の等値面ができるようにする
  */
-function buildFields(I, lab, solid, nx, ny, nz, th, te, dMed) {
+function buildFields(I, lab, solid, nx, ny, nz, th, te, dMed, vs = 0.1) {
   const n = I.length, rgba = new Uint8Array(n * 4);
   const blurMask = (pred, w) => { const f = new Float32Array(n); for (let i = 0; i < n; i++) f[i] = pred(i) ? 1 : 0; blur3(f, nx, ny, nz, w); return f; };
   const W3 = [0.25, 0.5, 0.25];
@@ -1982,6 +2000,30 @@ function buildFields(I, lab, solid, nx, ny, nz, th, te, dMed) {
   const enF = blurMask((i) => enD[i], [1 / 16, 4 / 16, 6 / 16, 4 / 16, 1 / 16]);
   const canal = blurMask((i) => lab[i] === 3, [1 / 16, 4 / 16, 6 / 16, 4 / 16, 1 / 16]);
   blur3(canal, nx, ny, nz, [0.25, 0.5, 0.25]); // 根管表面のざらつきを除去
+  // 太い部分（歯髄腔・太い根管）は、平滑化したCT値の等値面で表面を作る（2値マスクのギザギザを出さない）。
+  // 細い根管は CT値が途中まで下がりきらないので、従来の（ぼかした）マスクとの最大値をとる
+  {
+    const pv = []; for (let i = 0; i < n; i += 7) if (lab[i] === 3) pv.push(I[i]);
+    if (pv.length > 50) {
+      pv.sort((a, b) => a - b);
+      const pl = pv[Math.floor(pv.length * 0.3)], mid = (pl + dMed) / 2, hw = Math.max(40, (dMed - pl) / 2);
+      const Is = Float32Array.from(I);
+      const sm = [1 / 16, 4 / 16, 6 / 16, 4 / 16, 1 / 16];
+      blur3(Is, nx, ny, nz, sm); blur3(Is, nx, ny, nz, sm); blur3(Is, nx, ny, nz, sm);
+      const cm = new Uint8Array(n); for (let i = 0; i < n; i++) cm[i] = lab[i] === 3;
+      const dm = dilate6(cm, nx, ny, nz, 2), mask = blurMask((i) => dm[i], [0.25, 0.5, 0.25]);
+      // 太い部分（2ボクセル収縮しても残る部分の近傍）は CT値の面だけを使う
+      // 幅およそ1.2mm以上の部分だけを「太い」とする（細い根管はマスクのまま）
+      const ke = Math.max(2, Math.round(0.6 / vs));
+      let er = cm; for (let k = 0; k < ke; k++) er = erode6(er, nx, ny, nz);
+      const thick = dilate6(er, nx, ny, nz, ke + 1);
+      for (let i = 0; i < n; i++) {
+        if (!mask[i]) continue;
+        const f = Math.min(1, Math.max(0, 0.5 + (mid - Is[i]) / (2 * hw))) * mask[i];
+        if (thick[i]) canal[i] = f; else if (f > canal[i]) canal[i] = f;
+      }
+    }
+  }
   const bone = blurMask((i) => lab[i] === 4, [1 / 16, 4 / 16, 6 / 16, 4 / 16, 1 / 16]);
   const dD = Math.max(60, dMed - th);
   const c01 = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
