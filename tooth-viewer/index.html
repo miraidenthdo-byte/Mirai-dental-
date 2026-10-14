@@ -1416,7 +1416,7 @@ function distanceTransform(mask, nx, ny, nz, sx, sy, sz) {
  * 隣在歯との接触部分離：距離変換の「くびれ」で分ける（マーカー付きウォーターシェッド）。
  * 太い部分(dist>=D)を核とし、選択点の核＝対象歯、その他の核＝隣在歯として競合成長させる。
  */
-function splitNeighbors(domain, nx, ny, nz, sp, seedIdx) {
+function splitNeighbors(domain, nx, ny, nz, sp, seedIdx, wb) {
   const n = domain.length, nxy = nx * ny;
   const dist = distanceTransform(domain, nx, ny, nz, sp[0], sp[1], sp[2]);
   let maxD = 0;
@@ -1448,7 +1448,7 @@ function splitNeighbors(domain, nx, ny, nz, sp, seedIdx) {
       if (dd < bd) { bd = dd; seedComp = comp[i]; }
     }
   }
-  const lab = new Uint8Array(n); // 1=対象歯, 2=隣在歯
+  const lab = new Uint8Array(n); // 1=対象歯, 2=隣在歯, 3=枠の外周から入った骨など
   const Q = 0.05, nb = Math.ceil(Math.min(maxD, 50) / Q) + 2, buckets = Array.from({ length: nb }, () => []);
   const bOf = (i) => Math.min(nb - 1, Math.floor(Math.min(dist[i], 50) / Q));
   let others = 0;
@@ -1459,9 +1459,9 @@ function splitNeighbors(domain, nx, ny, nz, sp, seedIdx) {
   }
   // 枠の側面（外周）に接する硬組織 ＝ 骨・隣在歯 とみなして競合させる（歯根に密着した骨を切り分ける）
   for (let z = 0; z < nz; z++) for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) {
-    if (x > 1 && y > 1 && x < nx - 2 && y < ny - 2) continue;
+    if (wb ? x > wb.x0 && y > wb.y0 && x < wb.x1 && y < wb.y1 : x > 1 && y > 1 && x < nx - 2 && y < ny - 2) continue;
     const i = (z * ny + y) * nx + x;
-    if (domain[i] && !lab[i]) { lab[i] = 2; others++; buckets[bOf(i)].push(i); }
+    if (domain[i] && !lab[i]) { lab[i] = 3; others++; buckets[bOf(i)].push(i); }
   }
   if (!others) return null;
   for (let lv = nb - 1; lv >= 0; lv--) {
@@ -1476,6 +1476,76 @@ function splitNeighbors(domain, nx, ny, nz, sp, seedIdx) {
   return lab;
 }
 
+/**
+ * 断面ごとの追跡（歯冠の最大断面 z0 から上下へ）。cand=候補（硬組織）, init の z0 断面を出発点とする。
+ * 前の断面の領域 P の位置にある候補画素は残す。新たに加えるのは「前の断面では硬組織でなかった（歯根膜・歯髄だった）」画素で、
+ *  ・P に囲まれた穴（歯髄腔）の中：髄床・髄室天蓋など、または
+ *  ・P の外側1画素で、外側に硬組織でない画素が接する：歯の傾きで輪郭が外へずれる分
+ * に限る。骨は上下に連続しているので、骨に密着した面からは広がらない。
+ */
+function trackSlices(cand, init, z0, nx, ny, nz, seam, valley, minRun = 3) {
+  const nxy = nx * ny, out = new Uint8Array(cand.length), hole = new Uint8Array(nxy), stack = new Int32Array(nxy), nearP = new Uint8Array(nxy);
+  for (let i = z0 * nxy, e = i + nxy; i < e; i++) out[i] = init[i] && cand[i] ? 1 : 0;
+  // 周囲8画素がすべて硬組織（厚い骨・象牙質の内部）
+  // 軟組織扱い：硬組織でない、または断面内の細い谷（歯根膜）
+  const soft = (i) => !cand[i] || (valley && valley[i]);
+  const deep = (cb, x, y) => {
+    if (x < 1 || y < 1 || x >= nx - 1 || y >= ny - 1) return false;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (soft(cb + (y + dy) * nx + x + dx)) return false;
+    return true;
+  };
+  let rejD = new Uint8Array(nxy), rejP = new Uint8Array(nxy);
+  const run = new Uint16Array(nxy); // 追跡方向に見た、直前まで続いている「暗い（硬組織でない）」断面の数
+  for (const dir of [-1, 1]) {
+    rejP.fill(0);
+    for (let q = 0; q < nxy; q++) run[q] = cand[z0 * nxy + q] ? 0 : minRun;
+    for (let z = z0 + dir; z >= 0 && z < nz; z += dir) {
+      const pb = (z - dir) * nxy, cb = z * nxy;
+      [rejD, rejP] = [rejP, rejD]; rejD.fill(0);
+      // P の穴（外周から到達できない非P画素）
+      hole.fill(1); let sp = 0;
+      const push = (q) => { if (hole[q] && !out[pb + q]) { hole[q] = 0; stack[sp++] = q; } };
+      for (let x = 0; x < nx; x++) { push(x); push((ny - 1) * nx + x); }
+      for (let y = 0; y < ny; y++) { push(y * nx); push(y * nx + nx - 1); }
+      while (sp) { const q = stack[--sp], x = q % nx, y = (q / nx) | 0; if (x > 0) push(q - 1); if (x < nx - 1) push(q + 1); if (y > 0) push(q - nx); if (y < ny - 1) push(q + nx); }
+      // P から1画素以内
+      nearP.fill(0);
+      for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) {
+        if (!out[pb + y * nx + x]) continue;
+        for (let yy = Math.max(0, y - 1); yy <= Math.min(ny - 1, y + 1); yy++) for (let xx = Math.max(0, x - 1); xx <= Math.min(nx - 1, x + 1); xx++) nearP[yy * nx + xx] = 1;
+      }
+      let any = false;
+      for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) {
+        const q = y * nx + x;
+        if (!cand[cb + q]) continue;
+        const sm = seam && seam[cb + q];
+        if (out[pb + q]) { if (!sm) { out[cb + q] = 1; any = true; } continue; }   // 水平な歯根膜（根分岐部の天井など）で縦のつながりを切る
+        if (sm) continue;
+        const prevDark = !cand[pb + q], prevSoft = prevDark || (valley && valley[pb + q]), prevSeam = seam && seam[pb + q];
+        // 前の断面で P のすぐ外側にあり、骨として退けられていない画素（輪郭の取りこぼし）は取り戻してよい
+        const prevLag = !prevSoft && nearP[q] && !rejP[q];
+        if (!prevSoft && !prevSeam && !prevLag && !window.NOPREV) { if (rejP[q]) rejD[q] = 1; continue; }      // 前の断面でも硬組織（骨が上下に続いている）
+        // 歯髄腔の床・天井：上に十分厚い暗い層（歯髄）があった位置だけ。根分岐部の天井（薄い歯根膜）の下の骨は加えない
+        if (hole[q]) { if (prevDark && run[q] >= minRun) { out[cb + q] = 1; any = true; } continue; }
+        if (valley && valley[cb + q]) continue;     // 歯根膜そのものには広げない
+        // 外側に「P から2画素以上離れた、厚い硬組織の内部（＝皮質骨）」が接していれば、骨の表面を伝って広がるのを防ぐため加えない
+        let inP = 0, edge = false, bone = false;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          if (!dx && !dy) continue;
+          const xx = x + dx, yy = y + dy;
+          if (xx < 0 || yy < 0 || xx >= nx || yy >= ny) { edge = true; continue; }
+          const j = yy * nx + xx;
+          if (out[pb + j]) inP++; else if (soft(cb + j)) edge = true; else if (!nearP[j] && !bone && !window.NODEEP) bone = deep(cb, xx, yy);
+        }
+        if (inP && edge && !bone) { out[cb + q] = 1; any = true; } else if (bone) rejD[q] = 1;
+      }
+      for (let q = 0; q < nxy; q++) run[q] = cand[cb + q] ? 0 : Math.min(65000, run[q] + 1);
+      if (!any) break;
+      // 穴埋めで加えた画素が P の穴の中で孤立していても、外周側とつながる位置まで広げる（髄床の続き）
+    }
+  }
+  return out;
+}
 /** 水平断ごとの2D穴埋め：外側から到達できない非歯質領域 = 歯髄腔・根管 */
 function holes2D(tooth, nx, ny, nz) {
   const holes = new Uint8Array(tooth.length), nxy = nx * ny;
@@ -1570,7 +1640,7 @@ async function extract() {
   /** しきい値 thU で歯をつなぎ・隣在歯と分ける（粗い段階）。thU>th のときは骨との濃度差による分離 */
   const core0 = core, seed0 = seedIdx;
   const coarse = async (thU) => {
-    let hardS = hardE, core = core0, seedIdx = seed0;
+    let hardS = hardE, core = core0, seedIdx = seed0, nbr = null;
     if (thU > th) {
       hardS = new Uint8Array(en);
       for (let i = 0; i < en; i++) if (fe[i] >= thU && !excl[i]) hardS[i] = 1;
@@ -1608,7 +1678,8 @@ async function extract() {
       if (lab) {
         // 分水嶺の対象外だった薄い外層は、近い側（対象歯／隣在歯・骨）に割り当てる
         const A = new Uint8Array(en), Bm = new Uint8Array(en);
-        for (let i = 0; i < en; i++) { if (lab[i] === 1) A[i] = 1; else if (lab[i] === 2) Bm[i] = 1; }
+        for (let i = 0; i < en; i++) { if (lab[i] === 1) A[i] = 1; else if (lab[i] >= 2) Bm[i] = 1; }
+        nbr = new Uint8Array(en); for (let i = 0; i < en; i++) if (lab[i] === 2) nbr[i] = 1;
         const keep = competeGrow(A, Bm, toothE, ex, ey, ez, Math.round(2.0 / v.s));
         for (let i = 0; i < en; i++) if (!keep[i]) toothE[i] = 0;
         let s0 = seedIdx;
@@ -1616,7 +1687,7 @@ async function extract() {
         toothE = floodFill(toothE, ex, ey, ez, s0);
       }
     }
-    return { toothE, seedIdx };
+    return { toothE, seedIdx, nbr };
   };
   let res = await coarse(th), usedSep = false;
   if (sepManual && thSep > th) {
@@ -1648,25 +1719,106 @@ async function extract() {
     }
     return n ? c / n : 0;
   };
-  let leakFixed = 0;
+  // 骨への漏れの抑制：歯冠の最大断面から根尖側・咬合面側へ1断面ずつ追跡する（歯根は断面ごとに少しずつしか動かない）。
+  // 前の断面の輪郭から外へ広がれるのは1画素まで、しかも「本当の歯の縁（外側が軟組織・歯根膜）」か「くぼみの穴埋め」に限る。
+  // 歯根膜が写らず骨に密着している部分でも、骨の中へ連続して入り込むことがない
+  let tracked = false;
   const wf0 = wallFrac(res.toothE);
-  if (!sepManual && $('boneSep').checked && dentinM && wf0 > 0.03) {
-    showProgress('歯を抽出中…（骨への漏れを修正）', 0.48); await sleep0();
-    let best = { r: res, wf: wf0, t: 0 };
-    for (const fr of [0.35, 0.5, 0.65, 0.8, 0.9]) {
-      const tU = th + (dentinM - th) * fr;
-      if (tU <= th) continue;
-      const alt = await coarse(tU);
-      if (!alt) continue;
-      const wf = wallFrac(alt.toothE);
-      if (window.DEBUG_SEP) console.log('leak', fr, tU, wf);
-      if (wf < best.wf * 0.5) best = { r: alt, wf, t: tU };
-      if (wf < 0.01) break;
+  if (window.DEBUG_SEP) console.log('wf0', wf0);
+  if (split && !usedSep && !sepManual && !window.DEBUG_NOTRACK && (wf0 > 0.02 || window.FORCE_TRACK)) {
+    showProgress('歯を抽出中…（断面ごとの追跡で骨と分離）', 0.48); await sleep0();
+    const cand = new Uint8Array(en);
+    for (let i = 0; i < en; i++) cand[i] = hardE[i] && !(res.nbr && res.nbr[i] && !res.toothE[i]) ? 1 : 0;
+    const exy = ex * ey;
+    // 開始断面：枠の側面に接していない断面のうち、歯の断面積が最大のもの（歯冠の最大豊隆部）
+    let zStart = -1, best = -1, zAny = -1, bestAny = -1;
+    const szE = (res.seedIdx / exy) | 0;
+    for (let z = 0; z < ez; z++) {
+      let a = 0, wall = false;
+      for (let y = 0; y < ey; y++) for (let x = 0; x < ex; x++) {
+        if (!res.toothE[z * exy + y * ex + x]) continue;
+        a++; if (x <= roi.x0 || x >= roi.x1 || y <= roi.y0 || y >= roi.y1) wall = true;
+      }
+      if (a > bestAny) { bestAny = a; zAny = z; }
+      if (!wall && a > best) { best = a; zStart = z; }
     }
-    if (best.r !== res) { res = best.r; leakFixed = Math.round(best.t); usedSep = false; }
+    if (zStart < 0) zStart = best < 0 && bestAny > 0 ? zAny : szE;
+    // 水平に走る歯根膜（根分岐部の天井・根尖の下など）：Z方向の谷（クロージングとの差）が大きく、象牙質より暗い画素。
+    // ノイズの小さなくぼみは除き、面積 0.25mm² 以上のまとまりだけを使う
+    let seam = null;
+    if (!window.DEBUG_NOSEAM) {
+      const dv2 = []; for (let i = 0; i < en; i += 3) if (res.toothE[i] && fe[i] < te) dv2.push(fe[i]);
+      dv2.sort((a, b) => a - b);
+      const dM2 = dv2.length ? dv2[dv2.length >> 1] : th + 400;
+      const madD = dv2.length ? dv2.map((x) => Math.abs(x - dM2)).sort((a, b) => a - b)[dv2.length >> 1] : 50;
+      const tz = Math.max(40, (window.TZF || 0.3) * (dM2 - th)), hiS = (th + dM2) / 2;
+      const Cz = fe.slice(), rz = Math.max(1, Math.round(0.4 / v.sz));
+      // Z方向のみのクロージング（最大→最小）
+      const zline = (isMax) => {
+        const tmp = new Float32Array(ez);
+        for (let q = 0; q < exy; q++) {
+          for (let z = 0; z < ez; z++) { let m = isMax ? -Infinity : Infinity; for (let k = Math.max(0, z - rz); k <= Math.min(ez - 1, z + rz); k++) { const val = Cz[k * exy + q]; m = isMax ? Math.max(m, val) : Math.min(m, val); } tmp[z] = m; }
+          for (let z = 0; z < ez; z++) Cz[z * exy + q] = tmp[z];
+        }
+      };
+      zline(true); zline(false);
+      seam = new Uint8Array(en);
+      for (let i = 0; i < en; i++) if (hardE[i] && Cz[i] - fe[i] > tz && fe[i] < hiS) seam[i] = 1;
+      const minA = Math.max(3, Math.round(0.25 / (v.sx * v.sy))), st2 = new Int32Array(exy), lab2d = new Int32Array(exy);
+      for (let z = 0; z < ez; z++) {
+        lab2d.fill(0); let nl = 0;
+        for (let q0 = 0; q0 < exy; q0++) {
+          if (!seam[z * exy + q0] || lab2d[q0]) continue;
+          nl++; let sp = 0, c = 0; st2[sp++] = q0; lab2d[q0] = nl; const memb = [];
+          while (sp) { const q = st2[--sp]; memb.push(q); c++; const x = q % ex, y = (q / ex) | 0;
+            for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const xx = x + dx, yy = y + dy; if (xx < 0 || yy < 0 || xx >= ex || yy >= ey) continue; const j = yy * ex + xx; if (seam[z * exy + j] && !lab2d[j]) { lab2d[j] = nl; st2[sp++] = j; } } }
+          if (c < minA) for (const q of memb) seam[z * exy + q] = 0;
+        }
+      }
+      if (window.DEBUG_SEP) { let c = 0; for (let i = 0; i < en; i++) c += seam[i]; console.log('seam', tz, hiS, c); }
+    }
+    // 断面内の細い谷（歯根膜）：2Dクロージングとの差が大きい画素
+    let valley = null;
+    if (!window.DEBUG_NOVALLEY) {
+      const dv3 = []; for (let i = 0; i < en; i += 3) if (res.toothE[i] && fe[i] < te) dv3.push(fe[i]);
+      dv3.sort((a, b) => a - b);
+      const dM3 = dv3.length ? dv3[dv3.length >> 1] : th + 400, tv = Math.max(40, (window.TVF || 0.4) * (dM3 - th));
+      const Cv = fe.slice(), r2 = Math.max(1, Math.round(0.3 / v.sx));
+      for (let z = 0; z < ez; z++) { const sub = Cv.subarray(z * exy, (z + 1) * exy); rankFilter3(sub, ex, ey, 1, r2, true); rankFilter3(sub, ex, ey, 1, r2, false); }
+      valley = new Uint8Array(en);
+      for (let i = 0; i < en; i++) if (hardE[i] && Cv[i] - fe[i] > tv) valley[i] = 1;
+    }
+    const trk = trackSlices(cand, res.toothE, zStart, ex, ey, ez, seam, valley, Math.max(2, Math.round(0.4 / v.sz)));
+    if (window.DEBUG_TRK) window.DBG = { trk, cand, fe, seam, ex, ey, ez, zStart, init: res.toothE };
+    let s0 = res.seedIdx;
+    if (!trk[s0]) { let bd = Infinity; for (let i = 0; i < en; i++) if (trk[i]) { const d = Math.abs(((i / exy) | 0) - szE); if (d < bd) { bd = d; s0 = i; } } }
+    if (trk[s0]) {
+      // 追跡で生じた「歯に囲まれた明るい穴」（象牙質のノイズや水平な谷で一度外れた画素）は歯に戻す
+      { const hh = holes2D(trk, ex, ey, ez); for (let i = 0; i < en; i++) if (hh[i] && cand[i]) trk[i] = 1; }
+      let t2 = floodFill(trk, ex, ey, ez, s0);
+      // 細い橋（歯槽頂などで歯と骨が点でつながった部分）を切る：オープニング後に選択点側を残し、元の範囲で少しだけ戻す
+      if (!window.DEBUG_NOOPEN) {
+        const er = erode6(t2, ex, ey, ez);
+        let s1 = er[s0] ? s0 : -1;
+        if (s1 < 0) { let bd = Infinity; for (let i = 0; i < en; i++) if (er[i]) { const d = Math.abs(((i / exy) | 0) - szE) + Math.abs(i % ex - s0 % ex) + Math.abs(((i / ex) | 0) % ey - ((s0 / ex) | 0) % ey); if (d < bd) { bd = d; s1 = i; } } }
+        if (s1 >= 0) { const m = dilateWithin(floodFill(er, ex, ey, ez, s1), t2, ex, ey, ez, 3); if (m[s0]) t2 = m; }
+      }
+      // 追跡が骨の斜面に沿って入り込み、枠の外周まで達した部分は、くびれ（距離の谷）で切り離す
+      const h2 = holes2D(t2, ex, ey, ez), dom2 = new Uint8Array(en);
+      for (let i = 0; i < en; i++) dom2[i] = t2[i] | h2[i];
+      const lab2 = window.DEBUG_NOSPLIT2 ? null : splitNeighbors(dom2, ex, ey, ez, [v.sx, v.sy, v.sz], s0, roi);
+      if (lab2) {
+        const A = new Uint8Array(en), Bm = new Uint8Array(en);
+        for (let i = 0; i < en; i++) { if (lab2[i] === 1) A[i] = 1; else if (lab2[i] >= 2) Bm[i] = 1; }
+        const keep = competeGrow(A, Bm, t2, ex, ey, ez, Math.round(2.0 / v.s));
+        for (let i = 0; i < en; i++) if (!keep[i]) t2[i] = 0;
+        if (t2[s0]) t2 = floodFill(t2, ex, ey, ez, s0);
+      }
+      res = { toothE: t2, seedIdx: s0, nbr: res.nbr }; tracked = true;
+    }
   }
   let toothE = res.toothE; seedIdx = res.seedIdx;
-  const usedTh = leakFixed || (usedSep ? Math.round(thSep) : Math.round(th));
+  const usedTh = usedSep ? Math.round(thSep) : Math.round(th);
   S.diag = { th: Math.round(th), sep: usedTh, wall: wallFrac(toothE), dentin: dentinM && Math.round(dentinM), manual: sepManual };
   if (!sepManual) setVal('sepTh', usedTh);
   const f = cropROI(fe, ext, roi, Float32Array), hard = cropROI(hardE, ext, roi, Uint8Array);
@@ -1731,26 +1883,19 @@ async function extract() {
     if (strong[i] || (d >= dW && hat > kLow * sigma && hat >= 0.62 * Hm[i])) weak[i] = 1;
   }
   const canalF = hysteresis(strong, weak, fx, fy, fz);
-  // 根管の途切れをつなぐ：根管はほぼ歯軸（ローカルz）方向に走るので、z方向に約1mmまでの隙間を閉じる。
-  // ただし象牙質より暗い（トップハットが弱い陽性の）画素に限る
-  {
-    const rz = Math.max(1, Math.round(0.5 / fsp[2])), col = new Uint8Array(fz), tmp = new Uint8Array(fz);
-    const hatMin = 0.5 * kLow * sigma;
-    for (let y = 0; y < fy; y++) for (let x = 0; x < fx; x++) {
-      const b0 = y * fx + x;
-      let any = false;
-      for (let z = 0; z < fz; z++) { col[z] = canalF[b0 + z * fxy]; if (col[z]) any = true; }
-      if (!any) continue;
-      for (let z = 0; z < fz; z++) { let m = 0; for (let k = Math.max(0, z - rz); k <= Math.min(fz - 1, z + rz) && !m; k++) m = col[k]; tmp[z] = m; }   // 膨張
-      for (let z = 0; z < fz; z++) {                                                                                                    // 収縮
-        let m = 1; for (let k = Math.max(0, z - rz); k <= Math.min(fz - 1, z + rz) && m; k++) m = tmp[k];
-        const i = b0 + z * fxy;
-        if (m && !canalF[i] && solidF[i] && depth[i] >= dW && C[i] - B[i] > hatMin) canalF[i] = 1;
-      }
-    }
-  }
+  const DBF = window.DEBUG_FINE ? (window.DBGF = { fx, fy, fz, I, solidF, strong, weak, c0: canalF.slice(), sigma, dMed, kLow, kHigh, C, B }) : null;
+  if (DBF) DBF.c1 = canalF.slice();
   // 小さな孤立成分（ノイズ）を除去：最大成分（歯髄腔）＋ 長さ1mm以上の成分のみ残す
   filterComponents(canalF, fx, fy, fz, Math.max(6, Math.round(0.015 / fvol)), Math.round(1.0 / fsp[2]));
+  if (DBF) DBF.c2 = canalF.slice();
+  // 根管の追跡：細く写りの薄い根管は、しきい値だけでは途中で途切れる。
+  // 歯軸方向に長くならした画像で「歯根断面の中の暗い点（周囲の象牙質より暗い局所最小）」を断面ごとに拾い、
+  // 上下につながる点列（長さ1.5mm以上）を根管の中心線とみなす。検出済みの根管（歯髄腔）とつながるものを採用して細い管として描く
+  if (!window.DEBUG_NOCHAIN) {
+    showProgress('高精度処理中…（根管の追跡）', 0.72); await sleep0();
+    const chains = traceCanals(I, solidF, canalF, depth, fx, fy, fz, fsp, dMed, th, Hm);
+    if (DBF) DBF.chains = chains;
+  }
   // 根管は象牙質に囲まれているはず：周囲（約0.3mmの殻）の濃度が象牙質より明らかに低い成分は、
   // 骨の中の骨髄腔など（根分岐部の誤検出）とみなして除く（最大成分＝歯髄腔は残す）
   {
@@ -1768,12 +1913,28 @@ async function extract() {
       }
       front = nx2;
     }
-    for (let i = 0; i < fn; i++) if (nearest[i] && !canalF[i] && solidF[i]) { sum[nearest[i]] += Math.min(I[i], dMed); cnt[nearest[i]]++; }
+    // 象牙質の濃さは高さで変わる（歯根は歯冠より暗く写りやすい）ので、同じ高さ（±1mm）の象牙質の中央値と比べる
+    const dLoc = new Float32Array(fz), hz = Math.max(1, Math.round(1.0 / fsp[2]));
+    {
+      const zMed = new Float32Array(fz).fill(NaN);
+      for (let z = 0; z < fz; z++) {
+        const a = [];
+        for (let i = z * fxy, e = i + fxy; i < e; i += 2) if (solidF[i] && !canalF[i] && I[i] < te && depth[i] > 0.3) a.push(I[i]);
+        if (a.length > 20) { a.sort((p, q) => p - q); zMed[z] = a[a.length >> 1]; }
+      }
+      for (let z = 0; z < fz; z++) {
+        let sm = 0, c = 0;
+        for (let k = Math.max(0, z - hz); k <= Math.min(fz - 1, z + hz); k++) if (!isNaN(zMed[k])) { sm += zMed[k]; c++; }
+        dLoc[z] = c ? Math.min(dMed, sm / c) : dMed;
+      }
+    }
+    for (let i = 0; i < fn; i++) if (nearest[i] && !canalF[i] && solidF[i]) { const dl = dLoc[(i / fxy) | 0]; sum[nearest[i]] += Math.min(I[i], dl) - dl; cnt[nearest[i]]++; }
     let big = 0; for (let q = 1; q < cc.size.length; q++) if (cc.size[q] > cc.size[big]) big = q;
-    const minShell = th + (dMed - th) * 0.7;
-    const drop = cc.size.map((_, q) => q !== big && q > 0 && cnt[q] > 0 && sum[q] / cnt[q] < minShell);
+    const tol = (dMed - th) * 0.3;
+    const drop = cc.size.map((_, q) => q !== big && q > 0 && cnt[q] > 0 && sum[q] / cnt[q] < -tol);
     for (let i = 0; i < fn; i++) if (canalF[i] && drop[cc.lab[i]]) canalF[i] = 0;
   }
+  if (DBF) DBF.c3 = canalF.slice();
   showProgress('高精度処理中…（ラベル・表面）', 0.78); await sleep0();
   const labF = new Uint8Array(fn);
   const cnt = [0, 0, 0, 0, 0];
@@ -1846,7 +2007,7 @@ async function extract() {
   renderAll();
   const dg = S.diag;
   $('diagOut').textContent = `判定：歯質しきい値 ${dg.th} ／ 骨・歯の境界 ${dg.sep}${dg.manual ? '（手動）' : '（自動）'} ／ 象牙質の代表値 ${dg.dentin ?? '-'} ／ 枠の側面への接触 ${(dg.wall * 100).toFixed(1)}%` + (dg.wall > 0.03 ? ' → 骨・隣在歯へ漏れている可能性があります。「骨／歯の境界」を手動で上げてください' : '');
-  setStatus('抽出完了。' + (leakFixed ? `（骨とつながっていたため、つながり判定の基準を ${leakFixed} に上げて分離しました）` : '') + (usedSep ? '（骨が歯根に密着していたため、骨との濃度差で分離しました）' : '') + (touches ? '⚠ 歯がROIの枠に接しています。ROIを広げるか、隣在歯・骨とつながっていないか確認してください。' : '3Dビューをドラッグして回転できます。'), touches);
+  setStatus('抽出完了。' + (usedSep ? '（骨が歯根に密着していたため、骨との濃度差で分離しました）' : '') + (touches ? '⚠ 歯がROIの枠に接しています。ROIを広げるか、隣在歯・骨とつながっていないか確認してください。' : '3Dビューをドラッグして回転できます。'), touches);
 }
 
 /** ROI内の box 領域を u 倍に三線形補間 */
@@ -1961,6 +2122,79 @@ function competeGrow(a, b, mask, nx, ny, nz, maxSteps) {
   for (let i = 0; i < n; i++) out[i] = lab[i] === 1 ? 1 : 0;
   return out;
 }
+/**
+ * 根管の中心線追跡。I=補間後のCT値, solid=歯（歯髄腔を含む）, canal=検出済みの根管（ここへ追記する）, depth=歯の表面からの距離(mm)
+ * tmp は作業用（Float32, 大きさ同じ）。追加した点列の数を返す
+ */
+function traceCanals(I, solid, canal, depth, nx, ny, nz, sp, dMed, th, tmp) {
+  const nxy = nx * ny, vs = Math.min(sp[0], sp[1]);
+  // 1) 歯軸方向（z）に長い平滑化：xy 約0.07mm, z 約0.25mm のボックスを2回
+  const Is = tmp;
+  Is.set(I);
+  boxBlur3(Is, nx, ny, nz, Math.max(1, Math.round(0.07 / vs)), 2, Math.max(1, Math.round(0.25 / sp[2])));
+  // 2) 断面ごとの局所最小（窓 ±w）で、周囲（半径 R の円周12点）の平均より暗いもの
+  const w = Math.max(1, Math.round(0.12 / vs)), R = Math.max(2, Math.round(0.35 / vs)), dmin = Math.max(0.15, 2 * vs);
+  const ring = [];
+  for (let k = 0; k < 12; k++) ring.push([Math.round(R * Math.cos(k * Math.PI / 6)), Math.round(R * Math.sin(k * Math.PI / 6))]);
+  const cz = [], cy = [], cx = [], cc = [];
+  for (let z = 0; z < nz; z++) for (let y = R; y < ny - R; y++) for (let x = R; x < nx - R; x++) {
+    const i = z * nxy + y * nx + x;
+    if (!solid[i] || depth[i] < dmin) continue;
+    const v = Is[i];
+    let isMin = true;
+    for (let dy = -w; dy <= w && isMin; dy++) for (let dx = -w; dx <= w; dx++) if (Is[i + dy * nx + dx] < v) { isMin = false; break; }
+    if (!isMin) continue;
+    let m = 0;
+    for (const [dx, dy] of ring) m += Math.min(Is[i + dy * nx + dx], dMed);
+    const c = m / 12 - v;
+    if (c > 0) { cz.push(z); cy.push(y); cx.push(x); cc.push(c); }
+  }
+  if (!cc.length) return 0;
+  // しきい値：局所最小のコントラスト分布の上位25%（ノイズの最小点の大半を除く）。ただし歯質と象牙質の差の8%以上
+  const srt = cc.slice().sort((a, b) => a - b);
+  const T = Math.max(srt[Math.floor(srt.length * 0.75)], 0.08 * (dMed - th));
+  const id = [];
+  for (let k = 0; k < cc.length; k++) if (cc[k] > T) id.push(k);
+  // 3) 上下の断面（3断面先まで）で xy が近い点どうしをつなぐ（Union-Find）
+  const n = id.length, par = new Int32Array(n);
+  for (let k = 0; k < n; k++) par[k] = k;
+  const find = (a) => { while (par[a] !== a) { par[a] = par[par[a]]; a = par[a]; } return a; };
+  const link = Math.max(1, Math.round(0.13 / vs)), gap = Math.max(1, Math.round(0.19 / sp[2]));
+  const byZ = new Map();
+  for (let k = 0; k < n; k++) { const z = cz[id[k]]; if (!byZ.has(z)) byZ.set(z, []); byZ.get(z).push(k); }
+  for (const [z, A] of byZ) for (let g = 1; g <= gap; g++) {
+    const Bl = byZ.get(z + g); if (!Bl) continue;
+    for (const a of A) for (const b of Bl) {
+      if (Math.abs(cx[id[a]] - cx[id[b]]) <= link && Math.abs(cy[id[a]] - cy[id[b]]) <= link) { const ra = find(a), rb = find(b); if (ra !== rb) par[ra] = rb; }
+    }
+  }
+  const groups = new Map();
+  for (let k = 0; k < n; k++) { const r = find(k); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(k); }
+  // 4) 長さ1.5mm以上の点列を採用。検出済みの根管から0.3mm以内に端があるもの（または3mm以上の長いもの）に限る
+  const near = dilate6(canal, nx, ny, nz, Math.max(1, Math.round(0.3 / vs)));
+  const rC = Math.max(1, Math.round(0.1 / vs));
+  let added = 0;
+  const list = [...groups.values()].map((g) => { let lo = Infinity, hi = -1; for (const k of g) { const z = cz[id[k]]; if (z < lo) lo = z; if (z > hi) hi = z; } return { g, len: (hi - lo + 1) * sp[2] }; })
+    .filter((c) => c.len >= 1.5).sort((a, b) => b.len - a.len);
+  for (let pass = 0; pass < 2; pass++) {
+    for (const c of list) {
+      if (c.done) continue;
+      let touch = c.len >= 3;
+      if (!touch) for (const k of c.g) { const q = id[k]; if (near[cz[q] * nxy + cy[q] * nx + cx[q]]) { touch = true; break; } }
+      if (!touch) continue;
+      c.done = true; added++;
+      for (const k of c.g) {
+        const q = id[k], z = cz[q];
+        for (let dy = -rC; dy <= rC; dy++) for (let dx = -rC; dx <= rC; dx++) {
+          if (dx * dx + dy * dy > rC * rC + rC) continue;
+          const j = z * nxy + (cy[q] + dy) * nx + cx[q] + dx;
+          if (solid[j]) { canal[j] = 1; near[j] = 1; }
+        }
+      }
+    }
+  }
+  return added;
+}
 /** ヒステリシス：強い候補から、弱い候補の中を26近傍でつながる範囲へ拡張 */
 function hysteresis(strong, weak, nx, ny, nz) {
   const out = new Uint8Array(strong.length), nxy = nx * ny, q = new Int32Array(strong.length);
@@ -2007,9 +2241,9 @@ function buildFields(I, lab, solid, nx, ny, nz, th, te, dMed, vs = 0.1) {
     if (pv.length > 50) {
       pv.sort((a, b) => a - b);
       const pl = pv[Math.floor(pv.length * 0.3)], mid = (pl + dMed) / 2, hw = Math.max(40, (dMed - pl) / 2);
+      // ノイズの多い実データでも表面が粗くならないよう、約0.2mm幅でならしたCT値を使う
       const Is = Float32Array.from(I);
-      const sm = [1 / 16, 4 / 16, 6 / 16, 4 / 16, 1 / 16];
-      blur3(Is, nx, ny, nz, sm); blur3(Is, nx, ny, nz, sm); blur3(Is, nx, ny, nz, sm);
+      boxBlur3(Is, nx, ny, nz, Math.max(1, Math.round(0.2 / vs * 0.6)), 3);
       const cm = new Uint8Array(n); for (let i = 0; i < n; i++) cm[i] = lab[i] === 3;
       const dm = dilate6(cm, nx, ny, nz, 2), mask = blurMask((i) => dm[i], [0.25, 0.5, 0.25]);
       // 太い部分（2ボクセル収縮しても残る部分の近傍）は CT値の面だけを使う
@@ -2028,9 +2262,12 @@ function buildFields(I, lab, solid, nx, ny, nz, th, te, dMed, vs = 0.1) {
   const dD = Math.max(60, dMed - th);
   const c01 = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
   const bodyF = new Float32Array(n);
+  // 外形はノイズでざらつかないよう約0.1mm幅でならしたCT値の等値面
+  const Ib = Float32Array.from(I);
+  boxBlur3(Ib, nx, ny, nz, Math.max(1, Math.round(0.1 / vs * 0.6)), 3);
   for (let i = 0; i < n; i++) {
     // 歯の外形：CT値ベース（外側は1ボクセル膨張したマスクで切る）＋内部は塗りつぶし（根管の内壁を出さない）
-    let body = Math.min(c01(0.5 + (I[i] - th) / (2 * dD)), cutOuter[i]);
+    let body = Math.min(c01(0.5 + (Ib[i] - th) / (2 * dD)), cutOuter[i]);
     body = Math.max(body, fill[i]);
     if (lab[i] === 3) body = Math.max(body, cut[i]);
     rgba[i * 4] = Math.round(enF[i] * 255);   // エナメル質の割合（色の混合用）
@@ -2042,6 +2279,25 @@ function buildFields(I, lab, solid, nx, ny, nz, th, te, dMed, vs = 0.1) {
   blur3(bodyF, nx, ny, nz, [1 / 16, 4 / 16, 6 / 16, 4 / 16, 1 / 16]);
   for (let i = 0; i < n; i++) rgba[i * 4 + 1] = Math.round(bodyF[i] * 255);
   return rgba;
+}
+/** 3方向のボックス平滑化（半径 r ボクセル）を passes 回（3回でほぼガウシアン。σ ≈ √(passes·r(r+1)/3)） */
+function boxBlur3(a, nx, ny, nz, r, passes = 3, rz = r) {
+  const nxy = nx * ny, line = new Float32Array(Math.max(nx, ny, nz));
+  const run = (base, stride, len, rr) => {
+    if (rr < 1 || len < 2) return;
+    let acc = 0;
+    for (let k = -rr; k <= rr; k++) acc += a[base + Math.min(len - 1, Math.max(0, k)) * stride];
+    for (let k = 0; k < len; k++) {
+      line[k] = acc / (2 * rr + 1);
+      acc += a[base + Math.min(len - 1, k + rr + 1) * stride] - a[base + Math.max(0, k - rr) * stride];
+    }
+    for (let k = 0; k < len; k++) a[base + k * stride] = line[k];
+  };
+  for (let p = 0; p < passes; p++) {
+    for (let z = 0; z < nz; z++) for (let y = 0; y < ny; y++) run(z * nxy + y * nx, 1, nx, r);
+    for (let z = 0; z < nz; z++) for (let x = 0; x < nx; x++) run(z * nxy + x, nx, ny, r);
+    for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) run(y * nx + x, nxy, nz, rz);
+  }
 }
 /** 1枚の水平断における、ラベル L の 8連結成分の数 */
 function count2D(labels, nx, ny, z, L, minPx) {
