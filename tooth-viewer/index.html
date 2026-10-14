@@ -148,7 +148,7 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 3
     <div class="row"><label>傾き（サジタル）</label><input id="tiltX" type="range" min="-60" max="60" step="0.5" value="0"><output id="tiltXO"></output></div>
     <div class="row"><label>回転（水平断）</label><input id="tiltZ" type="range" min="-90" max="90" step="1" value="0"><output id="tiltZO"></output></div>
     <div class="flex"><button id="axisAuto" disabled title="抽出した歯の形から歯軸を求め、枠を合わせて再抽出">🎯 歯軸を自動で合わせる</button><button id="tiltReset">傾きリセット</button></div>
-    <div class="hint">■ 枠の各面をドラッグ：その面だけを伸縮（左右・前後・上下を片側ずつ）<br>● 歯軸線の端をドラッグ：枠を歯軸に合わせて傾ける（コロナル・サジタル）<br>● 水平断の枠の横の●をドラッグ：水平面内で枠を回転<br>範囲が決まったら「✅ 範囲を決定して解析」（Enterキーでも可）</div>
+    <div class="hint"><b>枠の調整は「🦷 歯を選択」モードで行います。</b><br>■ 枠の各面をドラッグ：その面だけを伸縮（左右・前後・上下を片側ずつ）<br>● 歯軸線の端をドラッグ：枠を歯軸に合わせて傾ける（コロナル・サジタル）<br>● 水平断の枠の横の●をドラッグ：水平面内で枠を回転<br>範囲が決まったら「✅ 範囲を決定して解析」（Enterキーでも可）</div>
     <div class="flex"><button id="brushBtn" title="断面上でなぞった部分を抽出対象から外す（くっついた骨・隣在歯など）">🖌 除外ブラシ</button>
       <button id="brushUndo" title="最後に塗った分を取り消す">1つ戻す</button><button id="brushClear">ブラシを全消去</button></div>
     <div class="row" id="brushRow"><label>ブラシ半径</label><input id="brushR" type="range" min="0.3" max="5" step="0.1" value="1.2"><output id="brushRO"></output></div>
@@ -224,8 +224,9 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 3
     <button data-wlp="bone">骨</button><button data-wlp="tooth">歯</button><button data-wlp="soft">軟組織</button><button data-wlp="auto">自動</button>
   </div>
   <div class="grp"><button id="resetViews" title="拡大・移動を元に戻す（R キー）">表示リセット</button>
+    <button id="resetMpr" title="十字線の回転（斜め断面）を元に戻す">回転リセット</button>
     <label class="check" style="margin:0"><input id="xhair" type="checkbox" checked>十字線</label></div>
-  <div class="help">ホイール：スライス送り ／ 右ドラッグ：明るさ・コントラスト ／ 中ドラッグ・Shift+ドラッグ：移動 ／ Ctrl+ホイール：拡大 ／ ダブルクリック：1画面表示 ／ ↑↓・PageUp/Down：スライス</div>
+  <div class="help">ホイール：スライス送り ／ 右ドラッグ：明るさ・コントラスト ／ 中ドラッグ・Shift+ドラッグ：移動 ／ Ctrl+ホイール：拡大 ／ ダブルクリック：1画面表示 ／ ↑↓・PageUp/Down：スライス ／ <b>十字線の線（○）をドラッグ：回転（斜め断面）</b></div>
 </div>
 <div class="views" id="views">
   <div class="view"><canvas id="cvAx"></canvas><div class="vlabel"><i class="pl" style="background:#4f8bff"></i>アキシャル（水平断）<small id="lblAx"></small></div><div class="vinfo" id="infoAx"></div></div>
@@ -678,7 +679,7 @@ function blur3(f, nx, ny, nz, w = [0.25, 0.5, 0.25]) {
  *  アプリ状態
  * ===================================================================== */
 const S = {
-  vol: null, cursor: [0, 0, 0], seed: null, seg: null, ww: 3000, wl: 800, meas: { on: false, pts: [] }, tool: 'view', shift: [0, 0], brush: { on: false, groups: [] },
+  vol: null, cursor: [0, 0, 0], seed: null, seg: null, ww: 3000, wl: 800, meas: { on: false, pts: [] }, tool: 'view', mpr: [[1, 0, 0], [0, 1, 0], [0, 0, 1]], shift: [0, 0], brush: { on: false, groups: [] },
 };
 function vget(x, y, z) { return S.vol.slices[z][y * S.vol.nx + x]; }
 
@@ -688,7 +689,7 @@ function hideProgress() { $('progress').classList.remove('on'); }
 
 function setVolume(vol, note) {
   S.vol = vol; S.seg = null; S.seed = null; S.thManual = false; S.shift = [0, 0]; S.brush.groups = [];
-  S.cursor = [vol.nx >> 1, vol.ny >> 1, vol.nz >> 1];
+  S.cursor = [vol.nx >> 1, vol.ny >> 1, vol.nz >> 1]; S.mpr = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
   // 統計（サンプリング）
   const samp = [];
   const stepS = Math.max(1, Math.floor(vol.nx * vol.ny * vol.nz / 400000));
@@ -872,25 +873,49 @@ class SliceView {
     new ResizeObserver(() => this.render()).observe(canvas);
   }
   resetView() { this.zoom = 1; this.panX = this.panY = 0; }
-  geom() { // 画像幅/高さ（ボクセル）と物理ピクセルサイズ
-    const v = S.vol;
-    if (this.axis === 2) return { w: v.nx, h: v.ny, pw: v.sx, ph: v.sy };
-    if (this.axis === 1) return { w: v.nx, h: v.nz, pw: v.sx, ph: v.sz };
-    return { w: v.ny, h: v.nz, pw: v.sy, ph: v.sz };
+  /**
+   * この断面の平面（十字線の回転に追従するオブリーク断面）。
+   * n: 法線, u/v: 画面の右/下方向（mm空間の単位ベクトル）, O: 画像左上, s: ピクセル間隔(mm)
+   */
+  plane() {
+    const v = S.vol, sp = [v.sx, v.sy, v.sz], n = S.mpr[this.axis];
+    const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    const norm = (a) => { const l = Math.hypot(...a); return l > 1e-9 ? a.map((x) => x / l) : null; };
+    const proj = (r, ...ax) => { let q = r.slice(); for (const a of ax) { const d = dot(q, a); q = q.map((x, k) => x - d * a[k]); } return norm(q); };
+    const X = [1, 0, 0], Y = [0, 1, 0], Z = [0, 0, 1], mZ = [0, 0, -1];
+    const ru = this.axis === 0 ? Y : X, rv = this.axis === 2 ? Y : mZ;
+    const u = proj(ru, n) || proj(this.axis === 0 ? X : Y, n) || proj(Z, n);
+    const vv = proj(rv, n, u) || norm([n[1] * u[2] - n[2] * u[1], n[2] * u[0] - n[0] * u[2], n[0] * u[1] - n[1] * u[0]]);
+    const cm = S.cursor.map((x, k) => x * sp[k]), s = Math.min(...sp);
+    let umin = Infinity, umax = -Infinity, vmin = Infinity, vmax = -Infinity;
+    for (const a of [-0.5, v.nx - 0.5]) for (const b of [-0.5, v.ny - 0.5]) for (const c of [-0.5, v.nz - 0.5]) {
+      const d = [a * sp[0] - cm[0], b * sp[1] - cm[1], c * sp[2] - cm[2]];
+      const pu = dot(d, u), pv = dot(d, vv);
+      umin = Math.min(umin, pu); umax = Math.max(umax, pu); vmin = Math.min(vmin, pv); vmax = Math.max(vmax, pv);
+    }
+    const w = Math.min(1400, Math.max(1, Math.round((umax - umin) / s))), h = Math.min(1400, Math.max(1, Math.round((vmax - vmin) / s)));
+    const O = [0, 1, 2].map((k) => cm[k] + umin * u[k] + vmin * vv[k]);
+    return { n, u, v: vv, O, s, w, h, sp, cm, dot };
   }
-  slice() { return S.cursor[this.axis]; }
-  sliceCount() { const v = S.vol; return [v.nx, v.ny, v.nz][this.axis]; }
+  P() { return this._P || (this._P = this.plane()); }
+  geom() { const P = this.P(); return { w: P.w, h: P.h, pw: P.s, ph: P.s }; }
+  /** 画像ピクセル(i,j) → ボクセル座標（実数） */
   toVox(i, j) {
-    const v = S.vol, s = this.slice();
-    if (this.axis === 2) return [i, j, s];
-    if (this.axis === 1) return [i, s, v.nz - 1 - j];
-    return [s, i, v.nz - 1 - j];
+    const P = this.P(), a = (i + 0.5) * P.s, b = (j + 0.5) * P.s;
+    return [0, 1, 2].map((k) => (P.O[k] + a * P.u[k] + b * P.v[k]) / P.sp[k]);
   }
+  /** ボクセル座標 → 画像座標（描画時に +0.5 する慣例） */
   toImg(x, y, z) {
-    const v = S.vol;
-    if (this.axis === 2) return [x, y];
-    if (this.axis === 1) return [x, v.nz - 1 - z];
-    return [y, v.nz - 1 - z];
+    const P = this.P(), d = [x * P.sp[0] - P.O[0], y * P.sp[1] - P.O[1], z * P.sp[2] - P.O[2]];
+    return [P.dot(d, P.u) / P.s - 0.5, P.dot(d, P.v) / P.s - 0.5];
+  }
+  /** ボクセル座標の点のこの断面からの距離(mm) */
+  distMm(q) { const P = this.P(); return P.dot([q[0] * P.sp[0] - P.cm[0], q[1] * P.sp[1] - P.cm[1], q[2] * P.sp[2] - P.cm[2]], P.n); }
+  /** 断面の法線方向へ d ステップ移動（スライス送り） */
+  step(d) {
+    const P = this.P(), v = S.vol, dims = [v.nx, v.ny, v.nz];
+    S.cursor = S.cursor.map((x, k) => clamp(x + d * P.s * P.n[k] / P.sp[k], 0, dims[k] - 1));
+    renderAll();
   }
   xform() {
     const g = this.geom(), cw = this.cv.width, ch = this.cv.height;
@@ -903,6 +928,14 @@ class SliceView {
     const sx = (e.clientX - r.left) * dpr, sy = (e.clientY - r.top) * dpr, t = this.xform();
     return [(sx - t.ox) / t.px, (sy - t.oy) / t.py, sx, sy];
   }
+  /** 十字線（他の2断面との交線）の画面上の中心と方向 */
+  xhairLines() {
+    const P = this.P(), t = this.xform(), [ci, cj] = this.toImg(...S.cursor);
+    const C = [t.ox + (ci + 0.5) * t.px, t.oy + (cj + 0.5) * t.py];
+    const others = [0, 1, 2].filter((k) => k !== this.axis);
+    // 断面 k1 の交線は、残りの軸 k2 の方向に伸びる
+    return { C, lines: others.map((k1) => { const k2 = others.find((q) => q !== k1), d = S.mpr[k2]; const a = P.dot(d, P.u), b = P.dot(d, P.v), l = Math.hypot(a, b) || 1; return { plane: k1, dir: [a / l, b / l] }; }) };
+  }
   down(e) {
     if (!S.vol) return;
     this.cv.setPointerCapture(e.pointerId);
@@ -912,40 +945,69 @@ class SliceView {
     if (e.button !== 0) return;
     if (S.meas.on) {
       const [i, j] = this.evtImg(e), g = this.geom();
-      if (i >= 0 && j >= 0 && i < g.w && j < g.h) addMeasPoint(this.toVox(Math.floor(i), Math.floor(j)));
+      if (i >= 0 && j >= 0 && i < g.w && j < g.h) addMeasPoint(this.toVox(i - 0.5, j - 0.5));
       return;
     }
-    if (e.button === 0 && S.brush.on) { this.drag = 'brush'; S.brush.groups.push([]); this.paint(e); return; }
-    if (e.button === 0 && this.handles && S.seed) {
-      const [, , sx, sy] = this.evtImg(e), dpr = this.cv.width / this.cv.getBoundingClientRect().width;
+    if (S.brush.on) { this.drag = 'brush'; S.brush.groups.push([]); this.paint(e); return; }
+    const [, , sx, sy] = this.evtImg(e), dpr = this.cv.width / this.cv.getBoundingClientRect().width;
+    if (this.handles && S.seed && S.tool === 'seed') {
       const h = this.handles.find((q) => Math.hypot(q.x - sx, q.y - sy) < 12 * dpr);
       if (h) { this.drag = h.end === 'rot' ? 'rot' : 'tilt'; this.tiltEnd = h.end; return; }
       const f = (this.faces || []).find((q) => Math.hypot(q.x - sx, q.y - sy) < 11 * dpr);
       if (f) { this.drag = 'face'; this.face = f; return; }
     }
-    if (S.tool === 'seed') { this.drag = 'pick'; this.pick(e); }
-    else { this.drag = 'cursor'; this.moveCursor(e); }
+    if (S.tool === 'seed') { this.drag = 'pick'; this.pick(e); return; }
+    // 閲覧：十字線の線の上（中心から離れた所）をつかむと回転、それ以外は十字線の移動
+    if ($('xhair').checked) {
+      const X = this.xhairLines(), rel = [sx - X.C[0], sy - X.C[1]], r = Math.hypot(...rel);
+      const near = X.lines.some((L) => Math.abs(rel[0] * L.dir[1] - rel[1] * L.dir[0]) < 7 * dpr);
+      if (r > 28 * dpr && near) { this.drag = 'xrot'; this.lastAng = Math.atan2(rel[1], rel[0]); return; }
+    }
+    this.drag = 'cursor'; this.moveCursor(e);
+  }
+  /** 十字線の回転：この断面の法線のまわりに、他の2断面を回す */
+  rotateXhair(e) {
+    const [, , sx, sy] = this.evtImg(e), X = this.xhairLines();
+    const ang = Math.atan2(sy - X.C[1], sx - X.C[0]);
+    let d = ang - this.lastAng; if (d > Math.PI) d -= 2 * Math.PI; if (d < -Math.PI) d += 2 * Math.PI;
+    this.lastAng = ang;
+    const P = this.P(), w = [P.u[1] * P.v[2] - P.u[2] * P.v[1], P.u[2] * P.v[0] - P.u[0] * P.v[2], P.u[0] * P.v[1] - P.u[1] * P.v[0]];
+    const c = Math.cos(d), sn = Math.sin(d);
+    const rot = (a) => { const k = P.dot(w, a), cr = [w[1] * a[2] - w[2] * a[1], w[2] * a[0] - w[0] * a[2], w[0] * a[1] - w[1] * a[0]]; return a.map((x, i) => x * c + cr[i] * sn + w[i] * k * (1 - c)); };
+    S.mpr = S.mpr.map((a, k) => (k === this.axis ? a : rot(a)));
+    renderAll();
   }
   /** 閲覧：十字線（3断面の交点）を移動 */
   moveCursor(e) {
-    const [i, j] = this.evtImg(e), g = this.geom();
-    const q = this.toVox(clamp(Math.floor(i), 0, g.w - 1), clamp(Math.floor(j), 0, g.h - 1));
-    S.cursor = q.map((x, k) => clamp(Math.round(x), 0, [S.vol.nx, S.vol.ny, S.vol.nz][k] - 1));
+    const [i, j] = this.evtImg(e), g = this.geom(), v = S.vol;
+    const q = this.toVox(clamp(i, 0, g.w) - 0.5, clamp(j, 0, g.h) - 0.5);
+    S.cursor = q.map((x, k) => clamp(x, 0, [v.nx, v.ny, v.nz][k] - 1));
     renderAll();
   }
   /** マウス位置の座標とCT値 */
   hover(e) {
-    const [i, j] = this.evtImg(e), g = this.geom(), el = this.info;
+    const [i, j] = this.evtImg(e), g = this.geom(), el = this.info, v = S.vol;
     if (!el) return;
     if (i < 0 || j < 0 || i >= g.w || j >= g.h) { el.textContent = ''; return; }
-    const [x, y, z] = this.toVox(Math.floor(i), Math.floor(j)), v = S.vol;
+    const [x, y, z] = this.toVox(i - 0.5, j - 0.5).map(Math.round);
+    if (x < 0 || y < 0 || z < 0 || x >= v.nx || y >= v.ny || z >= v.nz) { el.textContent = ''; return; }
     el.textContent = `(${x}, ${y}, ${z})  ${(x * v.sx).toFixed(1)}, ${(y * v.sy).toFixed(1)}, ${(z * v.sz).toFixed(1)} mm  値 ${vget(x, y, z)}`;
   }
   move(e) {
     if (S.vol) this.hover(e);
-    if (!this.drag) return;
+    if (!this.drag) {
+      // 十字線の上では回転できることをカーソルで示す
+      if (S.vol && S.tool === 'view' && $('xhair').checked) {
+        const [, , sx, sy] = this.evtImg(e), dpr = this.cv.width / this.cv.getBoundingClientRect().width, X = this.xhairLines();
+        const rel = [sx - X.C[0], sy - X.C[1]];
+        const near = Math.hypot(...rel) > 28 * dpr && X.lines.some((L) => Math.abs(rel[0] * L.dir[1] - rel[1] * L.dir[0]) < 7 * dpr);
+        this.cv.style.cursor = near ? 'grab' : 'crosshair';
+      }
+      return;
+    }
     if (this.drag === 'pick') this.pick(e);
     else if (this.drag === 'cursor') this.moveCursor(e);
+    else if (this.drag === 'xrot') this.rotateXhair(e);
     else if (this.drag === 'wl') {
       const k = Math.max(1, this.wl0[0]) / 250;
       setVal('ww', Math.round(Math.max(1, this.wl0[0] + (e.clientX - this.lastX) * k)));
@@ -993,7 +1055,6 @@ class SliceView {
     if (Math.hypot(d[0], d[1]) < 1) return;
     const z0 = $('tiltZ').value; $('tiltZ').value = 0;
     const R0 = tiltR(); $('tiltZ').value = z0;
-    // 回転前のローカルX・Y軸の水平面への投影に対するマウス方向の角度
     const a = d[0] * R0[0] + d[1] * R0[3], b = d[0] * R0[1] + d[1] * R0[4];
     let deg = Math.atan2(b, a) * 180 / Math.PI;
     if (deg > 90) deg -= 180; if (deg < -90) deg += 180; // 枠は左右対称なので ±90° に収める
@@ -1002,7 +1063,7 @@ class SliceView {
   }
   tilt(e) {
     const [i, j] = this.evtImg(e), q = this.toVox(i - 0.5, j - 0.5), v = S.vol;
-    const d = [(q[0] - S.seed[0]) * v.sx, (q[1] - S.seed[1]) * v.sy, (this.axis === 2 ? 0 : (v.nz - 1 - (j - 0.5)) - S.seed[2]) * v.sz].map((x) => x * this.tiltEnd);
+    const d = [(q[0] - S.seed[0]) * v.sx, (q[1] - S.seed[1]) * v.sy, (q[2] - S.seed[2]) * v.sz].map((x) => x * this.tiltEnd);
     if (Math.hypot(d[0], d[1], d[2]) < 1) return;
     const deg = 180 / Math.PI;
     if (this.axis === 1) setVal('tiltY', clamp(Math.round(Math.atan2(d[0], d[2]) * deg * 2) / 2, -60, 60));
@@ -1010,10 +1071,11 @@ class SliceView {
     renderAll();
   }
   pick(e) {
-    const [i, j] = this.evtImg(e), g = this.geom();
+    const [i, j] = this.evtImg(e), g = this.geom(), v = S.vol;
     if (i < 0 || j < 0 || i >= g.w || j >= g.h) return;
+    const q = this.toVox(i - 0.5, j - 0.5).map((x, k) => clamp(Math.round(x), 0, [v.nx, v.ny, v.nz][k] - 1));
     S.shift = [0, 0];
-    setSeed(this.toVox(Math.floor(i), Math.floor(j)));
+    setSeed(q);
   }
   wheel(e) {
     if (!S.vol) return;
@@ -1023,11 +1085,7 @@ class SliceView {
       const f = Math.exp(-e.deltaY * 0.0015), cw = this.cv.width / 2, ch = this.cv.height / 2;
       this.panX = sx - cw - (sx - cw - this.panX) * f; this.panY = sy - ch - (sy - ch - this.panY) * f;
       this.zoom *= f; this.render();
-    } else {
-      const d = Math.sign(e.deltaY);
-      S.cursor[this.axis] = clamp(S.cursor[this.axis] + d, 0, this.sliceCount() - 1);
-      renderAll();
-    }
+    } else this.step(Math.sign(e.deltaY));
   }
   render() {
     const cv = this.cv, dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -1036,7 +1094,8 @@ class SliceView {
     const ctx = this.ctx;
     ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
     if (!S.vol) return;
-    const v = S.vol, g = this.geom(), s = this.slice();
+    this._P = this.plane();
+    const v = S.vol, g = this.geom(), P = this._P;
     if (this.off.width !== g.w || this.off.height !== g.h) {
       this.off.width = g.w; this.off.height = g.h; this.img = this.offCtx.createImageData(g.w, g.h);
     }
@@ -1044,59 +1103,85 @@ class SliceView {
     const roi = getROI(), seg = S.seg, showOv = $('preview').checked, F = roiFrame();
     const th = +$('thHard').value, te = +$('thEnamel').value;
     const pulpRGB = hexRGB($('colP').value).map((x) => x * 255);
+    // 画素ごとのボクセル座標を増分で計算し、三線形補間でサンプリング（オブリーク断面対応）
+    const du = P.u.map((x, k) => x * P.s / P.sp[k]), dv = P.v.map((x, k) => x * P.s / P.sp[k]);
+    const p0 = [0, 1, 2].map((k) => (P.O[k] + 0.5 * P.s * (P.u[k] + P.v[k])) / P.sp[k]);
+    const nx = v.nx, ny = v.ny, nz = v.nz, sl = v.slices;
+    const axisAligned = [du, dv].every((q) => q.filter((x) => Math.abs(x) > 1e-9).length === 1) && P.n.filter((x) => Math.abs(x) > 1e-9).length === 1;
     for (let j = 0; j < g.h; j++) {
-      for (let i = 0; i < g.w; i++) {
-        let x, y, z;
-        if (this.axis === 2) { x = i; y = j; z = s; } else if (this.axis === 1) { x = i; y = s; z = v.nz - 1 - j; } else { x = s; y = i; z = v.nz - 1 - j; }
-        const val = v.slices[z][y * v.nx + x];
-        let gr = (val - lo) * sc; gr = gr < 0 ? 0 : gr > 255 ? 255 : gr;
-        let r = gr, gg = gr, b = gr;
-        if (showOv && F && x >= F.lo[0] && x <= F.hi[0] && y >= F.lo[1] && y <= F.hi[1] && z >= F.lo[2] && z <= F.hi[2] && F.inside(x, y, z)) {
-          let col = null, a = 0.45;
-          if (seg && seg.roi === roi.key) {
-            const L = seg.labelAt(x, y, z);
-            if (L && L !== 4) { col = L === 3 ? pulpRGB : LABEL_COL[L]; a = L === 3 ? 0.75 : 0.4; }
-          } else if (val >= te) { col = [90, 200, 255]; a = 0.35; }
-          else if (val >= th) { col = [60, 230, 120]; a = 0.35; }
-          if (col) { r = r * (1 - a) + col[0] * a; gg = gg * (1 - a) + col[1] * a; b = b * (1 - a) + col[2] * a; }
-        }
+      let X = p0[0] + j * dv[0], Y = p0[1] + j * dv[1], Z = p0[2] + j * dv[2];
+      for (let i = 0; i < g.w; i++, X += du[0], Y += du[1], Z += du[2]) {
         const o = (j * g.w + i) * 4;
-        d[o] = r; d[o + 1] = gg; d[o + 2] = b; d[o + 3] = 255;
+        let val;
+        if (axisAligned) {
+          const xi = Math.round(X), yi = Math.round(Y), zi = Math.round(Z);
+          if (xi < 0 || yi < 0 || zi < 0 || xi >= nx || yi >= ny || zi >= nz) { d[o] = d[o + 1] = d[o + 2] = 0; d[o + 3] = 255; continue; }
+          val = sl[zi][yi * nx + xi];
+        } else {
+          if (X < 0 || Y < 0 || Z < 0 || X > nx - 1 || Y > ny - 1 || Z > nz - 1) { d[o] = d[o + 1] = d[o + 2] = 0; d[o + 3] = 255; continue; }
+          const x0 = Math.min(nx - 2, X | 0), y0 = Math.min(ny - 2, Y | 0), z0 = Math.min(nz - 2, Z | 0);
+          const fx = X - x0, fy = Y - y0, fz = Z - z0, a = sl[z0], b = sl[z0 + 1], q = y0 * nx + x0;
+          const c0 = (a[q] * (1 - fx) + a[q + 1] * fx) * (1 - fy) + (a[q + nx] * (1 - fx) + a[q + nx + 1] * fx) * fy;
+          const c1 = (b[q] * (1 - fx) + b[q + 1] * fx) * (1 - fy) + (b[q + nx] * (1 - fx) + b[q + nx + 1] * fx) * fy;
+          val = c0 * (1 - fz) + c1 * fz;
+        }
+        let gr = (val - lo) * sc; gr = gr < 0 ? 0 : gr > 255 ? 255 : gr;
+        let r = gr, gg = gr, bl = gr;
+        if (showOv && F && X >= F.lo[0] && X <= F.hi[0] && Y >= F.lo[1] && Y <= F.hi[1] && Z >= F.lo[2] && Z <= F.hi[2] && F.inside(X, Y, Z)) {
+          let col = null, al = 0.45;
+          if (seg && seg.roi === roi.key) {
+            const L = seg.labelAt(X, Y, Z);
+            if (L && L !== 4) { col = L === 3 ? pulpRGB : LABEL_COL[L]; al = L === 3 ? 0.75 : 0.4; }
+          } else if (val >= te) { col = [90, 200, 255]; al = 0.35; }
+          else if (val >= th) { col = [60, 230, 120]; al = 0.35; }
+          if (col) { r = r * (1 - al) + col[0] * al; gg = gg * (1 - al) + col[1] * al; bl = bl * (1 - al) + col[2] * al; }
+        }
+        d[o] = r; d[o + 1] = gg; d[o + 2] = bl; d[o + 3] = 255;
       }
     }
     this.offCtx.putImageData(this.img, 0, 0);
     const t = this.xform();
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(this.off, t.ox, t.oy, g.w * t.px, g.h * t.py);
-    // 十字線（断面ごとの色：水平断=青, 前頭断=緑, 矢状断=赤）
+    // 十字線（断面ごとの色：水平断=青, 前頭断=緑, 矢状断=赤）。線をつかんで回転できる
     if ($('xhair').checked) {
-      const [ci, cj] = this.toImg(...S.cursor), PC = ['#ff6b6b', '#5ad17a', '#4f8bff'];
-      const ax = this.axis === 0 ? 1 : 0, ay = this.axis === 2 ? 1 : 2;
-      ctx.lineWidth = 1 * dpr; ctx.globalAlpha = 0.75;
-      ctx.strokeStyle = PC[ax]; ctx.beginPath(); ctx.moveTo(t.ox + (ci + 0.5) * t.px, 0); ctx.lineTo(t.ox + (ci + 0.5) * t.px, H); ctx.stroke();
-      ctx.strokeStyle = PC[ay]; ctx.beginPath(); ctx.moveTo(0, t.oy + (cj + 0.5) * t.py); ctx.lineTo(W, t.oy + (cj + 0.5) * t.py); ctx.stroke();
+      const X = this.xhairLines(), PC = ['#ff6b6b', '#5ad17a', '#4f8bff'], Lg = 2 * Math.max(W, H), gap = 14 * dpr, kr = Math.min(W, H) * 0.32;
+      ctx.lineWidth = 1.2 * dpr;
+      for (const L of X.lines) {
+        ctx.strokeStyle = PC[L.plane]; ctx.globalAlpha = 0.8;
+        ctx.beginPath();
+        for (const sg of [1, -1]) { ctx.moveTo(X.C[0] + sg * gap * L.dir[0], X.C[1] + sg * gap * L.dir[1]); ctx.lineTo(X.C[0] + sg * Lg * L.dir[0], X.C[1] + sg * Lg * L.dir[1]); }
+        ctx.stroke();
+        // 回転用のつまみ（○）
+        if (S.tool === 'view') {
+          ctx.globalAlpha = 1; ctx.fillStyle = '#000';
+          for (const sg of [1, -1]) { ctx.beginPath(); ctx.arc(X.C[0] + sg * kr * L.dir[0], X.C[1] + sg * kr * L.dir[1], 4.5 * dpr, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+        }
+      }
       ctx.globalAlpha = 1;
     }
     // 方向表示（画面の左右・上下が患者のどちら向きか）
     {
       const D = v.dirs, letter = (vec) => { const k = [0, 1, 2].reduce((a, b) => (Math.abs(vec[b]) > Math.abs(vec[a]) ? b : a), 0); return [['R', 'L'], ['A', 'P'], ['I', 'S']][k][vec[k] > 0 ? 1 : 0]; };
+      const pat = (w) => [0, 1, 2].map((q) => w[0] * D[0][q] + w[1] * D[1][q] + w[2] * D[2][q]);
       const neg = (a) => a.map((x) => -x);
-      const sx = this.axis === 0 ? D[1] : D[0], sy = this.axis === 2 ? D[1] : neg(D[2]);
+      const sx = pat(P.u), sy = pat(P.v);
       ctx.font = `bold ${12 * dpr}px sans-serif`; ctx.fillStyle = 'rgba(255,214,102,0.9)'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText(letter(sx), W - 12 * dpr, H / 2); ctx.fillText(letter(neg(sx)), 12 * dpr, H / 2);
       ctx.fillText(letter(sy), W / 2, H - 12 * dpr); ctx.fillText(letter(neg(sy)), W / 2, 26 * dpr);
       ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
     }
     // ROI
+    this.handles = []; this.faces = [];
     if (roi && F) {
       // 傾けた枠（直方体）の辺をこの断面へ投影して描く
       const scr = (q) => { const [a, b] = this.toImg(q[0], q[1], q[2]); return [t.ox + (a + 0.5) * t.px, t.oy + (b + 0.5) * t.py]; };
-      const C = F.corners.map(scr);
-      const inside = s >= F.lo[this.axis] && s <= F.hi[this.axis];
+      const C = F.corners.map(scr), dists = F.corners.map((q) => this.distMm(q));
+      const inside = Math.min(...dists) <= 0 && Math.max(...dists) >= 0;
       ctx.strokeStyle = inside ? 'rgba(255,210,63,0.9)' : 'rgba(255,210,63,0.35)'; ctx.lineWidth = 1.3 * dpr;
       if (!inside) ctx.setLineDash([6, 4]);
       ctx.beginPath();
-      for (const [p0, p1] of [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]]) { ctx.moveTo(...C[p0]); ctx.lineTo(...C[p1]); }
+      for (const [p0i, p1i] of [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]]) { ctx.moveTo(...C[p0i]); ctx.lineTo(...C[p1i]); }
       ctx.stroke(); ctx.setLineDash([]);
       // 歯軸線と、傾きを変えるハンドル（コロナル・サジタル）
       const top = scr(F.toVox(F.shx, F.shy, F.up + 3)), bot = scr(F.toVox(F.shx, F.shy, -F.dn - 3)), sp = scr(S.seed);
@@ -1104,8 +1189,9 @@ class SliceView {
       ctx.beginPath(); ctx.moveTo(...bot); ctx.lineTo(...top); ctx.stroke();
       ctx.fillStyle = '#ffd23f';
       ctx.beginPath(); ctx.arc(sp[0], sp[1], 3.5 * dpr, 0, Math.PI * 2); ctx.fill();
-      this.handles = [];
-      if (this.axis === 2) {
+      const editBox = S.tool === 'seed';
+      if (!editBox) { /* 閲覧中は枠の操作ハンドルを出さない（十字線の操作を優先） */ }
+      else if (this.axis === 2) {
         // 水平断：枠の外側の●をドラッグして水平面内で回転
         const rp = scr(F.toVox(F.shx + F.hx + 3, F.shy, 0));
         ctx.strokeStyle = 'rgba(255,210,63,0.7)'; ctx.lineWidth = 1.5 * dpr; ctx.setLineDash([4, 3]);
@@ -1114,8 +1200,7 @@ class SliceView {
         ctx.fillStyle = '#1e232c'; ctx.fill(); ctx.lineWidth = 2 * dpr; ctx.strokeStyle = '#ffd23f'; ctx.stroke();
         ctx.beginPath(); ctx.arc(rp[0], rp[1], 2.5 * dpr, 0, Math.PI * 2); ctx.fillStyle = '#ffd23f'; ctx.fill();
         this.handles.push({ x: rp[0], y: rp[1], end: 'rot' });
-      }
-      if (this.axis !== 2) {
+      } else {
         for (const [pt, end] of [[top, 1], [bot, -1]]) {
           ctx.beginPath(); ctx.arc(pt[0], pt[1], 6 * dpr, 0, Math.PI * 2);
           ctx.fillStyle = '#1e232c'; ctx.fill(); ctx.lineWidth = 2 * dpr; ctx.strokeStyle = '#ffd23f'; ctx.stroke();
@@ -1123,10 +1208,9 @@ class SliceView {
         }
       }
       // 面ハンドル（■）：この断面にほぼ平行に見えている面だけ
-      this.faces = [];
-      const mz = (F.up - F.dn) / 2, va = this.axis;
-      for (const [k, sg, L] of [[0, 1, [F.shx + F.hx, F.shy, mz]], [0, -1, [F.shx - F.hx, F.shy, mz]], [1, 1, [F.shx, F.shy + F.hy, mz]], [1, -1, [F.shx, F.shy - F.hy, mz]], [2, 1, [F.shx, F.shy, F.up]], [2, -1, [F.shx, F.shy, -F.dn]]]) {
-        const nrm = F.Rm[va * 3 + k];
+      const mz = (F.up - F.dn) / 2;
+      if (editBox) for (const [k, sg, L] of [[0, 1, [F.shx + F.hx, F.shy, mz]], [0, -1, [F.shx - F.hx, F.shy, mz]], [1, 1, [F.shx, F.shy + F.hy, mz]], [1, -1, [F.shx, F.shy - F.hy, mz]], [2, 1, [F.shx, F.shy, F.up]], [2, -1, [F.shx, F.shy, -F.dn]]]) {
+        const nrm = P.n[0] * F.Rm[k] + P.n[1] * F.Rm[3 + k] + P.n[2] * F.Rm[6 + k];
         if (Math.sqrt(Math.max(0, 1 - nrm * nrm)) < 0.5) continue;
         const pt = scr(F.toVox(...L)), hs = 5 * dpr;
         ctx.fillStyle = '#ffd23f'; ctx.fillRect(pt[0] - hs, pt[1] - hs, 2 * hs, 2 * hs);
@@ -1136,10 +1220,10 @@ class SliceView {
     }
     // 除外ブラシ（球の断面を赤で表示）
     if (S.brush.groups.length) {
-      const sp3 = [v.sx, v.sy, v.sz], mmPx = t.px / g.pw;
+      const mmPx = t.px / g.pw;
       ctx.fillStyle = 'rgba(255,70,70,0.35)';
       for (const grp of S.brush.groups) for (const b of grp) {
-        const dd = (b.c[this.axis] - s) * sp3[this.axis];
+        const dd = this.distMm(b.c);
         if (Math.abs(dd) >= b.r) continue;
         const [a0, b0] = this.toImg(...b.c), rr = Math.sqrt(b.r * b.r - dd * dd) * mmPx;
         ctx.beginPath(); ctx.arc(t.ox + (a0 + 0.5) * t.px, t.oy + (b0 + 0.5) * t.py, rr, 0, Math.PI * 2); ctx.fill();
@@ -1147,17 +1231,23 @@ class SliceView {
     }
     // 距離計測
     if (S.meas.pts.length) {
-      const P = S.meas.pts.map((q) => { const [a, b] = this.toImg(...q); return [t.ox + (a + 0.5) * t.px, t.oy + (b + 0.5) * t.py, q[this.axis] === s]; });
+      const Pm = S.meas.pts.map((q) => { const [a, b] = this.toImg(...q); return [t.ox + (a + 0.5) * t.px, t.oy + (b + 0.5) * t.py, Math.abs(this.distMm(q)) < P.s * 0.75]; });
       ctx.strokeStyle = '#ff9f1a'; ctx.fillStyle = '#ff9f1a'; ctx.lineWidth = 1.5 * dpr;
-      if (P.length === 2) { ctx.setLineDash([5, 3]); ctx.beginPath(); ctx.moveTo(P[0][0], P[0][1]); ctx.lineTo(P[1][0], P[1][1]); ctx.stroke(); ctx.setLineDash([]); }
-      for (const [x0, y0, on] of P) { ctx.beginPath(); ctx.arc(x0, y0, 4 * dpr, 0, Math.PI * 2); on ? ctx.fill() : ctx.stroke(); }
-      if (P.length === 2) {
-        ctx.font = `${12 * dpr}px sans-serif`; ctx.fillText(measDist().toFixed(2) + ' mm', P[1][0] + 8 * dpr, P[1][1] - 6 * dpr);
+      if (Pm.length === 2) { ctx.setLineDash([5, 3]); ctx.beginPath(); ctx.moveTo(Pm[0][0], Pm[0][1]); ctx.lineTo(Pm[1][0], Pm[1][1]); ctx.stroke(); ctx.setLineDash([]); }
+      for (const [x0, y0, on] of Pm) { ctx.beginPath(); ctx.arc(x0, y0, 4 * dpr, 0, Math.PI * 2); on ? ctx.fill() : ctx.stroke(); }
+      if (Pm.length === 2) {
+        ctx.font = `${12 * dpr}px sans-serif`; ctx.fillText(measDist().toFixed(2) + ' mm', Pm[1][0] + 8 * dpr, Pm[1][1] - 6 * dpr);
       }
     }
-    this.lbl.textContent = `${s + 1}/${this.sliceCount()}`;
+    // スライス位置（回転していなければ枚数、回転中は角度つきの位置 mm）
+    if (isMprIdentity()) this.lbl.textContent = `${Math.round(S.cursor[this.axis]) + 1}/${[v.nx, v.ny, v.nz][this.axis]}`;
+    else {
+      const ref = [[1, 0, 0], [0, 1, 0], [0, 0, 1]][this.axis], ang = Math.acos(clamp(Math.abs(P.dot(P.n, ref)), 0, 1)) * 180 / Math.PI;
+      this.lbl.textContent = `${P.dot(P.cm, P.n).toFixed(1)} mm ・ 傾き ${ang.toFixed(1)}°`;
+    }
   }
 }
+function isMprIdentity() { return S.mpr.every((a, k) => Math.abs(a[k] - 1) < 1e-9); }
 
 /* =====================================================================
  *  歯の抽出（セグメンテーション）
@@ -2225,13 +2315,14 @@ document.querySelectorAll('[data-wlp]').forEach((b) => (b.onclick = () => {
   setVal('ww', Math.round(P[0])); setVal('wl', Math.round(P[1])); readWL(); renderAll();
 }));
 $('resetViews').onclick = () => { for (const v of views) v.resetView(); renderAll(); };
+$('resetMpr').onclick = () => { S.mpr = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]; renderAll(); };
 $('xhair').addEventListener('change', renderAll);
 // キーボード：↑↓/PageUp/PageDown でマウス下の断面をスライス送り、R で表示リセット
 window.addEventListener('keydown', (e) => {
   if (!S.vol || /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) return;
   const v = S.hoverView || views[0];
   const d = { ArrowUp: 1, ArrowDown: -1, PageUp: 10, PageDown: -10 }[e.key];
-  if (d) { e.preventDefault(); S.cursor[v.axis] = clamp(S.cursor[v.axis] + d, 0, v.sliceCount() - 1); renderAll(); }
+  if (d) { e.preventDefault(); v.step(d); }
   else if (e.key === 'r' || e.key === 'R') $('resetViews').click();
   else if (e.key === 'Escape' && S.tool !== 'view') setTool('view');
 });
