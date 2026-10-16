@@ -833,7 +833,7 @@ function sampleVol(v, X, Y, Z, bg) {
   return Math.round(c0 * (1 - fz) + c1 * fz);
 }
 function setSeed(p) {
-  S.seed = p.slice(); S.cursor = p.slice(); S.autoFit = true; S.fitNote = '';
+  S.seed = p.slice(); S.cursor = p.slice(); S.autoFit = true; S.autoFit2 = true; S.fitNote = '';
   $('extractBtn').disabled = false; $('go3d').hidden = false;
   updateSeedInfo(); renderAll();
 }
@@ -857,7 +857,7 @@ class SliceView {
     canvas.addEventListener('pointermove', (e) => this.move(e));
     canvas.addEventListener('pointerup', (e) => {
       if (this.drag === 'tilt' || this.drag === 'rot' || this.drag === 'face' || this.drag === 'brush') {
-        if (this.drag !== 'brush') S.autoFit = false;   // 枠を手で調整したら自動調整しない
+        if (this.drag !== 'brush') S.autoFit = S.autoFit2 = false;   // 枠を手で調整したら自動調整しない
         this.drag = null; canvas.releasePointerCapture(e.pointerId);
         markDirty();
         return;
@@ -1916,6 +1916,31 @@ async function extract() {
         if (s1 < 0) { let bd = Infinity; for (let i = 0; i < en; i++) if (er[i]) { const d = Math.abs(((i / exy) | 0) - szE) + Math.abs(i % ex - s0 % ex) + Math.abs(((i / ex) | 0) % ey - ((s0 / ex) | 0) % ey); if (d < bd) { bd = d; s1 = i; } } }
         if (s1 >= 0) { const m = dilateWithin(floodFill(er, ex, ey, ez, s1), t2, ex, ey, ez, (window.OPENR || 1) + 2); if (m[s0]) t2 = m; }
       }
+      // 歯根の枠合わせ（1回だけ）：歯冠に合わせた後でも、歯根（開始断面より根尖側）が枠の側面に接していれば、
+      // 傾いた歯根が枠からはみ出しているので、接している側だけ3mm広げて解析し直す
+      if (S.autoFit2 && !S.autoFit && !window.DEBUG_NOFIT) {
+        S.autoFit2 = false;
+        const c = [0, 0, 0, 0];
+        for (let z = 0; z < ez; z++) {
+          if ((z - zStart) * apical <= 0) continue;
+          for (let y = roi.y0; y <= roi.y1; y++) { c[0] += t2[z * exy + y * ex + roi.x0]; c[1] += t2[z * exy + y * ex + roi.x1]; }
+          for (let x = roi.x0; x <= roi.x1; x++) { c[2] += t2[z * exy + roi.y0 * ex + x]; c[3] += t2[z * exy + roi.y1 * ex + x]; }
+        }
+        const minT = Math.max(4, Math.round(0.5 / (v.s * v.s)));
+        let changed = false;
+        const grow = (k, lo0, hi0, id) => {
+          if (!lo0 && !hi0) return;
+          const h = +$(id).value / 2, lo = S.shift[k] - h - (lo0 ? 3 : 0), hi = S.shift[k] + h + (hi0 ? 3 : 0);
+          if (hi - lo > 40) return;
+          S.shift[k] = Math.round((lo + hi) / 2 * 10) / 10; setVal(id, Math.round((hi - lo) * 2) / 2); changed = true;
+        };
+        grow(0, c[0] >= minT, c[1] >= minT, 'roiX'); grow(1, c[2] >= minT, c[3] >= minT, 'roiY');
+        if (window.DEBUG_SEP) console.log('rootfit', c, minT, changed);
+        if (changed) {
+          S.fitNote = '（歯根が枠からはみ出していたため、枠を自動で広げました）';
+          hideProgress(); renderAll(); S.rerun = true; return;
+        }
+      }
       // 追跡が骨の斜面に沿って入り込み、枠の外周まで達した部分は、くびれ（距離の谷）で切り離す
       const h2 = holes2D(t2, ex, ey, ez), dom2 = new Uint8Array(en);
       for (let i = 0; i < en; i++) dom2[i] = t2[i] | h2[i];
@@ -1947,7 +1972,7 @@ async function extract() {
   const box = { x0: Math.max(0, bx0 - mg), y0: Math.max(0, by0 - mg), z0: Math.max(0, bz0 - mg), x1: Math.min(nx - 1, bx1 + mg), y1: Math.min(ny - 1, by1 + mg), z1: Math.min(nz - 1, bz1 + mg) };
   const bnx = box.x1 - box.x0 + 1, bny = box.y1 - box.y0 + 1, bnz = box.z1 - box.z0 + 1;
   let u = $('hiRes').checked ? clamp(Math.round(Math.min(v.sx, v.sy, v.sz) / 0.07), 1, 3) : 1;
-  while (u > 1 && bnx * bny * bnz * u ** 3 > 20e6) u--;
+  while (u > 1 && bnx * bny * bnz * u ** 3 > 28e6) u--;
   const fx = bnx * u, fy = bny * u, fz = bnz * u, fn = fx * fy * fz, fxy = fx * fy;
   const fsp = [v.sx / u, v.sy / u, v.sz / u], fvol = fsp[0] * fsp[1] * fsp[2], fmin = Math.min(...fsp);
   // 高精度ステージは平滑化前の値を使う（細い根管のコントラストを保つ。ノイズは実測σでしきい値に反映）
@@ -2312,13 +2337,15 @@ function traceCanals(I, solid, canal, depth, nx, ny, nz, sp, dMed, th, tmp, te =
     if (added === before) break;
   }
   // 5) 根尖方向への延長：根管の途切れた端（細い根管の断面）から、1断面ずつ「近くの最も暗い点」をたどる。
-  //    周囲より暗ければ（CTで根管が見えていれば）描き、見えない区間が0.8mm続いたら止める。短い見えない区間（0.3mm以下）は線でつなぐ
+  //    周囲より少しでも暗ければ（根管を疑う暗がり。石灰化で見えにくい根管も）描き、見えない区間が3mm続いたら止める。短い見えない区間（0.3mm以下）は線でつなぐ
   if (!window.DEBUG_NOEXT) {
     let ezs = 0, en = 0, szs = 0, sn = 0;
     for (let i = 0; i < I.length; i += 7) { if (!solid[i]) continue; const z = (i / nxy) | 0; szs += z; sn++; if (I[i] >= te) { ezs += z; en++; } }
     const ap = en && ezs / en > szs / sn ? -1 : 1;              // 根尖の向き（エナメル質と反対）
-    const Tlow = srt[Math.floor(srt.length * (window.CEXT ?? 0.35))];
-    const ws = Math.max(1, Math.round(0.15 / vs)), maxMiss = Math.max(2, Math.round((window.CMISS ?? 1.2) / sp[2])), gapFill = Math.max(1, Math.round(0.3 / sp[2]));
+    // 根管を疑う薄い暗がりも拾う（石灰化などで途中が見えにくい根管）。「根管感度」で調整（既定45%→上位90%の暗さ）
+    const sensE = +$('thCanal').value / 100;
+    const Tlow = srt[Math.floor(srt.length * (window.CEXT ?? clamp(0.1 + (0.45 - sensE) * 0.8, 0.02, 0.6)))];
+    const ws = Math.max(1, Math.round(0.15 / vs)), maxMiss = Math.max(2, Math.round((window.CMISS ?? 3.0) / sp[2])), gapFill = Math.max(1, Math.round(0.3 / sp[2]));
     const maxEndA = Math.PI * (0.6 / vs) ** 2;
     const conAt = (i) => { let m = 0; for (const [dx, dy] of ring) m += Math.min(Is[i + dy * nx + dx], dMed); return m / 12 - Is[i]; };
     const disk = (z, x, y) => {
@@ -2387,7 +2414,7 @@ function traceCanals(I, solid, canal, depth, nx, ny, nz, sp, dMed, th, tmp, te =
           const xx = bx + dx, yy = by + dy; if (xx < 0 || yy < 0 || xx >= nx || yy >= ny) continue;
           const d = depth[z * nxy + yy * nx + xx]; if (d > dmx) dmx = d;
         }
-        const central = depth[best] >= (window.CCEN ?? 0.6) * dmx;
+        const central = depth[best] >= (window.CCEN ?? 0.5) * dmx;
         if (central && conAt(best) > Tlow) {
           if (z - ap !== lz && Math.abs(z - lz) <= gapFill + 1) {    // 短い見えない区間は直線でつなぐ
             const nstep = Math.abs(z - lz);
@@ -2852,7 +2879,7 @@ $('sepAuto').addEventListener('change', () => {
   renderAll(); markDirty();
 });
 for (const id of ['roiX', 'roiY', 'roiUp', 'roiDn', 'thHard', 'thEnamel', 'thCanal', 'erode', 'sepTh'])
-  $(id).addEventListener('input', () => { if (id.startsWith('roi')) S.autoFit = false; syncOut(id); renderAll(); markDirty(); });
+  $(id).addEventListener('input', () => { if (id.startsWith('roi')) S.autoFit = S.autoFit2 = false; syncOut(id); renderAll(); markDirty(); });
 for (const id of ['smooth', 'splitNb', 'boneSep', 'hiRes']) $(id).addEventListener('change', markDirty);
 $('preview').addEventListener('change', renderAll);
 $('wlAuto').onclick = autoWL;
