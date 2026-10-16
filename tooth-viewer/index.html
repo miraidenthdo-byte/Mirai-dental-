@@ -245,7 +245,7 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 3
     <canvas id="gizmo" style="position:absolute;right:8px;bottom:8px;width:96px;height:96px;left:auto;top:auto;inset:auto 8px 8px auto;pointer-events:none"></canvas>
     <div class="legend" id="legend">
       <div><i id="lgE"></i>エナメル質</div><div><i id="lgD"></i>象牙質</div>
-      <div><i id="lgP"></i><span id="lgPtxt">歯髄・根管</span></div><div id="lgBrow"><i id="lgB"></i>周囲の骨</div>
+      <div><i id="lgP"></i><span id="lgPtxt">歯髄・根管</span></div><div id="lgSrow" hidden><i id="lgS"></i><span id="lgStxt">根管の疑い（CTで薄い暗がり）</span></div><div id="lgBrow"><i id="lgB"></i>周囲の骨</div>
     </div>
     <div class="empty3d" id="empty3d"><div id="emptyMsg">① DICOMを開く → ② 断面で歯をクリック → ③ 範囲を調整 → ④「範囲を決定して解析」<br>
       ドラッグで回転 / ホイールで拡大縮小 / ダブルクリックでリセット</div>
@@ -846,7 +846,7 @@ function updateSeedInfo() {
 /* =====================================================================
  *  断面ビュー（MPR）
  * ===================================================================== */
-const LABEL_COL = [null, [140, 220, 255], [255, 200, 90], [255, 40, 60], [120, 140, 160]];
+const LABEL_COL = [null, [140, 220, 255], [255, 200, 90], [255, 40, 60], [120, 140, 160], [255, 220, 30]];
 class SliceView {
   constructor(canvas, axis, lbl) {
     this.cv = canvas; this.axis = axis; this.lbl = lbl;
@@ -1136,8 +1136,8 @@ class SliceView {
         if (showOv && F && X >= F.lo[0] && X <= F.hi[0] && Y >= F.lo[1] && Y <= F.hi[1] && Z >= F.lo[2] && Z <= F.hi[2] && F.inside(X, Y, Z)) {
           let col = null, al = 0.45;
           if (seg && seg.roi === roi.key && !S.dirty) {
-            const L = seg.labelAt(X, Y, Z);
-            if (L && L !== 4) { col = L === 3 ? pulpRGB : LABEL_COL[L]; al = L === 3 ? 0.75 : 0.4; }
+            const L = (seg.labelAtS || seg.labelAt)(X, Y, Z);
+            if (L && L !== 4) { col = L === 3 ? pulpRGB : LABEL_COL[L]; al = L === 3 || L === 5 ? 0.75 : 0.4; }
           } else if (val >= te) { col = [90, 200, 255]; al = 0.35; }
           else if (sepMan && val >= th && val < sepV) { col = [255, 169, 77]; al = 0.45; }
           else if (val >= th) { col = [60, 230, 120]; al = 0.35; }
@@ -2029,9 +2029,10 @@ async function extract() {
   // 根管の追跡：細く写りの薄い根管は、しきい値だけでは途中で途切れる。
   // 歯軸方向に長くならした画像で「歯根断面の中の暗い点（周囲の象牙質より暗い局所最小）」を断面ごとに拾い、
   // 上下につながる点列（長さ1.5mm以上）を根管の中心線とみなす。検出済みの根管（歯髄腔）とつながるものを採用して細い管として描く
+  const susF = new Uint8Array(fn);   // 「根管の疑い」（CTで薄い暗がりとしてだけ見える部分）
   if (!window.DEBUG_NOCHAIN) {
     showProgress('高精度処理中…（根管の追跡）', 0.72); await sleep0();
-    const chains = traceCanals(I, solidF, canalF, depth, fx, fy, fz, fsp, dMed, th, Hm, te);
+    const chains = traceCanals(I, solidF, canalF, depth, fx, fy, fz, fsp, dMed, th, Hm, te, susF);
     if (DBF) DBF.chains = chains;
   }
   // 根管は象牙質に囲まれているはず：周囲（約0.3mmの殻）の濃度が象牙質より明らかに低い成分は、
@@ -2087,6 +2088,16 @@ async function extract() {
   const nearT = dilate6(solidF, fx, fy, fz, 1);
   for (let i = 0; i < fn; i++) if (labF[i] === 4 && nearT[i]) { labF[i] = 0; cnt[4]--; cnt[0]++; }
   const rgba = buildFields(I, labF, solidF, fx, fy, fz, th, te, dMed, fmin);
+  // 「根管の疑い」の場：根管表面の色分け用（少し広げてぼかす）
+  for (let i = 0; i < fn; i++) if (labF[i] !== 3) susF[i] = 0;
+  let nSus = 0; for (let i = 0; i < fn; i++) nSus += susF[i];
+  let susTex = null;
+  if (nSus) {
+    const sd = dilate6(susF, fx, fy, fz, 2), sf = new Float32Array(fn);
+    for (let i = 0; i < fn; i++) sf[i] = sd[i];
+    blur3(sf, fx, fy, fz, [0.25, 0.5, 0.25]);
+    susTex = new Uint8Array(fn); for (let i = 0; i < fn; i++) susTex[i] = Math.round(sf[i] * 255);
+  }
   // 断面オーバーレイ用に元解像度のラベルへ戻す
   const labels = new Uint8Array(n);
   for (let i = 0; i < n; i++) if (hard[i] && !tooth[i]) labels[i] = 4;
@@ -2113,11 +2124,19 @@ async function extract() {
     const i = Math.round((l[0] - origin[0]) / fsp[0]), j = Math.round((l[1] - origin[1]) / fsp[1]), kk = Math.round((l[2] - origin[2]) / fsp[2]);
     return i < 0 || j < 0 || kk < 0 || i >= fx || j >= fy || kk >= fz ? 0 : labF[(kk * fy + j) * fx + i];
   };
-  S.seg = { roi: roi.key, roiObj: roi, labels, labelAt, localToVolMm, dirsL, fine: { labels: labF, rgba, nx: fx, ny: fy, nz: fz, sp: fsp, origin, u, box, sigma, dMed } };
+  // 断面表示用：疑いの根管は 5（黄色）として返す
+  const labelAtS = (x, y, z) => {
+    const a = x * vs[0] - v.sm[0], b = y * vs[1] - v.sm[1], c = z * vs[2] - v.sm[2];
+    const l = [Rm[0] * a + Rm[3] * b + Rm[6] * c + sIdxMm[0], Rm[1] * a + Rm[4] * b + Rm[7] * c + sIdxMm[1], Rm[2] * a + Rm[5] * b + Rm[8] * c + sIdxMm[2]];
+    const i = Math.round((l[0] - origin[0]) / fsp[0]), j = Math.round((l[1] - origin[1]) / fsp[1]), kk = Math.round((l[2] - origin[2]) / fsp[2]);
+    if (i < 0 || j < 0 || kk < 0 || i >= fx || j >= fy || kk >= fz) return 0;
+    const q = (kk * fy + j) * fx + i; return labF[q] === 3 && susF[q] ? 5 : labF[q];
+  };
+  S.seg = { roi: roi.key, roiObj: roi, labels, labelAt, labelAtS, localToVolMm, dirsL, fine: { labels: labF, rgba, sus: susTex, nx: fx, ny: fy, nz: fz, sp: fsp, origin, u, box, sigma, dMed } };
   $('axisAuto').disabled = false;
   showProgress('3Dデータを作成中…', 0.9); await sleep0();
   renderer.mode = 'tooth'; $('mode3d').value = 'tooth'; $('ctThWrap').hidden = true;
-  renderer.setData(rgba, labF, fx, fy, fz, fsp[0], fsp[1], fsp[2]);
+  renderer.setData(rgba, labF, fx, fy, fz, fsp[0], fsp[1], fsp[2], susTex); updateLegend();
   hideProgress();
   $('empty3d').style.display = 'none';
   $('stlBtn').disabled = false;
@@ -2264,7 +2283,7 @@ function competeGrow(a, b, mask, nx, ny, nz, maxSteps) {
  * 根管の中心線追跡。I=補間後のCT値, solid=歯（歯髄腔を含む）, canal=検出済みの根管（ここへ追記する）, depth=歯の表面からの距離(mm)
  * tmp は作業用（Float32, 大きさ同じ）。追加した点列の数を返す
  */
-function traceCanals(I, solid, canal, depth, nx, ny, nz, sp, dMed, th, tmp, te = Infinity) {
+function traceCanals(I, solid, canal, depth, nx, ny, nz, sp, dMed, th, tmp, te = Infinity, sus = null) {
   const nxy = nx * ny, vs = Math.min(sp[0], sp[1]);
   // 1) 歯軸方向（z）に長い平滑化：xy 約0.07mm, z 約0.25mm のボックスを2回
   const Is = tmp;
@@ -2348,11 +2367,15 @@ function traceCanals(I, solid, canal, depth, nx, ny, nz, sp, dMed, th, tmp, te =
     const ws = Math.max(1, Math.round(0.15 / vs)), maxMiss = Math.max(2, Math.round((window.CMISS ?? 3.0) / sp[2])), gapFill = Math.max(1, Math.round(0.3 / sp[2]));
     const maxEndA = Math.PI * (0.6 / vs) ** 2;
     const conAt = (i) => { let m = 0; for (const [dx, dy] of ring) m += Math.min(Is[i + dy * nx + dx], dMed); return m / 12 - Is[i]; };
-    const disk = (z, x, y) => {
+    // 「はっきり見える」（従来の基準＝暗さ上位65%）より薄い暗がりと、見えない区間をつないだ線は「疑い」として記録（黄色で表示）
+    const Tvis = Math.max(Tlow, srt[Math.floor(srt.length * 0.35)]);
+    const disk = (z, x, y, weak) => {
       for (let dy = -rC; dy <= rC; dy++) for (let dx = -rC; dx <= rC; dx++) {
         if (dx * dx + dy * dy > rC * rC + rC) continue;
         const xx = x + dx, yy = y + dy; if (xx < 0 || yy < 0 || xx >= nx || yy >= ny) continue;
-        const j = z * nxy + yy * nx + xx; if (solid[j]) canal[j] = 1;
+        const j = z * nxy + yy * nx + xx; if (!solid[j]) continue;
+        if (sus) { if (!weak) sus[j] = 0; else if (!canal[j]) sus[j] = 1; }
+        canal[j] = 1;
       }
     };
     // 端の検出：その断面の根管の連結成分のうち、根尖側の次の断面に根管が続いていない小さなもの。
@@ -2418,9 +2441,9 @@ function traceCanals(I, solid, canal, depth, nx, ny, nz, sp, dMed, th, tmp, te =
         if (central && conAt(best) > Tlow) {
           if (z - ap !== lz && Math.abs(z - lz) <= gapFill + 1) {    // 短い見えない区間は直線でつなぐ
             const nstep = Math.abs(z - lz);
-            for (let k = 1; k < nstep; k++) { const t = k / nstep; disk(lz + k * ap, Math.round(lx + (bx - lx) * t), Math.round(ly + (by - ly) * t)); }
+            for (let k = 1; k < nstep; k++) { const t = k / nstep; disk(lz + k * ap, Math.round(lx + (bx - lx) * t), Math.round(ly + (by - ly) * t), true); }
           }
-          disk(z, bx, by); ext++; extPts.push([z0, z, bx, by]); miss = 0; lz = z; lx = bx; ly = by; x = bx; y = by;
+          disk(z, bx, by, conAt(best) < Tvis); ext++; extPts.push([z0, z, bx, by]); miss = 0; lz = z; lx = bx; ly = by; x = bx; y = by;
         } else {
           if (++miss > maxMiss) break;
           x = bx; y = by;                                           // 見えない区間も暗い方へ位置を追う
@@ -2589,7 +2612,7 @@ void main(){ vec2 p = vec2(float((gl_VertexID<<1)&2), float(gl_VertexID&2))*2.0-
 const FS = `#version 300 es
 precision highp float; precision highp sampler3D;
 in vec2 vNdc; out vec4 outColor;
-uniform sampler3D uVol;
+uniform sampler3D uVol; uniform sampler3D uSus;
 uniform mat4 uInvVP; uniform vec3 uEye; uniform vec3 uHalf; uniform vec3 uTexel;
 uniform vec4 uOpacity; uniform vec4 uIso; uniform vec4 uGlass; uniform vec3 uCol[4];
 uniform vec4 uClip; uniform int uClipOn; uniform int uPulpGrad; uniform float uDt; uniform float uRef;
@@ -2645,6 +2668,8 @@ void main(){
         // 透かし表示：正面を向いた面ほど透明に、輪郭ほど不透明に（形が分かりやすい）
         if (!cutFace) a *= mix(1.0, 0.25 + 0.75*pow(1.0 - facing, 1.5), uGlass[c+1]);
         vec3 base = c == 0 ? mix(uCol[1], uCol[0], en) : (c == 1 && uPulpGrad == 1) ? pulpHue(tcc.z) : uCol[c+1];
+        // 根管の疑い（CTで薄い暗がりとしてだけ見える部分）は黄色（高さで色分け中は白）
+        if (c == 1) base = mix(base, uPulpGrad == 1 ? vec3(0.95) : vec3(1.0, 0.86, 0.10), smoothstep(0.3, 0.6, texture(uSus, tcc).r));
         vec3 col = base*(c == 0 ? 0.55 + 0.45*facing : 0.40 + 0.60*facing) + vec3(0.20)*pow(facing, 40.0);
         acc.rgb += (1.0-acc.a)*a*col; acc.a += (1.0-acc.a)*a;
       }
@@ -2716,9 +2741,9 @@ class VolumeRenderer {
     gl.attachShader(p, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, FS));
     gl.linkProgram(p);
     if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
-    this.prog = p; this.vao = gl.createVertexArray(); this.tex = gl.createTexture();
+    this.prog = p; this.vao = gl.createVertexArray(); this.tex = gl.createTexture(); this.susTex = gl.createTexture();
     this.u = {};
-    for (const n of ['uVol', 'uInvVP', 'uEye', 'uHalf', 'uTexel', 'uOpacity', 'uIso', 'uGlass', 'uCol', 'uClip', 'uClipOn', 'uPulpGrad', 'uDt', 'uRef', 'uZRange'])
+    for (const n of ['uVol', 'uSus', 'uInvVP', 'uEye', 'uHalf', 'uTexel', 'uOpacity', 'uIso', 'uGlass', 'uCol', 'uClip', 'uClipOn', 'uPulpGrad', 'uDt', 'uRef', 'uZRange'])
       this.u[n] = gl.getUniformLocation(p, n);
     // 操作
     let drag = null;
@@ -2740,8 +2765,17 @@ class VolumeRenderer {
   }
   clear() { this.has = false; this.request(); }
   /** rgba: R=エナメル質 G=象牙質 B=歯髄・根管 A=骨 のフィールド（0-255, 等値面=128） */
-  setData(rgba, labels, nx, ny, nz, sx, sy, sz) {
+  setData(rgba, labels, nx, ny, nz, sx, sy, sz, sus = null) {
     const gl = this.gl; if (!gl) return;
+    // 根管の疑いの場（無いときは 1×1×1 の0）
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_3D, this.susTex); gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    if (sus) gl.texImage3D(gl.TEXTURE_3D, 0, gl.R8, nx, ny, nz, 0, gl.RED, gl.UNSIGNED_BYTE, sus);
+    else gl.texImage3D(gl.TEXTURE_3D, 0, gl.R8, 1, 1, 1, 0, gl.RED, gl.UNSIGNED_BYTE, new Uint8Array(1));
+    for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR],
+      [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE]])
+      gl.texParameteri(gl.TEXTURE_3D, k, v);
+    gl.activeTexture(gl.TEXTURE0);
+    this.hasSus = !!sus;
     gl.bindTexture(gl.TEXTURE_3D, this.tex);
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
     gl.texImage3D(gl.TEXTURE_3D, 0, gl.RGBA8, nx, ny, nz, 0, gl.RGBA, gl.UNSIGNED_BYTE, rgba);
@@ -2788,7 +2822,8 @@ class VolumeRenderer {
     gl.useProgram(this.prog); gl.bindVertexArray(this.vao);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_3D, this.tex);
     const u = this.u;
-    gl.uniform1i(u.uVol, 0);
+    gl.uniform1i(u.uVol, 0); gl.uniform1i(u.uSus, 1);
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_3D, this.susTex); gl.activeTexture(gl.TEXTURE0);
     gl.uniformMatrix4fv(u.uInvVP, false, M4.invert(vp));
     gl.uniform3fv(u.uEye, eye); gl.uniform3fv(u.uHalf, this.half); gl.uniform3fv(u.uTexel, this.texel);
     const op = (id) => +$(id).value / 100;
@@ -3037,7 +3072,7 @@ $('mode3d').addEventListener('change', () => {
     renderer.mode = 'tooth'; $('ctThWrap').hidden = true;
     if (S.opSaved) { ['opE', 'opD', 'glass'].forEach((id, i) => setVal(id, S.opSaved[i])); S.opSaved = null; }
     const F = S.seg && S.seg.fine;
-    if (F) renderer.setData(F.rgba, F.labels, F.nx, F.ny, F.nz, F.sp[0], F.sp[1], F.sp[2]);
+    if (F) renderer.setData(F.rgba, F.labels, F.nx, F.ny, F.nz, F.sp[0], F.sp[1], F.sp[2], F.sus);
     else { renderer.clear(); $('empty3d').style.display = ''; }
     renderer.request(); updateLegend();
   }
@@ -3223,6 +3258,8 @@ function updateLegend() {
   const grad = $('pulpGrad').checked;
   $('lgP').className = grad ? 'grad' : ''; $('lgP').style.background = grad ? '' : $('colP').value;
   $('lgPtxt').textContent = grad ? '歯髄・根管（高さで色分け：上→下）' : '歯髄・根管';
+  $('lgSrow').hidden = !(renderer.mode !== 'ct' && renderer.hasSus);
+  $('lgS').style.background = grad ? '#f2f2f2' : '#ffdc1a';
 }
 (function spin() {
   if ($('autoRot').checked && renderer.has) { renderer.yaw += 0.012; renderer.request(); }
