@@ -1310,7 +1310,22 @@ function autoThreshold(quiet) {
   const [t1, t2, t3] = multiOtsu(samp, 3);
   // 硬組織/エナメル の2しきい値を、t1 以上の画素で再推定（空気の影響を除く）
   const hard = samp.filter((x) => x >= t1);
-  const [a, b] = hard.length > 100 ? multiOtsu(hard, 2) : [t2, t3];
+  let [a, b] = hard.length > 100 ? multiOtsu(hard, 2) : [t2, t3];
+  // 枠の中の空気の割合で Otsu の値は大きく動く（枠の上が空気だと低すぎて骨とつながる）。
+  // 選択点を中心とした半径6mmの球の中で、空気だけを除いて（HU値なら -300 超）2クラス Otsu で歯質しきい値を決める
+  if (!window.DEBUG_OLDTH && S.seed) {
+    const v = S.vol, [sx, sy, sz] = S.seed, R = window.THR ?? 6, r = [R / v.sx, R / v.sy, R / v.sz].map(Math.ceil), sv = [];
+    const cut = f.reduce((m, x) => Math.min(m, x), Infinity) < -500 ? -300 : t1;
+    for (let z = Math.max(0, sz - r[2]); z <= Math.min(v.nz - 1, sz + r[2]); z++) {
+      const sl = v.slices[z];
+      for (let y = Math.max(0, sy - r[1]); y <= Math.min(v.ny - 1, sy + r[1]); y++) for (let x = Math.max(0, sx - r[0]); x <= Math.min(v.nx - 1, sx + r[0]); x++) {
+        if (((x - sx) / r[0]) ** 2 + ((y - sy) / r[1]) ** 2 + ((z - sz) / r[2]) ** 2 > 1) continue;
+        const val = sl[y * v.nx + x]; if (val > cut) sv.push(val);
+      }
+    }
+    if (sv.length > 500) { const [a2] = multiOtsu(sv, 2); if (a2 > t1 && a2 < b - 100) a = a2; }
+    if (window.DEBUG_SEP) console.log('autoTh', Math.round(t1), Math.round(a), Math.round(b));
+  }
   setVal('thHard', Math.round(a)); setVal('thEnamel', Math.round(Math.max(b, a + 50)));
   renderAll();
   if (!quiet) setStatus(`しきい値を自動設定しました（歯質 ${Math.round(a)} / エナメル質 ${Math.round(b)}）。緑のプレビューを確認してください`);
@@ -1916,6 +1931,66 @@ async function extract() {
         if (s1 < 0) { let bd = Infinity; for (let i = 0; i < en; i++) if (er[i]) { const d = Math.abs(((i / exy) | 0) - szE) + Math.abs(i % ex - s0 % ex) + Math.abs(((i / ex) | 0) % ey - ((s0 / ex) | 0) % ey); if (d < bd) { bd = d; s1 = i; } } }
         if (s1 >= 0) { const m = dilateWithin(floodFill(er, ex, ey, ez, s1), t2, ex, ey, ez, (window.OPENR || 1) + 2); if (m[s0]) t2 = m; }
       }
+      // 根尖より先の骨の帯：根尖側の端から歯冠側へ見て、断面の塊がすべて「枠の側面に接する」か「外周の半分以上が硬組織」（＝骨板だけ）の断面を消す。
+      // そうでない塊（軟組織＝歯根膜に囲まれた歯根の先）が現れた断面で止める
+      if (!window.DEBUG_NOTAIL) {
+        const zs = []; for (let z = zStart + apical; z >= 0 && z < ez; z += apical) zs.push(z);
+        const lab2 = new Int32Array(exy), st2 = new Int32Array(exy), pend = [], saved = new Map();
+        let freeRun = 0, zStop = -1;
+        for (let k = zs.length - 1; k >= 0; k--) {
+          const z = zs[k], b = z * exy;
+          let any = false, free = false; lab2.fill(0); let nl = 0;
+          for (let q0 = 0; q0 < exy && !free; q0++) {
+            if (!t2[b + q0] || lab2[q0]) continue;
+            any = true; nl++; let sp = 0, wall = false; st2[sp++] = q0; lab2[q0] = nl;
+            while (sp) {
+              const q = st2[--sp], x = q % ex, y = (q / ex) | 0;
+              if (x <= roi.x0 || x >= roi.x1 || y <= roi.y0 || y >= roi.y1) wall = true;
+              for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const xx = x + dx, yy = y + dy; if (xx < 0 || yy < 0 || xx >= ex || yy >= ey) continue; const j = yy * ex + xx; if (t2[b + j] && !lab2[j]) { lab2[j] = nl; st2[sp++] = j; } }
+            }
+            if (!wall) {
+              // 枠に接していなくても、外周の大半が硬組織（骨板に沿った帯）なら根尖ではない
+              let hb = 0, tb = 0;
+              for (let q = 0; q < exy; q++) {
+                if (lab2[q] !== nl) continue;
+                const x = q % ex, y = (q / ex) | 0;
+                for (const j of [x > 0 ? q - 1 : -1, x < ex - 1 ? q + 1 : -1, y > 0 ? q - ex : -1, y < ey - 1 ? q + ex : -1]) {
+                  if (j < 0 || t2[b + j]) continue; tb++; if (hardE[b + j]) hb++;
+                }
+              }
+              if (window.DEBUG_SEP) console.log('tailc', z, lab2.reduce((c, l) => c + (l === nl ? 1 : 0), 0), (hb / Math.max(1, tb)).toFixed(2));
+              if (!tb || hb / tb < (window.TAILF ?? 0.5)) free = true;
+            }
+          }
+          if (!any) continue;
+          if (window.DEBUG_SEP) console.log('tail z', z, free);
+          if (free) { if (++freeRun >= 3) { zStop = z; break; } pend.push(z); continue; }
+          // 骨板だけの断面。直前の「根尖らしい」断面が3枚続かなかったものも併せて消す（元に戻せるよう保存）
+          for (const zz of pend.concat([z])) { saved.set(zz, t2.slice(zz * exy, (zz + 1) * exy)); for (let q = 0; q < exy; q++) t2[zz * exy + q] = 0; }
+          pend.length = 0; freeRun = 0;
+        }
+        // 止まった位置から根尖側 2mm は戻す（歯根の先が骨板の帯と一体になっている部分を残す）
+        if (zStop >= 0) { const keepN = Math.round(2.0 / v.sz); for (const [zz, arr] of saved) if (Math.abs(zz - zStop) <= keepN + 3) t2.set(arr, zz * exy); }
+        if (t2[s0]) t2 = floodFill(t2, ex, ey, ez, s0);
+      }
+      // 歯根側の骨板の帯（画素ごと）：周囲 0.8mm に「歯でない硬組織（皮質骨）」が3割以上あり、歯の割合が5割未満の画素を外す。
+      // 外した後、歯冠側から断面ごとにつながる部分だけ残す
+      if (window.PLATE2) {
+        const r = Math.max(2, Math.round(0.8 / v.s)), W = (2 * r + 1) ** 2;
+        const I1 = new Int32Array((ex + 1) * (ey + 1)), I2 = new Int32Array((ex + 1) * (ey + 1));
+        const box = (I, x, y) => { const x0 = Math.max(0, x - r), x1 = Math.min(ex, x + r + 1), y0 = Math.max(0, y - r), y1 = Math.min(ey, y + r + 1); return I[y1 * (ex + 1) + x1] - I[y0 * (ex + 1) + x1] - I[y1 * (ex + 1) + x0] + I[y0 * (ex + 1) + x0]; };
+        let nrm = 0;
+        for (let z = zStart + apical; z >= 0 && z < ez; z += apical) {
+          const b = z * exy;
+          for (let y = 0; y < ey; y++) { let r1 = 0, r2 = 0; for (let x = 0; x < ex; x++) { const i = b + y * ex + x; r1 += hardE[i] && !t2[i] ? 1 : 0; r2 += t2[i]; I1[(y + 1) * (ex + 1) + x + 1] = I1[y * (ex + 1) + x + 1] + r1; I2[(y + 1) * (ex + 1) + x + 1] = I2[y * (ex + 1) + x + 1] + r2; } }
+          for (let y = 0; y < ey; y++) for (let x = 0; x < ex; x++) {
+            const i = b + y * ex + x; if (!t2[i]) continue;
+            if (box(I1, x, y) > (window.PL2F ?? 0.3) * W && box(I2, x, y) < 0.5 * W) { t2[i] = 0; nrm++; }
+          }
+        }
+        if (t2[s0]) t2 = floodFill(t2, ex, ey, ez, s0);
+        if (window.DEBUG_SEP) console.log('plate2 rm', nrm);
+      }
       // 歯根の枠合わせ（1回だけ）：歯冠に合わせた後でも、歯根（開始断面より根尖側）が枠の側面に接していれば、
       // 傾いた歯根が枠からはみ出しているので、接している側だけ3mm広げて解析し直す
       if (S.autoFit2 && !S.autoFit && !window.DEBUG_NOFIT) {
@@ -1972,7 +2047,7 @@ async function extract() {
   const box = { x0: Math.max(0, bx0 - mg), y0: Math.max(0, by0 - mg), z0: Math.max(0, bz0 - mg), x1: Math.min(nx - 1, bx1 + mg), y1: Math.min(ny - 1, by1 + mg), z1: Math.min(nz - 1, bz1 + mg) };
   const bnx = box.x1 - box.x0 + 1, bny = box.y1 - box.y0 + 1, bnz = box.z1 - box.z0 + 1;
   let u = $('hiRes').checked ? clamp(Math.round(Math.min(v.sx, v.sy, v.sz) / 0.07), 1, 3) : 1;
-  while (u > 1 && bnx * bny * bnz * u ** 3 > 28e6) u--;
+  while (u > 1 && bnx * bny * bnz * u ** 3 > (window.FINECAP ?? 34e6)) u--;
   const fx = bnx * u, fy = bny * u, fz = bnz * u, fn = fx * fy * fz, fxy = fx * fy;
   const fsp = [v.sx / u, v.sy / u, v.sz / u], fvol = fsp[0] * fsp[1] * fsp[2], fmin = Math.min(...fsp);
   // 高精度ステージは平滑化前の値を使う（細い根管のコントラストを保つ。ノイズは実測σでしきい値に反映）
