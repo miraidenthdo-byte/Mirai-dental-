@@ -833,7 +833,7 @@ function sampleVol(v, X, Y, Z, bg) {
   return Math.round(c0 * (1 - fz) + c1 * fz);
 }
 function setSeed(p) {
-  S.seed = p.slice(); S.cursor = p.slice(); S.autoFit = true; S.autoFit2 = true; S.fitNote = '';
+  S.seed = p.slice(); S.cursor = p.slice(); S.autoFit = true; S.autoFit2 = true; S.fitNote = ''; S.seedNote = '';
   $('extractBtn').disabled = false; $('go3d').hidden = false;
   updateSeedInfo(); renderAll();
 }
@@ -1300,7 +1300,99 @@ function roiValues(roi, smooth, v = S.vol) {
   return f;
 }
 
-function autoThreshold(quiet) {
+/**
+ * 選択点を歯冠の中央（咬合面から約6.5mm歯根側、歯冠断面の重心）へ寄せる。
+ * 歯根や咬頭の先をクリックしても、毎回ほぼ同じ位置からしきい値・枠・追跡が決まるようにする。
+ * 咬合面は「選択点から歯冠側へたどって、エナメル質が十分に現れた後に硬組織が最も少なくなる高さ」（上下の歯の間の空気）。
+ * 動かしたら true
+ */
+function crownSeed(b) {
+  const v = S.vol, j = $('jaw').value;
+  if (S.snapping || j === 'both') return false;
+  const dir = j === 'upper' ? -1 : 1, [sx, sy, sz] = S.seed;
+  const R = 4, rx = Math.ceil(R / v.sx), ry = Math.ceil(R / v.sy), half = b * 0.5;
+  const prof = (x0, y0, z) => {
+    const sl = v.slices[z]; let e = 0, h = 0;
+    for (let y = Math.max(0, y0 - ry); y <= Math.min(v.ny - 1, y0 + ry); y++) for (let x = Math.max(0, x0 - rx); x <= Math.min(v.nx - 1, x0 + rx); x++) {
+      if (((x - x0) / rx) ** 2 + ((y - y0) / ry) ** 2 > 1) continue;
+      const q = sl[y * v.nx + x]; if (q > b) e++; if (q > half) h++;
+    }
+    return [e, h];
+  };
+  const eMin = Math.round(3 / (v.sx * v.sy)), steps = Math.round(25 / v.sz);
+  // (x0,y0) の柱で選択点から歯冠側へたどった咬合面の高さ（見つからなければ -1）
+  const topAt = (x0, y0) => {
+    let zE = -1, hMax = 0;
+    const H = [];
+    for (let k = 0; k <= steps; k++) {
+      const z = sz + dir * k; if (z < 0 || z >= v.nz) break;
+      const [e, h] = prof(x0, y0, z); H.push([z, h]);
+      if (zE < 0) { if (e >= eMin) zE = k; else continue; }
+      if (h > hMax) hMax = h;
+      if (k - zE > Math.round(12 / v.sz)) break;
+    }
+    if (zE < 0 || hMax < eMin) return -1;
+    // エナメル質の現れた高さから先で硬組織が最も少ない値に近づいた最初の高さ＝咬合面
+    const tail = H.slice(zE), hMin = Math.min(...tail.map((q) => q[1]));
+    if (hMin > hMax * 0.5) return -1;   // 咬合面が見つからない（隙間なく咬合など）
+    return tail.find((q) => q[1] <= hMin + 0.15 * (hMax - hMin))[0];
+  };
+  let zTop = topAt(sx, sy);
+  if (zTop < 0) return false;
+  // 水平方向は、咬合面から4mmの断面（歯髄腔より上の、詰まった歯冠）で選択点を含む歯冠の中心へ
+  let cx = sx, cy = sy;
+  for (let it = 0; it < 2; it++) {
+    const zx = Math.round(zTop - dir * 4 / v.sz);
+    if (zx < 0 || zx >= v.nz) break;
+    const c = crownCentroid(v, zx, cx, cy, half, 9);
+    if (!c) break;
+    cx = c[0]; cy = c[1];
+    const t2 = topAt(cx, cy); if (t2 >= 0) zTop = t2;
+  }
+  const zc = Math.round(zTop - dir * 6.5 / v.sz);
+  if (zc < 0 || zc >= v.nz) return false;
+  if (window.DEBUG_SEP) console.log('crownSeed', S.seed.join(','), '->', cx, cy, zc, 'top', zTop);
+  if (cx === sx && cy === sy && zc === sz) return false;
+  S.snapping = true;
+  try { setSeed([cx, cy, zc]); S.seedNote = '（クリック点を歯冠の中央へ自動で移しました）'; } finally { S.snapping = false; }
+  return true;
+}
+
+/**
+ * 断面 z の歯冠の中心：硬組織（> th）を 1.5mm 収縮して隣在歯との接触点を切り、(x0,y0) に最も近い塊の重心。
+ * 半径 Rmm の枠に接する（骨などとつながる）ときは null
+ */
+function crownCentroid(v, z, x0, y0, th, Rmm) {
+  const s = Math.min(v.sx, v.sy), r = Math.ceil(Rmm / s), w = 2 * r + 1, sl = v.slices[z], n = w * w;
+  const D = new Float32Array(n);
+  for (let j = 0; j < w; j++) for (let i = 0; i < w; i++) {
+    const x = x0 - r + i, y = y0 - r + j;
+    D[j * w + i] = x >= 0 && y >= 0 && x < v.nx && y < v.ny && sl[y * v.nx + x] > th ? 1e9 : 0;
+  }
+  // 2D 面取り距離変換（3-4）
+  for (let j = 0; j < w; j++) for (let i = 0; i < w; i++) { const q = j * w + i; if (!D[q]) continue; let d = D[q];
+    if (i > 0) d = Math.min(d, D[q - 1] + 3); if (j > 0) { d = Math.min(d, D[q - w] + 3); if (i > 0) d = Math.min(d, D[q - w - 1] + 4); if (i < w - 1) d = Math.min(d, D[q - w + 1] + 4); } D[q] = d; }
+  for (let j = w - 1; j >= 0; j--) for (let i = w - 1; i >= 0; i--) { const q = j * w + i; if (!D[q]) continue; let d = D[q];
+    if (i < w - 1) d = Math.min(d, D[q + 1] + 3); if (j < w - 1) { d = Math.min(d, D[q + w] + 3); if (i < w - 1) d = Math.min(d, D[q + w + 1] + 4); if (i > 0) d = Math.min(d, D[q + w - 1] + 4); } D[q] = d; }
+  // 接触点が太いときは、つながりが切れるまで収縮量を増やす（1.5〜3mm）
+  for (const cm of [1.5, 2, 2.5, 3]) {
+    const core = cm / s * 3;
+    let best = -1, bd = Infinity;
+    for (let q = 0; q < n; q++) if (D[q] >= core) { const d = (q % w - r) ** 2 + (((q / w) | 0) - r) ** 2; if (d < bd) { bd = d; best = q; } }
+    if (best < 0 || Math.sqrt(bd) * s > 4) return null;
+    const comp = new Uint8Array(n), st = [best]; comp[best] = 1;
+    let cnt = 0, mx = 0, my = 0, touch = false;
+    while (st.length && !touch) {
+      const q = st.pop(), i = q % w, j = (q / w) | 0; cnt++; mx += i; my += j;
+      if (i === 0 || j === 0 || i === w - 1 || j === w - 1) { touch = true; break; }
+      for (const t of [q - 1, q + 1, q - w, q + w]) if (!comp[t] && D[t] >= core) { comp[t] = 1; st.push(t); }
+    }
+    if (!touch) return [Math.round(x0 - r + mx / cnt), Math.round(y0 - r + my / cnt)];
+  }
+  return null;
+}
+
+function autoThreshold(quiet, noSnap) {
   const roi = getROI();
   if (!roi) { setStatus('先に断面上で歯をクリックしてください', true); return; }
   const f = roiValues(roi, true);
@@ -1311,10 +1403,12 @@ function autoThreshold(quiet) {
   // 硬組織/エナメル の2しきい値を、t1 以上の画素で再推定（空気の影響を除く）
   const hard = samp.filter((x) => x >= t1);
   let [a, b] = hard.length > 100 ? multiOtsu(hard, 2) : [t2, t3];
+  // クリック位置（歯冠・歯根・左右のずれ）で結果が変わらないよう、選択点を歯冠の中央へ寄せる
+  if (!noSnap && !window.DEBUG_NOSNAP && S.seed && crownSeed(b)) return autoThreshold(quiet, true);
   // 枠の中の空気の割合で Otsu の値は大きく動く（枠の上が空気だと低すぎて骨とつながる）。
-  // 選択点を中心とした半径6mmの球の中で、空気だけを除いて（HU値なら -300 超）2クラス Otsu で歯質しきい値を決める
+  // 選択点を中心とした半径5mmの球の中で、空気だけを除いて（HU値なら -300 超）2クラス Otsu で歯質しきい値を決める
   if (!window.DEBUG_OLDTH && S.seed) {
-    const v = S.vol, [sx, sy, sz] = S.seed, R = window.THR ?? 6, r = [R / v.sx, R / v.sy, R / v.sz].map(Math.ceil), sv = [];
+    const v = S.vol, [sx, sy, sz] = S.seed, R = window.THR ?? 5, r = [R / v.sx, R / v.sy, R / v.sz].map(Math.ceil), sv = [];
     const cut = f.reduce((m, x) => Math.min(m, x), Infinity) < -500 ? -300 : t1;
     for (let z = Math.max(0, sz - r[2]); z <= Math.min(v.nz - 1, sz + r[2]); z++) {
       const sl = v.slices[z];
@@ -2239,7 +2333,7 @@ async function extract() {
   renderAll();
   const dg = S.diag;
   $('diagOut').textContent = `判定：歯質しきい値 ${dg.th} ／ 骨・歯の境界 ${dg.sep}${dg.manual ? '（手動）' : '（自動）'} ／ 象牙質の代表値 ${dg.dentin ?? '-'} ／ 枠の側面への接触 ${(dg.wall * 100).toFixed(1)}%` + (dg.wall > 0.03 ? ' → 骨・隣在歯へ漏れている可能性があります。「骨／歯の境界」を手動で上げてください' : '');
-  setStatus('抽出完了。' + (S.fitNote || '') + (usedSep ? '（骨が歯根に密着していたため、骨との濃度差で分離しました）' : '') + (touches ? '⚠ 歯がROIの枠に接しています。ROIを広げるか、隣在歯・骨とつながっていないか確認してください。' : '3Dビューをドラッグして回転できます。'), touches);
+  setStatus('抽出完了。' + (S.seedNote || '') + (S.fitNote || '') + (usedSep ? '（骨が歯根に密着していたため、骨との濃度差で分離しました）' : '') + (touches ? '⚠ 歯がROIの枠に接しています。ROIを広げるか、隣在歯・骨とつながっていないか確認してください。' : '3Dビューをドラッグして回転できます。'), touches);
 }
 
 /** ROI内の box 領域を u 倍に三線形補間 */
@@ -2707,7 +2801,10 @@ void main(){
   vec3 tn = min(t0,t1), tf = max(t0,t1);
   float tnear = max(max(tn.x,tn.y),tn.z), tfar = min(min(tf.x,tf.y),tf.z);
   if (tnear > tfar || tfar < 0.0) { outColor = vec4(bg,1.0); return; }
-  float t = max(tnear, 0.0) + uDt * fract(sin(dot(gl_FragCoord.xy, vec2(12.9898,78.233)))*43758.5453);
+  // 開始位置のずらし（整数ハッシュ：GPUによって sin の精度が低く縞模様になるのを防ぐ）
+  uvec2 fq = uvec2(gl_FragCoord.xy);
+  uint hsh = fq.x * 1973u + fq.y * 9277u; hsh = (hsh ^ (hsh >> 13u)) * 0x5bd1e995u; hsh ^= hsh >> 15u;
+  float t = max(tnear, 0.0) + uDt * float(hsh & 65535u) / 65536.0;
   // 等値面合成：各構造の表面を通過するたびに一定の不透明度で1回だけ合成（メッシュ表示に近い見え方）
   vec4 acc = vec4(0.0);
   vec3 L = -dir;
@@ -2915,7 +3012,7 @@ class VolumeRenderer {
     } else gl.uniform1i(u.uClipOn, 0);
     gl.uniform1i(u.uPulpGrad, $('pulpGrad').checked ? 1 : 0);
     gl.uniform2fv(u.uZRange, this.zRange || [0, 1]);
-    const dt = this.ref * (this.interacting || $('autoRot').checked ? 0.9 : 0.5);
+    const dt = this.ref * (this.interacting || $('autoRot').checked ? 0.7 : 0.5);
     gl.uniform1f(u.uDt, dt); gl.uniform1f(u.uRef, this.ref);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     this.drawGizmo(M4.lookAt(eye, tg, up));
