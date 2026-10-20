@@ -129,7 +129,7 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 3
 
   <section>
     <h2><span class="num">2</span>歯の選択</h2>
-    <div class="hint">上の <b>「🦷 歯を選択」</b> を押してから、断面画像上で<b>抽出したい歯（象牙質の部分）</b>をクリックしてください。黄色い枠（ROI）の中から、その歯だけを抽出します。<br>
+    <div class="hint">断面画像上で<b>抽出したい歯をダブルクリック</b>すると、その歯を認識してすぐ解析します（歯冠・歯根のどこでも可）。「🦷 歯を選択」を押してからクリックすると、解析の前に枠を調整できます。黄色い枠（ROI）の中から、その歯だけを抽出します。<br>
       <kbd>ホイール</kbd> スライス送り / <kbd>Ctrl</kbd>+<kbd>ホイール</kbd> 拡大 / <kbd>右ドラッグ</kbd> 移動</div>
     <div class="flex" style="margin-bottom:6px">
       <label class="muted">歯番 (FDI)</label>
@@ -230,7 +230,7 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 3
   <div class="grp"><button id="resetViews" title="拡大・移動を元に戻す（R キー）">表示リセット</button>
     <button id="resetMpr" title="十字線の回転（斜め断面）を元に戻す">回転リセット</button>
     <label class="check" style="margin:0"><input id="xhair" type="checkbox" checked>十字線</label></div>
-  <div class="help">ホイール：スライス送り ／ 右ドラッグ：明るさ・コントラスト ／ 中ドラッグ・Shift+ドラッグ：移動 ／ Ctrl+ホイール：拡大 ／ ダブルクリック：1画面表示 ／ ↑↓・PageUp/Down：スライス ／ <b>十字線の線（○）をドラッグ：回転（斜め断面）</b></div>
+  <div class="help">ホイール：スライス送り ／ 右ドラッグ：明るさ・コントラスト ／ 中ドラッグ・Shift+ドラッグ：移動 ／ Ctrl+ホイール：拡大 ／ <b>歯をダブルクリック：その歯を抽出</b>（歯のない所：1画面表示） ／ ↑↓・PageUp/Down：スライス ／ <b>十字線の線（○）をドラッグ：回転（斜め断面）</b></div>
 </div>
 <div class="views" id="views">
   <div class="view"><canvas id="cvAx"></canvas><div class="vlabel"><i class="pl" style="background:#4f8bff"></i>アキシャル（水平断）<small id="lblAx"></small></div><div class="vinfo" id="infoAx"></div></div>
@@ -247,7 +247,7 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 3
       <div><i id="lgE"></i>エナメル質</div><div><i id="lgD"></i>象牙質</div>
       <div><i id="lgP"></i><span id="lgPtxt">歯髄・根管</span></div><div id="lgSrow" hidden><i id="lgS"></i><span id="lgStxt">根管の疑い（CTで薄い暗がり）</span></div><div id="lgBrow"><i id="lgB"></i>周囲の骨</div>
     </div>
-    <div class="empty3d" id="empty3d"><div id="emptyMsg">① DICOMを開く → ② 断面で歯をクリック → ③ 範囲を調整 → ④「範囲を決定して解析」<br>
+    <div class="empty3d" id="empty3d"><div id="emptyMsg">① DICOMを開く → ② 断面で歯をダブルクリック（すぐ解析）または「歯を選択」でクリック → ③ 範囲を調整 → ④「範囲を決定して解析」<br>
       ドラッグで回転 / ホイールで拡大縮小 / ダブルクリックでリセット</div>
       <button id="go3d" class="primary" hidden>✅ 範囲を決定して解析</button></div>
     <div class="decide" id="decideBar" hidden><span>範囲を調整中です。決まったら押してください</span><button id="decideBtn" class="primary">✅ 範囲を決定して解析</button></div>
@@ -730,7 +730,7 @@ function setVolume(vol, note) {
   for (const v of views) v.resetView();
   if (vol.demoSeed) { setSeed(vol.demoSeed); autoThreshold(true); }
   else { updateSeedInfo(); renderAll(); }
-  setStatus('読み込み完了: ' + note + '　→ 断面画像上で抽出したい歯をクリックしてください');
+  setStatus('読み込み完了: ' + note + '　→ 断面画像上で抽出したい歯をダブルクリックしてください');
 }
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -837,6 +837,26 @@ function setSeed(p) {
   $('extractBtn').disabled = false; $('go3d').hidden = false;
   updateSeedInfo(); renderAll();
 }
+/**
+ * ダブルクリックした歯を選択して解析する。クリック点の近く（断面内2mm）に硬組織がなければ false。
+ * 選択点は歯冠の中央へ自動で移す（歯根・咬頭・歯冠の端どこをクリックしても同じ歯・同じ結果）
+ */
+function selectToothAt(p) {
+  const v = S.vol, q = p.map((x, k) => clamp(Math.round(x), 0, [v.nx, v.ny, v.nz][k] - 1));
+  const hardTh = v.p01 + 0.5 * (v.p999 - v.p01), r = Math.ceil(2 / v.sx), sl = v.slices[q[2]];
+  // クリック点に最も近い硬組織の画素（歯髄・歯根膜の上をクリックしても、その歯の象牙質を選ぶ）
+  let best = null, bd = Infinity;
+  for (let y = Math.max(0, q[1] - r); y <= Math.min(v.ny - 1, q[1] + r); y++) for (let x = Math.max(0, q[0] - r); x <= Math.min(v.nx - 1, q[0] + r); x++) {
+    const d = (x - q[0]) ** 2 + (y - q[1]) ** 2;
+    if (d <= r * r && d < bd && sl[y * v.nx + x] > hardTh) { bd = d; best = [x, y, q[2]]; }
+  }
+  if (!best) return false;
+  S.shift = [0, 0];
+  setSeed(best);
+  if (!S.thManual) autoThreshold(true); else crownSeed(+$('thEnamel').value);
+  if (S.busy) S.rerun = true; else runExtract();
+  return true;
+}
 function updateSeedInfo() {
   if (!S.seed) { $('seedInfo').textContent = '選択点: なし'; return; }
   const v = S.vol, [x, y, z] = S.seed;
@@ -872,7 +892,13 @@ class SliceView {
     canvas.addEventListener('wheel', (e) => this.wheel(e), { passive: false });
     canvas.addEventListener('pointerenter', () => { S.hoverView = this; });
     canvas.addEventListener('pointerleave', () => { if (this.info) this.info.textContent = ''; });
-    canvas.addEventListener('dblclick', () => { if (S.tool === 'view') toggleSolo(canvas.parentElement); });
+    // ダブルクリック：歯の上なら、その歯を選択してすぐ解析／歯がない所なら1画面表示の切り替え
+    canvas.addEventListener('dblclick', (e) => {
+      if (!S.vol || S.meas.on || S.brush.on) return;
+      const [i, j] = this.evtImg(e), g = this.geom();
+      if (i < 0 || j < 0 || i >= g.w || j >= g.h) return;
+      if (!selectToothAt(this.toVox(i - 0.5, j - 0.5)) && S.tool === 'view') toggleSolo(canvas.parentElement);
+    });
     canvas.addEventListener('auxclick', (e) => e.preventDefault());
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
     new ResizeObserver(() => this.render()).observe(canvas);
@@ -1310,41 +1336,55 @@ function crownSeed(b) {
   const v = S.vol, j = $('jaw').value;
   if (S.snapping || j === 'both') return false;
   const dir = j === 'upper' ? -1 : 1, [sx, sy, sz] = S.seed;
-  const R = 4, rx = Math.ceil(R / v.sx), ry = Math.ceil(R / v.sy), half = b * 0.5;
+  const R = 4, rx = Math.ceil(R / v.sx), ry = Math.ceil(R / v.sy);
+  // エナメル質のしきい値：歯根をクリックすると枠の中にエナメル質が少なく b が低すぎるので、
+  // 選択点から歯冠側25mmの柱の硬組織だけで2クラス Otsu（象牙質・骨 / エナメル質）をとり直す
+  {
+    const hardTh = v.p01 + 0.5 * (v.p999 - v.p01), cv = [];
+    for (let k = 0; k <= Math.round(25 / v.sz); k += 2) {
+      const z = sz + dir * k; if (z < 0 || z >= v.nz) break;
+      const sl = v.slices[z];
+      for (let y = Math.max(0, sy - ry); y <= Math.min(v.ny - 1, sy + ry); y += 2) for (let x = Math.max(0, sx - rx); x <= Math.min(v.nx - 1, sx + rx); x += 2) {
+        const q = sl[y * v.nx + x]; if (q > hardTh) cv.push(q);
+      }
+    }
+    if (cv.length > 200) b = Math.max(b, multiOtsu(cv, 2)[0]);
+  }
+  const half = b * 0.5;
+  const softTh = v.p01 + 0.3 * (v.p999 - v.p01);
   const prof = (x0, y0, z) => {
-    const sl = v.slices[z]; let e = 0, h = 0;
+    const sl = v.slices[z]; let e = 0, h = 0, lo = 0, n = 0;
     for (let y = Math.max(0, y0 - ry); y <= Math.min(v.ny - 1, y0 + ry); y++) for (let x = Math.max(0, x0 - rx); x <= Math.min(v.nx - 1, x0 + rx); x++) {
       if (((x - x0) / rx) ** 2 + ((y - y0) / ry) ** 2 > 1) continue;
-      const q = sl[y * v.nx + x]; if (q > b) e++; if (q > half) h++;
+      const q = sl[y * v.nx + x]; n++; if (q > b) e++; if (q > half) h++; if (q < softTh) lo++;
     }
-    return [e, h];
+    return [e, h, lo, n];
   };
-  const eMin = Math.round(3 / (v.sx * v.sy)), steps = Math.round(25 / v.sz);
-  // (x0,y0) の柱で選択点から歯冠側へたどった咬合面の高さ（見つからなければ -1）
+  const eMin = Math.round(3 / (v.sx * v.sy)), steps = Math.round(30 / v.sz);
+  // (x0,y0) の柱で選択点から歯冠側へたどり、エナメル質が現れた後で「ほとんど空気・軟組織」になる最初の高さ＝咬合面
+  // （海綿骨の骨髄や歯髄腔は軟組織より濃いので咬合面と間違えない）。見つからなければ -1
   const topAt = (x0, y0) => {
-    let zE = -1, hMax = 0;
-    const H = [];
+    let band = false, hMax = 0;
     for (let k = 0; k <= steps; k++) {
       const z = sz + dir * k; if (z < 0 || z >= v.nz) break;
-      const [e, h] = prof(x0, y0, z); H.push([z, h]);
-      if (zE < 0) { if (e >= eMin) zE = k; else continue; }
+      const [e, h, lo, n] = prof(x0, y0, z);
+      if (e >= eMin) band = true;
       if (h > hMax) hMax = h;
-      if (k - zE > Math.round(12 / v.sz)) break;
+      if (band && h <= 0.15 * hMax && lo >= 0.5 * n) return z;
     }
-    if (zE < 0 || hMax < eMin) return -1;
-    // エナメル質の現れた高さから先で硬組織が最も少ない値に近づいた最初の高さ＝咬合面
-    const tail = H.slice(zE), hMin = Math.min(...tail.map((q) => q[1]));
-    if (hMin > hMax * 0.5) return -1;   // 咬合面が見つからない（隙間なく咬合など）
-    return tail.find((q) => q[1] <= hMin + 0.15 * (hMax - hMin))[0];
+    return -1;
   };
-  let zTop = topAt(sx, sy);
+  // まずクリックした断面で、クリック点がどの歯に属するか（その歯の断面の中心）を決める
+  let ox = sx, oy = sy;
+  { const c0 = crownCentroid(v, sz, sx, sy, half, 12); if (c0) { ox = c0[0]; oy = c0[1]; } }
+  let zTop = topAt(ox, oy);
   if (zTop < 0) return false;
   // 水平方向は、咬合面から4mmの断面（歯髄腔より上の、詰まった歯冠）で選択点を含む歯冠の中心へ
-  let cx = sx, cy = sy;
+  let cx = ox, cy = oy;
   for (let it = 0; it < 2; it++) {
     const zx = Math.round(zTop - dir * 4 / v.sz);
     if (zx < 0 || zx >= v.nz) break;
-    const c = crownCentroid(v, zx, cx, cy, half, 9);
+    const c = crownCentroid(v, zx, cx, cy, half, 12);
     if (!c) break;
     cx = c[0]; cy = c[1];
     const t2 = topAt(cx, cy); if (t2 >= 0) zTop = t2;
@@ -1369,26 +1409,56 @@ function crownCentroid(v, z, x0, y0, th, Rmm) {
     const x = x0 - r + i, y = y0 - r + j;
     D[j * w + i] = x >= 0 && y >= 0 && x < v.nx && y < v.ny && sl[y * v.nx + x] > th ? 1e9 : 0;
   }
+  // 穴埋め：枠の外周から硬組織を通らずに届かない所（歯髄腔・根管）も歯に含める
+  {
+    const out = new Uint8Array(n), st = [];
+    for (let k = 0; k < w; k++) for (const q of [k, (w - 1) * w + k, k * w, k * w + w - 1]) if (!D[q] && !out[q]) { out[q] = 1; st.push(q); }
+    while (st.length) { const q = st.pop(), i = q % w, j = (q / w) | 0;
+      for (const [t, ok] of [[q - 1, i > 0], [q + 1, i < w - 1], [q - w, j > 0], [q + w, j < w - 1]]) if (ok && !D[t] && !out[t]) { out[t] = 1; st.push(t); } }
+    for (let q = 0; q < n; q++) if (!D[q] && !out[q]) D[q] = 1e9;
+  }
   // 2D 面取り距離変換（3-4）
   for (let j = 0; j < w; j++) for (let i = 0; i < w; i++) { const q = j * w + i; if (!D[q]) continue; let d = D[q];
     if (i > 0) d = Math.min(d, D[q - 1] + 3); if (j > 0) { d = Math.min(d, D[q - w] + 3); if (i > 0) d = Math.min(d, D[q - w - 1] + 4); if (i < w - 1) d = Math.min(d, D[q - w + 1] + 4); } D[q] = d; }
   for (let j = w - 1; j >= 0; j--) for (let i = w - 1; i >= 0; i--) { const q = j * w + i; if (!D[q]) continue; let d = D[q];
     if (i < w - 1) d = Math.min(d, D[q + 1] + 3); if (j < w - 1) { d = Math.min(d, D[q + w] + 3); if (i < w - 1) d = Math.min(d, D[q + w + 1] + 4); if (i > 0) d = Math.min(d, D[q + w - 1] + 4); } D[q] = d; }
-  // 接触点が太いときは、つながりが切れるまで収縮量を増やす（1.5〜3mm）
-  for (const cm of [1.5, 2, 2.5, 3]) {
+  // クリック点に最も近い硬組織の画素から、硬組織の中だけを通って最初に着く「歯の芯」（収縮しても残る部分）の重心。
+  // 軟組織の隙間を飛び越えて隣の歯へ行かない。接触点が太いときは、つながりが切れるまで収縮量を増やす（1.5〜3mm）
+  let p = -1, bd = Infinity;
+  for (let q = 0; q < n; q++) if (D[q] > 0) { const d = (q % w - r) ** 2 + (((q / w) | 0) - r) ** 2; if (d < bd) { bd = d; p = q; } }
+  if (p < 0 || Math.sqrt(bd) * s > 2) return null;
+  // 収縮量を 1〜3mm で少しずつ増やし、塊が急に小さくなった（接触点が切れて隣の歯が離れた）最後の段の塊を採る
+  let res = null, prevCnt = 0, prevC = null;
+  for (let cm = 1; cm <= 3.001; cm += 0.25) {
     const core = cm / s * 3;
-    let best = -1, bd = Infinity;
-    for (let q = 0; q < n; q++) if (D[q] >= core) { const d = (q % w - r) ** 2 + (((q / w) | 0) - r) ** 2; if (d < bd) { bd = d; best = q; } }
-    if (best < 0 || Math.sqrt(bd) * s > 4) return null;
-    const comp = new Uint8Array(n), st = [best]; comp[best] = 1;
-    let cnt = 0, mx = 0, my = 0, touch = false;
-    while (st.length && !touch) {
-      const q = st.pop(), i = q % w, j = (q / w) | 0; cnt++; mx += i; my += j;
-      if (i === 0 || j === 0 || i === w - 1 || j === w - 1) { touch = true; break; }
-      for (const t of [q - 1, q + 1, q - w, q + w]) if (!comp[t] && D[t] >= core) { comp[t] = 1; st.push(t); }
+    // 硬組織内の幅優先探索で最も近い芯の画素
+    const seen = new Uint8Array(n), qu = new Int32Array(n); let h = 0, t = 0, hit = -1;
+    qu[t++] = p; seen[p] = 1;
+    while (h < t) {
+      const q = qu[h++]; if (D[q] >= core) { hit = q; break; }
+      const i = q % w, j = (q / w) | 0;
+      if (i > 0 && !seen[q - 1] && D[q - 1] > 0) { seen[q - 1] = 1; qu[t++] = q - 1; }
+      if (i < w - 1 && !seen[q + 1] && D[q + 1] > 0) { seen[q + 1] = 1; qu[t++] = q + 1; }
+      if (j > 0 && !seen[q - w] && D[q - w] > 0) { seen[q - w] = 1; qu[t++] = q - w; }
+      if (j < w - 1 && !seen[q + w] && D[q + w] > 0) { seen[q + w] = 1; qu[t++] = q + w; }
     }
-    if (!touch) return [Math.round(x0 - r + mx / cnt), Math.round(y0 - r + my / cnt)];
+    if (hit < 0) break;
+    const comp = new Uint8Array(n), st = [hit]; comp[hit] = 1;
+    let cnt = 0, mx = 0, my = 0, touch = false;
+    while (st.length) {
+      const q = st.pop(), i = q % w, j = (q / w) | 0; cnt++; mx += i; my += j;
+      if (i === 0 || j === 0 || i === w - 1 || j === w - 1) touch = true;
+      for (const t2 of [q - 1, q + 1, q - w, q + w]) if (t2 >= 0 && t2 < n && !comp[t2] && D[t2] >= core) { comp[t2] = 1; st.push(t2); }
+    }
+    if (cnt * s * s < 2) break;
+    // 1段（0.25mm）の収縮で面積は1〜2割しか減らない。3割以上減るか重心が1.5mm以上動いたら、何かが切り離された
+    const c = [x0 - r + mx / cnt, y0 - r + my / cnt];
+    const split = prevCnt && (cnt < 0.72 * prevCnt || Math.hypot(c[0] - prevC[0], c[1] - prevC[1]) * s > 1.5);
+    if (!touch && (!res || split || res.touch)) res = { c: c.map(Math.round), touch };
+    else if (touch && split) res = null;
+    prevCnt = cnt; prevC = c;
   }
+  if (res) return res.c;
   return null;
 }
 
