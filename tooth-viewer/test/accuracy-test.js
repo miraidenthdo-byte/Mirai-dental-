@@ -19,9 +19,13 @@ const CASES = [
 (async () => {
   const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
   const rows = [];
-  for (const c of CASES) {
+  // ONLY=6,7 で一部の条件だけ、FLAGS='{"X":1}' でページの window に設定を入れて実行
+  const only = process.env.ONLY ? process.env.ONLY.split(',').map(Number) : null;
+  for (const [ci, c] of CASES.entries()) {
+    if (only && !only.includes(ci)) continue;
     const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
     page.on('pageerror', (e) => console.error('PAGEERROR', e.message));
+    if (process.env.FLAGS) await page.addInitScript((f) => Object.assign(window, f), JSON.parse(process.env.FLAGS));
     await page.goto(PAGE);
     await page.evaluate((o) => (window.DEMO_OPTS = o), c.demo);
     await page.click('#demoBtn');
