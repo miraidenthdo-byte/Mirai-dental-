@@ -212,6 +212,7 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 3
     <dl class="stats" id="segStats"><dt>未抽出</dt><dd></dd></dl>
     <canvas id="canalChart"></canvas>
     <div class="hint">各高さの水平断面に含まれる根管の数（Vertucci分類の目安）。</div>
+    <button id="copyDiag" style="width:100%;margin-top:8px" title="うまく抽出できないときの報告用。クリック位置・枠・しきい値・結果の数値をコピーします（患者情報は含みません）">📋 診断情報をコピー（不具合の報告用）</button>
   </section>
   <div class="hint" style="margin-top:10px">※データはブラウザ内だけで処理され、外部に送信されません。<br>※本ツールは参考表示用であり、診断の最終判断は原画像で行ってください。</div>
 </aside>
@@ -694,6 +695,8 @@ function hideProgress() { $('progress').classList.remove('on'); }
 function setVolume(vol, note) {
   S.vol = vol; S.seg = null; S.seed = null; S.thManual = false; S.diag = null; $('diagOut').textContent = ''; S.shift = [0, 0]; S.brush.groups = [];
   S.cursor = [vol.nx >> 1, vol.ny >> 1, vol.nz >> 1]; S.mpr = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+  // 上下の向き（DICOM の向き情報）に合わせて枠の上方・下方を設定し直す
+  if ($('jaw').value !== 'both') applyJaw();
   // 統計（サンプリング）
   const samp = [];
   const stepS = Math.max(1, Math.floor(vol.nx * vol.ny * vol.nz / 400000));
@@ -832,6 +835,8 @@ function sampleVol(v, X, Y, Z, bg) {
   const c1 = (b[i] * (1 - fx) + b[i + 1] * fx) * (1 - fy) + (b[i + nx] * (1 - fx) + b[i + nx + 1] * fx) * fy;
   return Math.round(c0 * (1 - fz) + c1 * fz);
 }
+/** ボリュームの +z（スライス番号の増える向き）が患者の上（頭側）なら 1、下なら -1（DICOM の向き情報から） */
+function supSign() { const d = S.vol && S.vol.dirs; return d && d[2] && d[2][2] < 0 ? -1 : 1; }
 function setSeed(p) {
   S.seed = p.slice(); S.cursor = p.slice(); S.autoFit = true; S.autoFit2 = true; S.fitNote = ''; S.seedNote = '';
   $('extractBtn').disabled = false; $('go3d').hidden = false;
@@ -852,8 +857,10 @@ function selectToothAt(p) {
   }
   if (!best) return false;
   S.shift = [0, 0];
-  setSeed(best);
-  if (!S.thManual) autoThreshold(true); else crownSeed(+$('thEnamel').value);
+  setSeed(best); S.seedClick = q.slice();
+  // ダブルクリックは全自動：以前に手で動かしたしきい値は使わず、選んだ歯から決め直す
+  S.thManual = false;
+  autoThreshold(true);
   if (S.busy) S.rerun = true; else runExtract();
   return true;
 }
@@ -1106,7 +1113,7 @@ class SliceView {
     if (i < 0 || j < 0 || i >= g.w || j >= g.h) return;
     const q = this.toVox(i - 0.5, j - 0.5).map((x, k) => clamp(Math.round(x), 0, [v.nx, v.ny, v.nz][k] - 1));
     S.shift = [0, 0];
-    setSeed(q);
+    setSeed(q); S.seedClick = q.slice();
   }
   wheel(e) {
     if (!S.vol) return;
@@ -1335,7 +1342,8 @@ function roiValues(roi, smooth, v = S.vol) {
 function crownSeed(b) {
   const v = S.vol, j = $('jaw').value;
   if (S.snapping || j === 'both') return false;
-  const dir = j === 'upper' ? -1 : 1, [sx, sy, sz] = S.seed;
+  const dir0 = (j === 'upper' ? -1 : 1) * supSign(), [sx, sy, sz] = S.seed;
+  let dir = dir0;
   const R = 4, rx = Math.ceil(R / v.sx), ry = Math.ceil(R / v.sy);
   // エナメル質のしきい値：歯根をクリックすると枠の中にエナメル質が少なく b が低すぎるので、
   // 選択点から歯冠側25mmの柱の硬組織だけで2クラス Otsu（象牙質・骨 / エナメル質）をとり直す
@@ -1378,6 +1386,8 @@ function crownSeed(b) {
   let ox = sx, oy = sy;
   { const c0 = crownCentroid(v, sz, sx, sy, half, 12); if (c0) { ox = c0[0]; oy = c0[1]; } }
   let zTop = topAt(ox, oy);
+  // 想定した向き（上顎／下顎の設定）で咬合面が見つからなければ、反対向きも調べる
+  if (zTop < 0) { dir = -dir0; zTop = topAt(ox, oy); }
   if (zTop < 0) return false;
   // 水平方向は、咬合面から4mmの断面（歯髄腔より上の、詰まった歯冠）で選択点を含む歯冠の中心へ
   let cx = ox, cy = oy;
@@ -3083,7 +3093,8 @@ class VolumeRenderer {
     new ResizeObserver(() => this.request()).observe(canvas);
   }
   setView(name) {
-    const P = { front: [-Math.PI / 2, 0.12], side: [0, 0.12], top: [-Math.PI / 2, 1.55], bottom: [-Math.PI / 2, -1.55] }[name];
+    const sg = S.vol ? supSign() : 1;
+    const P = { front: [-Math.PI / 2, 0.12 * sg], side: [0, 0.12 * sg], top: [-Math.PI / 2, 1.55 * sg], bottom: [-Math.PI / 2, -1.55 * sg] }[name];
     this.yaw = P[0]; this.pitch = P[1]; this.dist = this.fitDist || 2.4; this.request();
   }
   clear() { this.has = false; this.request(); }
@@ -3140,7 +3151,7 @@ class VolumeRenderer {
     const tg = this.target || [0, 0, 0];
     const eye = [tg[0] + this.dist * Math.cos(this.pitch) * Math.cos(this.yaw), tg[1] + this.dist * Math.cos(this.pitch) * Math.sin(this.yaw), tg[2] + this.dist * Math.sin(this.pitch)];
     this.eye = eye;
-    const up = Math.abs(this.pitch) > 1.5 ? [Math.cos(this.yaw) * -Math.sign(this.pitch), Math.sin(this.yaw) * -Math.sign(this.pitch), 0] : [0, 0, 1];
+    const up = Math.abs(this.pitch) > 1.5 ? [Math.cos(this.yaw) * -Math.sign(this.pitch), Math.sin(this.yaw) * -Math.sign(this.pitch), 0] : [0, 0, S.vol ? supSign() : 1];
     const vp = M4.mul(M4.perspective(0.5, W / H, 0.05, 20), M4.lookAt(eye, tg, up));
     gl.useProgram(this.prog); gl.bindVertexArray(this.vao);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_3D, this.tex);
@@ -3222,9 +3233,10 @@ function renderAll() {
   });
 })();
 function applyJaw() {
-  const j = $('jaw').value;
-  if (j === 'lower') { setVal('roiUp', 12); setVal('roiDn', 24); }
-  else if (j === 'upper') { setVal('roiUp', 24); setVal('roiDn', 12); }
+  const j = $('jaw').value, sg = S.vol ? supSign() : 1;
+  // 「上方」はスライス番号の増える向き。DICOM の向きで患者の下向きのときは入れ替える
+  const crownUp = (j === 'lower') === (sg > 0);
+  if (j === 'lower' || j === 'upper') { setVal('roiUp', crownUp ? 12 : 24); setVal('roiDn', crownUp ? 24 : 12); }
   else { setVal('roiUp', 18); setVal('roiDn', 18); }
   renderAll();
 }
@@ -3349,6 +3361,20 @@ function runExtract() {
     .finally(() => { S.busy = false; if (S.rerun) { S.rerun = false; runExtract(); } });
 }
 $('extractBtn').onclick = runExtract;
+// 不具合報告用の診断情報（患者情報・シリーズ名は含めない）
+$('copyDiag').onclick = async () => {
+  const v = S.vol, val = (id) => $(id) && ($(id).type === 'checkbox' ? $(id).checked : $(id).value);
+  const info = {
+    app: '2026-10-21', vol: v && { nx: v.nx, ny: v.ny, nz: v.nz, sp: [v.sx, v.sy, v.sz].map((x) => +x.toFixed(4)), dirs: v.dirs.map((a) => a.map((x) => +x.toFixed(3))), p01: v.p01, p999: v.p999 },
+    click: S.seedClick || null, seed: S.seed, shift: S.shift, thManual: !!S.thManual,
+    ui: Object.fromEntries(['toothNo', 'jaw', 'roiX', 'roiY', 'roiUp', 'roiDn', 'tiltX', 'tiltY', 'tiltZ', 'thHard', 'thEnamel', 'sepTh', 'sepAuto', 'thCanal', 'erode', 'smooth'].map((k) => [k, val(k)])),
+    brush: S.brush.groups.length, fine: S.seg && S.seg.fine ? { dims: [S.seg.fine.nx, S.seg.fine.ny, S.seg.fine.nz], u: S.seg.fine.u } : null,
+    status: $('status').innerText, diag: $('diagOut').innerText, stats: $('segStats').innerText.replace(/\n/g, ' | '),
+  };
+  const txt = JSON.stringify(info);
+  try { await navigator.clipboard.writeText(txt); setStatus('診断情報をコピーしました。メッセージに貼り付けて送ってください'); }
+  catch (e) { window.prompt('次の文字列をコピーして送ってください', txt); }
+};
 $('go3d').onclick = runExtract;
 $('decideBtn').onclick = runExtract;
 // Enter キーでも決定
