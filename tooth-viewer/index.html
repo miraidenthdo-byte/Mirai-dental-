@@ -2404,6 +2404,32 @@ async function extract() {
       }
     }
   }
+  // 歯根の表面にこびりついた薄い骨片（歯槽硬線の切れ端など）のノイズを除く：
+  // 歯（象牙質＋根管）を約0.25mm収縮しても残る芯から、元の範囲で同じだけ戻す（厚さ0.5mm未満の薄い張り出しは戻らない）。
+  // 根管は形を変えない。最後に歯冠とつながる最大の塊だけ残す
+  if (!window.DEBUG_NOFOPEN) {
+    const r = Math.max(1, Math.round((window.OPENF ?? 0.25) / fmin));
+    const U = new Uint8Array(fn); for (let i = 0; i < fn; i++) U[i] = solidF[i] || canalF[i] ? 1 : 0;
+    let er = U; for (let k = 0; k < r; k++) er = erode6(er, fx, fy, fz);
+    for (let i = 0; i < fn; i++) if (canalF[i]) er[i] = 1;   // 根管とそのまわりは必ず残す
+    const op = dilateWithin(er, U, fx, fy, fz, r + 1);
+    let nrm = 0;
+    for (let i = 0; i < fn; i++) if (solidF[i] && !op[i]) { solidF[i] = 0; nrm++; }
+    if (nrm) {
+      const cc = components26(solidF, fx, fy, fz);
+      let big = 0; for (let q = 1; q < cc.size.length; q++) if (cc.size[q] > cc.size[big]) big = q;
+      for (let i = 0; i < fn; i++) if (solidF[i] && cc.lab[i] !== big) { solidF[i] = 0; nrm++; }
+    }
+    if (window.DEBUG_SEP) console.log('fopen', r, nrm);
+  }
+  // 歯の内部の小さな空洞（ノイズの暗い点・追跡で取りこぼした画素）を埋める：断面ごとに、歯（象牙質＋根管）に囲まれた穴は象牙質にする。
+  // 空洞の表面が3D表示で「歯の中の薄い膜・斑点」として見えるのを防ぐ（根管はそのまま）
+  if (!window.DEBUG_NOFHOLE) {
+    const U = new Uint8Array(fn); for (let i = 0; i < fn; i++) U[i] = solidF[i] || canalF[i] ? 1 : 0;
+    const hh = holes2D(U, fx, fy, fz);
+    let nf = 0; for (let i = 0; i < fn; i++) if (hh[i] && !U[i]) { solidF[i] = 1; nf++; }
+    if (window.DEBUG_SEP) console.log('fhole', nf);
+  }
   showProgress('高精度処理中…（ラベル・表面）', 0.78); await sleep0();
   const labF = new Uint8Array(fn);
   const cnt = [0, 0, 0, 0, 0];
@@ -2816,7 +2842,13 @@ function buildFields(I, lab, solid, nx, ny, nz, th, te, dMed, vs = 0.1) {
   const W3 = [0.25, 0.5, 0.25];
   const cut = blurMask((i) => solid[i], W3);
   const dil = dilate6(solid, nx, ny, nz, 1);
-  const cutOuter = blurMask((i) => dil[i], W3);
+  // 歯の外形（既定）：抽出マスクそのものを約0.15mm幅でならした面。
+  // CT値の等値面を使うと、マスクに含まれた歯根膜腔の外の薄い骨片が「歯根の表面と骨片の二重の膜」になり、ノイズの斑点として見えるため
+  const smS = new Float32Array(n); for (let i = 0; i < n; i++) smS[i] = solid[i] ? 1 : 0;
+  boxBlur3(smS, nx, ny, nz, Math.max(1, Math.round((window.CUTS ?? 0.15) / vs)), 3);
+  // 外形を切るマスク：粗い格子の段差（追跡のマスクの階段）が表面のざらつき・縞として見えないよう、約0.15mm幅でならす
+  const cutOuter = new Float32Array(n); for (let i = 0; i < n; i++) cutOuter[i] = dil[i];
+  boxBlur3(cutOuter, nx, ny, nz, Math.max(1, Math.round((window.CUTS ?? 0.15) / vs)), 3);
   const ero = erode6(solid, nx, ny, nz);
   const fill = blurMask((i) => ero[i], W3);
   const enM = new Uint8Array(n); for (let i = 0; i < n; i++) enM[i] = lab[i] === 1;
@@ -2854,10 +2886,10 @@ function buildFields(I, lab, solid, nx, ny, nz, th, te, dMed, vs = 0.1) {
   const bodyF = new Float32Array(n);
   // 外形はノイズでざらつかないよう約0.1mm幅でならしたCT値の等値面
   const Ib = Float32Array.from(I);
-  boxBlur3(Ib, nx, ny, nz, Math.max(1, Math.round(0.1 / vs * 0.6)), 3);
+  boxBlur3(Ib, nx, ny, nz, Math.max(1, Math.round((window.BODYS ?? 0.1) / vs * 0.6)), 3);
   for (let i = 0; i < n; i++) {
     // 歯の外形：CT値ベース（外側は1ボクセル膨張したマスクで切る）＋内部は塗りつぶし（根管の内壁を出さない）
-    let body = Math.min(c01(0.5 + (Ib[i] - th) / (2 * dD)), cutOuter[i]);
+    let body = window.BODYCT ? Math.min(c01(0.5 + (Ib[i] - th) / (2 * dD)), cutOuter[i]) : smS[i];
     body = Math.max(body, fill[i]);
     if (lab[i] === 3) body = Math.max(body, cut[i]);
     rgba[i * 4] = Math.round(enF[i] * 255);   // エナメル質の割合（色の混合用）
