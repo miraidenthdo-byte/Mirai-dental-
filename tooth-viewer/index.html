@@ -2374,7 +2374,10 @@ async function extract() {
       }
       if (zc >= 0) {
         const hz2 = Math.max(1, Math.round(1.0 / fsp[2])), z1 = zc + ap * Math.round(1.0 / fsp[2]);
-        const lim = (window.CDMAX ?? Infinity) / fsp[0] * 3, cm = new Uint8Array(fxy), D = new Float32Array(fxy);
+        const lim = (window.CDMAX ?? 3.5) / fsp[0] * 3, cm = new Uint8Array(fxy), D = new Float32Array(fxy), lab2c = new Int32Array(fxy), st2c = new Int32Array(fxy),
+          hasCanal = new Uint8Array(fxy + 1), Ib2 = new Float32Array(fxy), keep = new Uint8Array(fxy),
+          rB = Math.max(1, Math.round(0.06 / fsp[0])), rC = 0.3 / fsp[0] * 3, rR = Math.max(1, Math.round(0.25 / fsp[0]));
+        let nPdl = 0;
         let nrm = 0;
         // 最も根尖側の根管の断面（これより1mm以上先には歯根はない：根尖孔は歯根の先端から1mm以内）
         let zLast = -1;
@@ -2392,8 +2395,61 @@ async function extract() {
             if (x > 0) d = Math.min(d, D[q - 1] + 3); if (y > 0) { d = Math.min(d, D[q - fx] + 3); if (x > 0) d = Math.min(d, D[q - fx - 1] + 4); if (x < fx - 1) d = Math.min(d, D[q - fx + 1] + 4); } D[q] = d; }
           for (let y = fy - 1; y >= 0; y--) for (let x = fx - 1; x >= 0; x--) { const q = y * fx + x; let d = D[q]; if (!d) continue;
             if (x < fx - 1) d = Math.min(d, D[q + 1] + 3); if (y < fy - 1) { d = Math.min(d, D[q + fx] + 3); if (x < fx - 1) d = Math.min(d, D[q + fx + 1] + 4); if (x > 0) d = Math.min(d, D[q + fx - 1] + 4); } D[q] = d; }
-          for (let q = 0, b = z * fxy; q < fxy; q++) if (solidF[b + q] && !canalF[b + q] && D[q] > lim) { solidF[b + q] = 0; nrm++; }
+          // 根管を含む歯根の断面（2Dの塊）だけを削る。根管が見つからなかった歯根は丸ごと残す（傾いた歯で根を失わないため）
+          {
+            const b = z * fxy; lab2c.fill(0); let nl = 0; hasCanal.fill(0);
+            for (let q0 = 0; q0 < fxy; q0++) {
+              if (lab2c[q0] || !(solidF[b + q0] || canalF[b + q0])) continue;
+              nl++; let sp = 0, hasC = false; st2c[sp++] = q0; lab2c[q0] = nl; const memb = [];
+              while (sp) {
+                const q = st2c[--sp]; memb.push(q); if (cm[q]) hasC = true;
+                const x = q % fx, y = (q / fx) | 0;
+                for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                  const xx = x + dx, yy = y + dy; if (xx < 0 || yy < 0 || xx >= fx || yy >= fy) continue;
+                  const j = yy * fx + xx; if (!lab2c[j] && (solidF[b + j] || canalF[b + j])) { lab2c[j] = nl; st2c[sp++] = j; }
+                }
+              }
+              hasCanal[nl] = hasC ? 1 : 0;
+              if (!hasC) continue;
+              // 歯頸部の近く（根幹は太い）では緩く、根尖側ほど厳しく：深さ d mm で max(CDMIN, CDMAX − 0.25·d)
+              const dmm = Math.abs(z - z1) * fsp[2], limZ = Math.max((window.CDMIN ?? 2.2) / fsp[0] * 3, lim - 0.25 * dmm / fsp[0] * 3);
+              for (const q of memb) if (solidF[b + q] && !canalF[b + q] && D[q] > limZ) { solidF[b + q] = 0; nrm++; }
+            }
+          }
+          // 歯根膜の暗い線で骨を切り離す：断面内で「象牙質より明らかに暗い」画素を境界とみなして除いた残りを、
+          // 根管（とそのまわり0.3mm）に届く塊だけ残し、元の範囲で0.25mm戻す。歯根に密着した骨（歯槽中隔・皮質骨）を外す
+          if (!window.DEBUG_NOPDL) {
+            const b = z * fxy;
+            for (let q = 0; q < fxy; q++) Ib2[q] = I[b + q];
+            blur2(Ib2, fx, fy, rB); blur2(Ib2, fx, fy, rB);
+            const dv = []; for (let q = 0; q < fxy; q += 3) if (solidF[b + q] && !canalF[b + q] && D[q] > rC) dv.push(Ib2[q]);
+            if (dv.length > 50) {
+              dv.sort((p2, q2) => p2 - q2);
+              const dS = dv[dv.length >> 1], tD = dS - (window.PDLA ?? 0.2) * Math.max(100, dS - th);
+              keep.fill(0); let sp = 0;
+              // 種：根管から rC 以内の歯（根管のまわりの暗い縁も含む）
+              for (let q = 0; q < fxy; q++) if ((solidF[b + q] || canalF[b + q]) && D[q] <= rC) { keep[q] = 1; st2c[sp++] = q; }
+              while (sp) {
+                const q = st2c[--sp], x = q % fx, y = (q / fx) | 0;
+                for (const [j, ok] of [[q - 1, x > 0], [q + 1, x < fx - 1], [q - fx, y > 0], [q + fx, y < fy - 1]])
+                  if (ok && !keep[j] && solidF[b + j] && Ib2[j] >= tD) { keep[j] = 1; st2c[sp++] = j; }
+              }
+              // 境界の暗い縁（部分容積）を 0.25mm だけ戻す
+              for (let k = 0; k < rR; k++) {
+                const add = [];
+                for (let q = 0; q < fxy; q++) {
+                  if (keep[q] || !solidF[b + q]) continue;
+                  const x = q % fx, y = (q / fx) | 0;
+                  if ((x > 0 && keep[q - 1]) || (x < fx - 1 && keep[q + 1]) || (y > 0 && keep[q - fx]) || (y < fy - 1 && keep[q + fx])) add.push(q);
+                }
+                for (const q of add) keep[q] = 1;
+              }
+              // 根管を含まない塊（根管が見えない歯根）は残す：根管を含む塊の中だけを削る
+              for (let q = 0; q < fxy; q++) if (solidF[b + q] && !keep[q] && lab2c[q] && hasCanal[lab2c[q]]) { solidF[b + q] = 0; nrm++; nPdl++; }
+            }
+          }
         }
+        if (window.DEBUG_SEP) console.log('pdl', nPdl);
         // 歯冠とつながる部分だけ残す
         if (nrm) {
           const cc = components26(solidF, fx, fy, fz);
@@ -2610,6 +2666,18 @@ function keepLargest(mask, nx, ny, nz) {
   let best = 0; for (let k = 1; k < c.size.length; k++) if (c.size[k] > c.size[best]) best = k;
   for (let i = 0; i < mask.length; i++) mask[i] = c.lab[i] === best && best ? 1 : 0;
   return mask;
+}
+/** 2D の箱形平滑化（半径 r、横→縦の1回ずつ） */
+function blur2(a, nx, ny, r) {
+  const t = new Float32Array(Math.max(nx, ny));
+  for (let y = 0; y < ny; y++) { const o = y * nx; let sm = 0, c = 0;
+    for (let x = 0; x < Math.min(r, nx); x++) { sm += a[o + x]; c++; }
+    for (let x = 0; x < nx; x++) { if (x + r < nx) { sm += a[o + x + r]; c++; } if (x - r - 1 >= 0) { sm -= a[o + x - r - 1]; c--; } t[x] = sm / c; }
+    for (let x = 0; x < nx; x++) a[o + x] = t[x]; }
+  for (let x = 0; x < nx; x++) { let sm = 0, c = 0;
+    for (let y = 0; y < Math.min(r, ny); y++) { sm += a[y * nx + x]; c++; }
+    for (let y = 0; y < ny; y++) { if (y + r < ny) { sm += a[(y + r) * nx + x]; c++; } if (y - r - 1 >= 0) { sm -= a[(y - r - 1) * nx + x]; c--; } t[y] = sm / c; }
+    for (let y = 0; y < ny; y++) a[y * nx + x] = t[y]; }
 }
 function filterComponents(mask, nx, ny, nz, minSize, minZ) {
   const c = components26(mask, nx, ny, nz);
