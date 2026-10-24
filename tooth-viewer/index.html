@@ -2491,6 +2491,17 @@ async function extract() {
     let nf = 0; for (let i = 0; i < fn; i++) if (hh[i] && !U[i]) { solidF[i] = 1; nf++; }
     if (window.DEBUG_SEP) console.log('fhole', nf);
   }
+  // 歯の外に取り残された根管（骨として外した部分の中に延長された根管）は消す：象牙質に接していない根管の塊
+  {
+    const cc = components26(canalF, fx, fy, fz), touch = new Uint8Array(cc.size.length);
+    for (let i = 0; i < fn; i++) {
+      const l = cc.lab[i]; if (!l || touch[l]) continue;
+      const x = i % fx, y = ((i / fx) | 0) % fy, z = (i / fxy) | 0;
+      if ((x > 0 && solidF[i - 1]) || (x < fx - 1 && solidF[i + 1]) || (y > 0 && solidF[i - fx]) || (y < fy - 1 && solidF[i + fx]) || (z > 0 && solidF[i - fxy]) || (z < fz - 1 && solidF[i + fxy])) touch[l] = 1;
+    }
+    let nr = 0; for (let i = 0; i < fn; i++) if (canalF[i] && !touch[cc.lab[i]]) { canalF[i] = 0; susF[i] = 0; nr++; }
+    if (window.DEBUG_SEP) console.log('float canal', nr);
+  }
   showProgress('高精度処理中…（ラベル・表面）', 0.78); await sleep0();
   const labF = new Uint8Array(fn);
   const cnt = [0, 0, 0, 0, 0];
@@ -2840,9 +2851,20 @@ function traceCanals(I, solid, canal, depth, nx, ny, nz, sp, dMed, th, tmp, te =
         for (const j of [qx > 0 ? q - 1 : -1, qx < nx - 1 ? q + 1 : -1, qy > 0 ? q - nx : -1, qy < ny - 1 ? q + nx : -1]) if (j >= 0 && !seen[j] && solid[z * nxy + j]) { seen[j] = 1; st[sp2++] = j; } }
       return a;
     };
-    let ext = 0; const extPts = [];
+    // 髄床底：根管の断面積が最大断面の35%以上ある（＝歯髄腔）最も根尖側の断面。端はこれより1mm以上根尖側のものだけ（根分岐部へ横に伸ばさない）
+    let zFloor = -1;
+    { const ca = new Float64Array(nz); let cmax = 0;
+      for (let z = 0; z < nz; z++) { let a = 0; for (let i = z * nxy, e = i + nxy; i < e; i++) a += canal[i]; ca[z] = a; if (a > cmax) cmax = a; }
+      const aMin = Math.max(1.5 / (vs * vs), 0.35 * cmax);   // 歯髄腔の断面（最大断面の35%以上）
+      for (let z = 0; z < nz; z++) if (ca[z] >= aMin && (zFloor < 0 || (z - zFloor) * ap > 0)) zFloor = z; }
+    const floorGap = Math.round(1.0 / sp[2]);
+    let ext = 0; const extPts = [], why = { area: 0, floor: 0, root: 0, merge: 0, miss: 0, ok: 0 };
     for (const [z0, x0, y0] of ends) {
-      if (compArea(z0, x0, y0) > 0.45 * maxA) continue;
+      // 歯根の中か：断面の塊が小さい、または歯の表面まで 2.2mm 以内（2本の根が骨などで断面上つながっていても歯根とみなす）
+      if (compArea(z0, x0, y0) > 0.45 * maxA) {
+        if (depth[z0 * nxy + y0 * nx + x0] > (window.CEXTD ?? 2.2)) { why.area++; continue; }
+        if (zFloor >= 0 && (z0 - zFloor) * ap < floorGap) { why.floor++; continue; }
+      }
       let x = x0, y = y0, miss = 0, lz = z0, lx = x0, ly = y0;
       for (let z = z0 + ap; z >= 0 && z < nz; z += ap) {
         let best = -1, bv = Infinity;
@@ -2851,7 +2873,7 @@ function traceCanals(I, solid, canal, depth, nx, ny, nz, sp, dMed, th, tmp, te =
           const i = z * nxy + yy * nx + xx; if (!solid[i] || depth[i] < Math.min(dmin, 0.12)) continue;
           if (Is[i] < bv) { bv = Is[i]; best = i; }
         }
-        if (best < 0) break;                                       // 歯根が終わった
+        if (best < 0) { why.root++; break; }                       // 歯根が終わった
         const bx = best % nx, by = ((best / nx) | 0) % ny;
         // 別の根管（同じ断面で近く＝約0.25mm以内）に合流したら止める（並走して二重に描かない）
         let merge = false;
@@ -2860,7 +2882,7 @@ function traceCanals(I, solid, canal, depth, nx, ny, nz, sp, dMed, th, tmp, te =
           const xx = bx + dx, yy = by + dy; if (xx < 0 || yy < 0 || xx >= nx || yy >= ny) continue;
           if (canal[z * nxy + yy * nx + xx]) { merge = true; break; }
         }
-        if (merge) break;
+        if (merge) { why.merge++; break; }
         // 根管は歯根の中央付近にある：周囲0.6mmの中で最も深い位置の6割以上の深さがあること
         let dmx = 0; const rr = Math.max(2, Math.round(0.6 / vs));
         for (let dy = -rr; dy <= rr; dy++) for (let dx = -rr; dx <= rr; dx++) {
@@ -2875,12 +2897,12 @@ function traceCanals(I, solid, canal, depth, nx, ny, nz, sp, dMed, th, tmp, te =
           }
           disk(z, bx, by, conAt(best) < Tvis); ext++; extPts.push([z0, z, bx, by]); miss = 0; lz = z; lx = bx; ly = by; x = bx; y = by;
         } else {
-          if (++miss > maxMiss) break;
+          if (++miss > maxMiss) { why.miss++; break; }
           x = bx; y = by;                                           // 見えない区間も暗い方へ位置を追う
         }
       }
     }
-    if (window.DEBUG_SEP) console.log('canal ext', ends.length, ext, 'ap', ap);
+    if (window.DEBUG_SEP) console.log('canal ext', ends.length, ext, 'ap', ap, JSON.stringify(why), 'maxA', maxA);
     if (window.DEBUG_CHAIN) window.DBGE = { ends, pts: extPts };
   }
   return added;
