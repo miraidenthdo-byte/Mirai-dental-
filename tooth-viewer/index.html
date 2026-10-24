@@ -2376,7 +2376,7 @@ async function extract() {
         if (c >= eMin2) zc = z;
       }
       if (zc >= 0) {
-        const hz2 = Math.max(1, Math.round(1.0 / fsp[2])), z1 = zc + ap * Math.round(1.0 / fsp[2]);
+        const hz2 = Math.max(1, Math.round(1.0 / fsp[2])), hz3 = Math.round(3.0 / fsp[2]), z1 = zc + ap * Math.round(1.0 / fsp[2]);
         const lim = (window.CDMAX ?? 3.5) / fsp[0] * 3, cm = new Uint8Array(fxy), D = new Float32Array(fxy), lab2c = new Int32Array(fxy), st2c = new Int32Array(fxy),
           hasCanal = new Uint8Array(fxy + 1), Ib2 = new Float32Array(fxy), keep = new Uint8Array(fxy),
           rB = Math.max(1, Math.round(0.06 / fsp[0])), rC = 0.3 / fsp[0] * 3, rR = Math.max(1, Math.round(0.25 / fsp[0]));
@@ -2387,9 +2387,11 @@ async function extract() {
         for (let z = z1; z >= 0 && z < fz; z += ap) { for (let i = z * fxy, e = i + fxy; i < e; i++) if (canalF[i]) { zLast = z; break; } }
         for (let z = z1; z >= 0 && z < fz; z += ap) {
           cm.fill(0); let nc = 0;
-          for (let k = Math.max(0, z - hz2); k <= Math.min(fz - 1, z + hz2); k++) for (let q = 0, b = k * fxy; q < fxy; q++) if (canalF[b + q] && !cm[q]) { cm[q] = 1; nc++; }
+          // その高さの根管：根尖側1mm〜歯冠側3mmの根管を重ねたもの（根尖の手前で根管が見えなくなる歯根でも、その根管の延長から測る）
+          const ka = z + ap * hz2, kc = z - ap * hz3;
+          for (let k = Math.max(0, Math.min(ka, kc)); k <= Math.min(fz - 1, Math.max(ka, kc)); k++) for (let q = 0, b = k * fxy; q < fxy; q++) if (canalF[b + q] && !cm[q]) { cm[q] = 1; nc++; }
           if (!nc) {
-            if (zLast >= 0 && (z - zLast) * ap > hz2) for (let q = 0, b = z * fxy; q < fxy; q++) if (solidF[b + q]) { solidF[b + q] = 0; nrm++; }
+            if (zLast >= 0 && (z - zLast) * ap > Math.round((window.CTAIL ?? 3) / fsp[2])) for (let q = 0, b = z * fxy; q < fxy; q++) if (solidF[b + q]) { solidF[b + q] = 0; nrm++; }
             continue;
           }
           if (lim === Infinity) continue;
