@@ -187,10 +187,13 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 3
     <div class="struct" hidden><input type="color" id="colB" value="#8fa3b8"><span>周囲の骨</span><input type="range" id="opB" min="0" max="100" value="0"><output id="opBO"></output></div>
     <div class="row"><label>透かし表示</label><input id="glass" type="range" min="0" max="100" value="75"><output id="glassO"></output></div>
     <label class="check"><input id="pulpGrad" type="checkbox">根管を高さで色分け（走行が分かりやすい）</label>
+    <label class="check" title="解析結果（歯・根管の範囲）から表面をなめらかに作り直して表示します。STL出力もなめらかな面になります。解析結果（計測値）は変わりません"><input id="smoothOn" type="checkbox">表面をなめらかに（模型風）</label>
+    <div class="row" id="smoothWrap" hidden><label>なめらかさ</label><input id="smoothR" type="range" min="1" max="8" value="4"><output id="smoothRO"></output></div>
     <div class="flex" style="margin:6px 0">
       <button data-preset="solid">不透明</button>
       <button data-preset="canal">根管を透視</button>
       <button data-preset="canalOnly">根管のみ</button>
+      <button data-preset="model" title="なめらかな表面・やや不透明の歯と、透けて見える根管（模型風）">模型風</button>
       <button data-scheme="green">配色：緑の根管</button>
       <button data-scheme="red">配色：赤の根管</button>
     </div>
@@ -744,7 +747,7 @@ function syncOut(id) {
   const fmt = {
     roiX: v + 'mm', roiY: v + 'mm', roiUp: v + 'mm', roiDn: v + 'mm', thCanal: v + '%',
     erode: ['なし', '弱', '中', '強', '最強'][v], sepTh: $('sepAuto') && $('sepAuto').checked ? '自動' : v, tiltX: v + '°', tiltY: v + '°', tiltZ: v + '°', brushR: v + 'mm', opE: v + '%', opD: v + '%', opP: v + '%', opB: v + '%',
-    glass: v + '%', clipPos: v + '%',
+    glass: v + '%', clipPos: v + '%', smoothR: (v * 0.1).toFixed(1) + 'mm',
   }[id];
   o.textContent = fmt !== undefined ? fmt : v;
 }
@@ -2549,6 +2552,7 @@ async function extract() {
   showProgress('3Dデータを作成中…', 0.9); await sleep0();
   renderer.mode = 'tooth'; $('mode3d').value = 'tooth'; $('ctThWrap').hidden = true;
   renderer.setData(rgba, labF, fx, fy, fz, fsp[0], fsp[1], fsp[2], susTex); updateLegend();
+  if ($('smoothOn').checked) applySmooth();
   hideProgress();
   $('empty3d').style.display = 'none';
   $('stlBtn').disabled = false;
@@ -3496,12 +3500,67 @@ $('clipAxis').addEventListener('input', () => { // カメラ側の半分を取�
 $('colP').addEventListener('input', () => { if (S.chart) drawCanalChart(...S.chart); renderAll(); });
 document.querySelectorAll('[data-view]').forEach((b) => (b.onclick = () => renderer.setView(b.dataset.view)));
 document.querySelectorAll('[data-preset]').forEach((b) => (b.onclick = () => {
-  const P = { solid: [100, 100, 100, 0], canal: [55, 55, 100, 0], canalOnly: [10, 10, 100, 0] }[b.dataset.preset];
+  const P = { solid: [100, 100, 100, 0], canal: [55, 55, 100, 0], canalOnly: [10, 10, 100, 0], model: [60, 60, 100, 0] }[b.dataset.preset];
   ['opE', 'opD', 'opP', 'opB'].forEach((id, i) => setVal(id, P[i]));
-  setVal('glass', b.dataset.preset === 'solid' ? 0 : 75);
+  setVal('glass', b.dataset.preset === 'solid' ? 0 : b.dataset.preset === 'model' ? 35 : 75);
+  if (b.dataset.preset === 'model') {
+    // 歯は一色のやや黄色がかった象牙色、根管は緑。表面はなめらかに
+    $('colE').value = '#cfc98a'; $('colD').value = '#cfc98a';
+    if (!$('smoothOn').checked) { $('smoothOn').checked = true; $('smoothWrap').hidden = false; applySmooth(); return; }
+  }
   r3();
 }));
 $('max3d').onclick = () => toggleSolo($('cv3d').parentElement);
+/** 表示中の3Dフィールド（なめらか表示なら作り直したもの） */
+function curRgba(F) { return $('smoothOn').checked && F.rgbaSmooth ? F.rgbaSmooth : F.rgba; }
+/**
+ * なめらかな表面（模型風）：解析したラベル（歯・エナメル質・根管）だけから3D用の場を作り直す。
+ * 歯は約 r mm でならした面。根管は少し弱め（約 0.8r）にならし、細い根管も消えないよう最低限の太さ（約0.2mm）を保つ。
+ * 計測値・ラベルは変えない（表示とSTLだけ）
+ */
+function buildSmoothFields(F, rMm) {
+  const { nx, ny, nz, sp, labels: L } = F, n = L.length, vs = Math.min(...sp);
+  const T = new Float32Array(n), E = new Float32Array(n), C = new Float32Array(n), cm = new Uint8Array(n);
+  for (let i = 0; i < n; i++) { const l = L[i]; if (l >= 1 && l <= 3) T[i] = 1; if (l === 1) E[i] = 1; if (l === 3) { C[i] = 1; cm[i] = 1; } }
+  const rb = Math.max(1, Math.round(rMm / vs / 1.4)), rc = Math.max(1, Math.round(rMm * 0.8 / vs / 1.4));
+  boxBlur3(T, nx, ny, nz, rb, 3);
+  boxBlur3(E, nx, ny, nz, Math.max(1, Math.round(0.15 / vs)), 2);
+  boxBlur3(C, nx, ny, nz, rc, 3);
+  // 細い根管：1画素広げて軽くならした場で下支え（中心線が必ず等値面の内側に入る）
+  const Cd = new Float32Array(n), dm = dilate6(cm, nx, ny, nz, 1);
+  for (let i = 0; i < n; i++) Cd[i] = dm[i];
+  boxBlur3(Cd, nx, ny, nz, 1, 2);
+  // 太い部分（歯髄腔・太い根管）は下支えしない（元のマスクのでこぼこが残るため）。細い所だけ支える
+  const ke = Math.max(2, Math.round(0.3 / vs));   // 幅およそ0.6mm以上を「太い」とする
+  let er = cm; for (let k = 0; k < ke; k++) er = erode6(er, nx, ny, nz);
+  const thick = dilate6(er, nx, ny, nz, ke);
+  const rgba = new Uint8Array(n * 4);
+  for (let i = 0; i < n; i++) {
+    const c = thick[i] ? C[i] : Math.max(C[i], cm[i] ? Math.max(0.6 * Cd[i], 0.5) : 0.6 * Cd[i]);
+    rgba[i * 4] = Math.round(Math.min(1, E[i] * 1.6) * 255);
+    rgba[i * 4 + 1] = Math.round(Math.max(T[i], c > 0.35 ? 0.55 : 0) * 255);   // 根管は必ず歯の内側
+    rgba[i * 4 + 2] = Math.round(Math.min(1, c) * 255);
+    rgba[i * 4 + 3] = 0;
+  }
+  return rgba;
+}
+function applySmooth() {
+  const F = S.seg && S.seg.fine;
+  if (!F || renderer.mode === 'ct') return;
+  if ($('smoothOn').checked) {
+    const r = +$('smoothR').value * 0.1;
+    if (!F.rgbaSmooth || F.smoothR !== r) {
+      showProgress('表面をなめらかに処理中…', 0.5);
+      F.rgbaSmooth = buildSmoothFields(F, r); F.smoothR = r; hideProgress();
+    }
+  }
+  renderer.setData(curRgba(F), F.labels, F.nx, F.ny, F.nz, F.sp[0], F.sp[1], F.sp[2], F.sus);
+  renderer.request(); updateLegend();
+}
+$('smoothOn').addEventListener('change', () => { $('smoothWrap').hidden = !$('smoothOn').checked; setTimeout(applySmooth, 20); });
+$('smoothR').addEventListener('change', () => setTimeout(applySmooth, 20));
+$('smoothR').addEventListener('input', () => syncOut('smoothR'));
+syncOut('smoothR');
 /** 3D表示の対象：抽出した歯 / CT全体（しきい値の等値面） */
 $('mode3d').addEventListener('change', () => {
   const m = $('mode3d').value;
@@ -3521,7 +3580,7 @@ $('mode3d').addEventListener('change', () => {
     renderer.mode = 'tooth'; $('ctThWrap').hidden = true;
     if (S.opSaved) { ['opE', 'opD', 'glass'].forEach((id, i) => setVal(id, S.opSaved[i])); S.opSaved = null; }
     const F = S.seg && S.seg.fine;
-    if (F) renderer.setData(F.rgba, F.labels, F.nx, F.ny, F.nz, F.sp[0], F.sp[1], F.sp[2], F.sus);
+    if (F) renderer.setData(curRgba(F), F.labels, F.nx, F.ny, F.nz, F.sp[0], F.sp[1], F.sp[2], F.sus);
     else { renderer.clear(); $('empty3d').style.display = ''; }
     renderer.request(); updateLegend();
   }
@@ -3580,7 +3639,7 @@ $('stlBtn').onclick = () => {
   const F = S.seg && S.seg.fine; if (!F) return;
   showProgress('STLを作成中…', 0.5);
   setTimeout(() => {
-    const { rgba, nx, ny, nz, sp, origin } = F, v = S.vol, D = v.dirs, O = v.origin;
+    const { nx, ny, nz, sp, origin } = F, rgba = curRgba(F), v = S.vol, D = v.dirs, O = v.origin;
     // ローカル(mm) → ボリューム(mm) → 患者座標(DICOM, mm)
     const toPat = (x, y, z) => { const q = S.seg.localToVolMm([x, y, z]); return [0, 1, 2].map((k) => O[k] + q[0] * D[0][k] + q[1] * D[1][k] + q[2] * D[2][k]); };
     const tag = $('toothNo').value || 'tooth';
