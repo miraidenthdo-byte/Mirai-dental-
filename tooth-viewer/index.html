@@ -1610,6 +1610,41 @@ function distanceTransform(mask, nx, ny, nz, sx, sy, sz) {
  * 隣在歯との接触部分離：距離変換の「くびれ」で分ける（マーカー付きウォーターシェッド）。
  * 太い部分(dist>=D)を核とし、選択点の核＝対象歯、その他の核＝隣在歯として競合成長させる。
  */
+/**
+ * 隣在歯との分水嶺の補正（根尖が近接する歯根の救済）：分水嶺は太さ（距離）で塊を分けるので、細い根尖が隣の歯の根に接すると
+ * 太い隣の根の側に取られてしまう。歯根は上下に連続しているので、対象歯の断面積が最大の断面から上下へ1断面ずつ、
+ * 前の断面の所属（対象歯／それ以外）をそのまま引き継ぎ、新しく現れた画素は同じ断面の中で近い方へ割り当てる。
+ * その結果「対象歯」になった画素で、分水嶺が隣在歯（2）としていたものだけを対象歯に戻す（取り過ぎを防ぐため、救済のみ）
+ */
+function rescueRoots(lab, dom, nx, ny, nz, maxGrow = 3) {
+  const nxy = nx * ny, P = new Uint8Array(lab.length), G = new Uint8Array(nxy);
+  let z0 = -1, best = 0;
+  for (let z = 0; z < nz; z++) { let a = 0; for (let i = z * nxy, e = i + nxy; i < e; i++) if (lab[i] === 1) a++; if (a > best) { best = a; z0 = z; } }
+  if (z0 < 0) return 0;
+  for (let i = z0 * nxy, e = i + nxy; i < e; i++) P[i] = dom[i] ? (lab[i] === 1 ? 1 : 2) : 0;
+  const q = new Int32Array(nxy);
+  // 根尖の向き：最大断面から対象歯が長く続く側（歯冠側は咬合面までの数mmで短い。咬合する対向歯を引き継がないよう歯冠側には行わない）
+  let zl = nz, zh = -1;
+  for (let i = 0; i < lab.length; i++) if (lab[i] === 1) { const z = (i / nxy) | 0; if (z < zl) zl = z; if (z > zh) zh = z; }
+  const dirA = zh - z0 >= z0 - zl ? 1 : -1;
+  for (const dir of [dirA]) {
+    for (let z = z0 + dir; z >= 0 && z < nz; z += dir) {
+      const b = z * nxy, pb = (z - dir) * nxy; let h = 0, t = 0;
+      for (let k = 0; k < nxy; k++) { const i = b + k; if (!dom[i]) continue; const pl = P[pb + k]; if (pl) { P[i] = pl; G[k] = 0; q[t++] = k; } }
+      if (!t) break;
+      while (h < t) {   // 同じ断面の中で近い方へ、引き継いだ画素から maxGrow 画素まで広げる（4近傍の幅優先）
+        const k = q[h++], x = k % nx, y = (k / nx) | 0, L = P[b + k], g = G[k] + 1;
+        if (g > maxGrow) continue;
+        for (const [j, ok] of [[k - 1, x > 0], [k + 1, x < nx - 1], [k - nx, y > 0], [k + nx, y < ny - 1]])
+          if (ok && dom[b + j] && !P[b + j]) { P[b + j] = L; G[j] = g; q[t++] = j; }
+      }
+    }
+  }
+  let n = 0;
+  for (let i = 0; i < lab.length; i++) if (lab[i] === 2 && P[i] === 1) { lab[i] = 1; n++; }
+  if (window.DEBUG_SEP) console.log('rescueRoots', z0, n);
+  return n;
+}
 function splitNeighbors(domain, nx, ny, nz, sp, seedIdx, wb) {
   const n = domain.length, nxy = nx * ny;
   const dist = distanceTransform(domain, nx, ny, nz, sp[0], sp[1], sp[2]);
@@ -1824,7 +1859,7 @@ async function extract() {
   if (!roiG) { setStatus('先に断面上で歯をクリックしてください', true); return; }
   const th = +$('thHard').value, te = +$('thEnamel').value;
   const k = +$('erode').value;
-  const split = $('splitNb').checked;
+  const split = $('splitNb').checked && !window.DEBUG_NOSPLIT;
   showProgress('歯を抽出中…（歯軸に沿って再サンプリング）', 0.05); await sleep0();
   // 歯軸に合わせて傾けた枠でCTを再サンプリング。隣在歯の歯冠全体を含めて「くびれ」で分離できるよう、左右前後へ 5mm 広げる
   const v = buildLocalVolume(split ? 5 : 0);
@@ -1928,6 +1963,7 @@ async function extract() {
       const h0 = holes2D(full, ex, ey, ez), dom = new Uint8Array(en);
       for (let i = 0; i < en; i++) dom[i] = full[i] | h0[i];
       const lab = splitNeighbors(dom, ex, ey, ez, [v.sx, v.sy, v.sz], seedIdx);
+      if (lab && !window.DEBUG_NORESCUE) rescueRoots(lab, dom, ex, ey, ez);
       if (lab) {
         // 分水嶺の対象外だった薄い外層は、近い側（対象歯／隣在歯・骨）に割り当てる
         const A = new Uint8Array(en), Bm = new Uint8Array(en);
@@ -3530,24 +3566,28 @@ function fitAxis() {
   // ローカル → ボリューム方向
   const c0 = S.seg.localToVolMm([0, 0, 0]), c1 = S.seg.localToVolMm(e);
   let u = [c1[0] - c0[0], c1[1] - c0[1], c1[2] - c0[2]];
-  if (u[2] < 0) u = u.map((x) => -x);
+  let crownSign = 1;                                   // 歯冠が u の正の側なら 1（上顎は歯冠が下なので -1 になる）
+  if (u[2] < 0) { u = u.map((x) => -x); crownSign = -1; }
   const deg = 180 / Math.PI, ax = Math.asin(clamp(-u[1], -1, 1)), ay = Math.atan2(u[0], u[2]);
   const tx = clamp(Math.round(ax * deg * 2) / 2, -60, 60), ty = clamp(Math.round(ay * deg * 2) / 2, -60, 60);
   const changed = Math.abs(tx - +$('tiltX').value) >= 2 || Math.abs(ty - +$('tiltY').value) >= 2;
   setVal('tiltX', tx); setVal('tiltY', ty);
   // 枠の中心を歯の重心へ、上下の長さを「歯（骨を除く：歯冠〜根管の先＋2.5mm）」の歯軸方向の広がり＋余裕に
   const cm = S.seg.localToVolMm(m), v = S.vol;
-  let lo = Infinity, hi = -Infinity, cl = Infinity;
+  let lo = Infinity, hi = -Infinity, cl = Infinity, ch = -Infinity;
   for (let z = 0; z < nz; z += st) for (let y = 0; y < ny; y += st) for (let x = 0; x < nx; x += st) {
     const L = labels[(z * ny + y) * nx + x]; if (!L || L === 4) continue;
     const q = S.seg.localToVolMm(P(x, y, z));
     const t = (q[0] - cm[0]) * u[0] + (q[1] - cm[1]) * u[1] + (q[2] - cm[2]) * u[2];
-    if (t < lo) lo = t; if (t > hi) hi = t; if (L === 3 && t < cl) cl = t;
+    if (t < lo) lo = t; if (t > hi) hi = t; if (L === 3 && t < cl) cl = t; if (L === 3 && t > ch) ch = t;
   }
-  // 根尖側：根管の先から 4mm より先へは広げない（骨の帯に引っ張られて枠が長くなるのを防ぐ）。根管が無ければ歯の広がり
-  const loU = cl < Infinity ? Math.max(lo, cl - 4) : lo;
+  // 根尖側：根管の先から 4mm より先へは広げない（骨の帯に引っ張られて枠が長くなるのを防ぐ）。根管が無ければ歯の広がり。
+  // 上顎（歯冠が下）は根尖側が u の正の側
+  let loU = lo, hiU = hi;
+  if (crownSign > 0) { if (cl < Infinity) loU = Math.max(lo, cl - 4); }
+  else if (ch > -Infinity) hiU = Math.min(hi, ch + 4);
   S.seed = [Math.round(cm[0] / v.sx), Math.round(cm[1] / v.sy), Math.round(cm[2] / v.sz)]; S.cursor = S.seed.slice(); S.shift = [0, 0];
-  setVal('roiUp', clamp(Math.ceil(hi + 2.5), 2, 40)); setVal('roiDn', clamp(Math.ceil(-loU + 2.5), 2, 40));
+  setVal('roiUp', clamp(Math.ceil(hiU + 2.5), 2, 40)); setVal('roiDn', clamp(Math.ceil(-loU + 2.5), 2, 40));
   if (window.DEBUG_SEP) console.log('fitAxis', tx, ty, changed, hi.toFixed(1), lo.toFixed(1), cl.toFixed(1));
   return changed;
 }
