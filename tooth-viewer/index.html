@@ -2512,6 +2512,55 @@ async function extract() {
       }
     }
   }
+  // 歯根に貼り付いた骨板（頬側の皮質骨・上顎洞底など）を断面の形で外す：歯根の断面は丸〜楕円で、骨板は薄く広がる。
+  // 歯頸部より1mm以上根尖側の各断面で、半径 r（約0.5mm）の2Dオープニングで残る「芯」から r 以内を歯根とし、
+  // 芯に付いた残り（はみ出し）のうち面積が 0.3mm² 以上のまとまり（板状の骨）を外す。芯を持たない小さな塊（細い根尖）と根管の近くは残す
+  if (!window.DEBUG_NOPLATE) {
+    let ezs = 0, en2 = 0, tzs = 0, tn2 = 0;
+    for (let i = 0; i < fn; i += 3) if (solidF[i]) { const z = (i / fxy) | 0; tzs += z; tn2++; if (I[i] >= te) { ezs += z; en2++; } }
+    if (en2 > 30) {
+      const ap = ezs / en2 > tzs / tn2 ? -1 : 1, eMin2 = 0.5 / (fsp[0] * fsp[1]);
+      let zc = -1;
+      for (let z = ap > 0 ? 0 : fz - 1; z >= 0 && z < fz; z += ap) { let c = 0; for (let i = z * fxy, e = i + fxy; i < e; i++) if (solidF[i] && I[i] >= te) c++; if (c >= eMin2) zc = z; }
+      if (zc >= 0) {
+        const r3 = (window.PLATER ?? 0.5) / fsp[0] * 3, aMin = (window.PLATEA ?? 0.3) / (fsp[0] * fsp[1]), protR = 0.3 / fsp[0] * 3;
+        const U = new Uint8Array(fxy), D = new Float32Array(fxy), Dc = new Float32Array(fxy), Dk = new Float32Array(fxy), lab = new Int32Array(fxy), st = new Int32Array(fxy);
+        let nrm = 0;
+        for (let z = zc + ap * Math.round(1 / fsp[2]); z >= 0 && z < fz; z += ap) {
+          const b = z * fxy; let any = 0;
+          for (let q = 0; q < fxy; q++) { U[q] = solidF[b + q] || canalF[b + q] ? 1 : 0; any += U[q]; }
+          if (!any) continue;
+          // 内側の距離（芯）、芯からの距離、根管からの距離
+          for (let q = 0; q < fxy; q++) { D[q] = U[q] ? 1e9 : 0; Dc[q] = canalF[b + q] ? 0 : 1e9; }
+          chamfer2(D, fx, fy); chamfer2(Dc, fx, fy);
+          for (let q = 0; q < fxy; q++) Dk[q] = D[q] > r3 ? 0 : 1e9;
+          chamfer2(Dk, fx, fy);
+          lab.fill(0); let nl = 0;
+          for (let q0 = 0; q0 < fxy; q0++) {
+            if (!U[q0] || lab[q0] || Dk[q0] <= r3) continue;
+            // はみ出し（芯から r より遠い画素）の4連結のまとまり
+            nl++; let sp = 0, cnt = 0, touchCore = false; st[sp++] = q0; lab[q0] = nl; const memb = [];
+            while (sp) {
+              const q = st[--sp], x = q % fx, y = (q / fx) | 0; memb.push(q); cnt++;
+              for (const [j, ok] of [[q - 1, x > 0], [q + 1, x < fx - 1], [q - fx, y > 0], [q + fx, y < fy - 1]]) {
+                if (!ok || !U[j]) continue;
+                if (Dk[j] <= r3) { if (Dk[j] === 0) touchCore = true; else touchCore = touchCore || Dk[j] < r3; continue; }
+                if (!lab[j]) { lab[j] = nl; st[sp++] = j; }
+              }
+            }
+            if (!touchCore || cnt < aMin) continue;
+            for (const q of memb) if (solidF[b + q] && !canalF[b + q] && Dc[q] > protR) { solidF[b + q] = 0; nrm++; }
+          }
+        }
+        if (nrm) {
+          const cc = components26(solidF, fx, fy, fz);
+          let big = 0; for (let q = 1; q < cc.size.length; q++) if (cc.size[q] > cc.size[big]) big = q;
+          for (let i = 0; i < fn; i++) if (solidF[i] && cc.lab[i] !== big) solidF[i] = 0;
+        }
+        if (window.DEBUG_SEP) console.log('plate rm', nrm);
+      }
+    }
+  }
   // 歯根の表面にこびりついた薄い骨片（歯槽硬線の切れ端など）のノイズを除く：
   // 歯（象牙質＋根管）を約0.25mm収縮しても残る芯から、元の範囲で同じだけ戻す（厚さ0.5mm未満の薄い張り出しは戻らない）。
   // 根管は形を変えない。最後に歯冠とつながる最大の塊だけ残す
@@ -2769,6 +2818,13 @@ function keepLargest(mask, nx, ny, nz) {
   return mask;
 }
 /** 2D の箱形平滑化（半径 r、横→縦の1回ずつ） */
+/** 2D 面取り距離変換（3-4、単位 1/3 画素）。0 の画素からの距離を、その場で D に入れる */
+function chamfer2(D, nx, ny) {
+  for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) { const q = y * nx + x; let d = D[q]; if (!d) continue;
+    if (x > 0) d = Math.min(d, D[q - 1] + 3); if (y > 0) { d = Math.min(d, D[q - nx] + 3); if (x > 0) d = Math.min(d, D[q - nx - 1] + 4); if (x < nx - 1) d = Math.min(d, D[q - nx + 1] + 4); } D[q] = d; }
+  for (let y = ny - 1; y >= 0; y--) for (let x = nx - 1; x >= 0; x--) { const q = y * nx + x; let d = D[q]; if (!d) continue;
+    if (x < nx - 1) d = Math.min(d, D[q + 1] + 3); if (y < ny - 1) { d = Math.min(d, D[q + nx] + 3); if (x < nx - 1) d = Math.min(d, D[q + nx + 1] + 4); if (x > 0) d = Math.min(d, D[q + nx - 1] + 4); } D[q] = d; }
+}
 function blur2(a, nx, ny, r) {
   const t = new Float32Array(Math.max(nx, ny));
   for (let y = 0; y < ny; y++) { const o = y * nx; let sm = 0, c = 0;
