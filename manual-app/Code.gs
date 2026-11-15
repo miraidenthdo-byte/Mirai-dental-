@@ -361,7 +361,7 @@ function adminData(token) {
       sessions: sessions.filter(x => String(x[1]) === String(r[0])).map(x => ({ device: String(x[2]), lastSeen: when_(x[4]) }))
     })),
     progress: progress,
-    line: lineReady_()
+    slack: slackReady_()
   };
 }
 
@@ -519,78 +519,69 @@ function getMediaChunk(token, id, offset, length) {
   return { size: bytes.length, mime: file.getMimeType(), data: Utilities.base64Encode(bytes.slice(start, end)) };
 }
 
-/* ---------- LINE通知（管理者へ） ---------- */
-// LINE公式アカウント（Messaging API）から、管理者のLINEにメッセージを送る。
-// チャネルアクセストークンとユーザーIDは、管理者ページの「LINE通知」で登録する（スクリプトのプロパティに保存）。
+/* ---------- Slack通知 ---------- */
+// Slack の「Incoming Webhook」のURLへ送る。URLは管理者ページの「Slack通知」で登録する（スクリプトのプロパティに保存し、画面には返さない）。
 
 const CAT_NAMES = {
   reception: '受付・会計', assist: '診療補助', hygiene: '衛生士業務', steril: '滅菌・消毒', emergency: '緊急時対応',
   open: '開院・閉院', patient: '患者さま対応', material: '器具・材料', chart: 'カルテ・用語', rules: '院内ルール・申請'
 };
+const SLACK_URL_RE = /^https:\/\/hooks\.slack\.com\/services\/[A-Za-z0-9_\/-]+$/;
 
-function lineReady_() {
-  const p = props_();
-  return !!(p.getProperty('LINE_TOKEN') && p.getProperty('LINE_TO'));
+function slackReady_() {
+  return !!props_().getProperty('SLACK_URL');
 }
 
-function sendLine_(text) {
-  const p = props_();
-  const tok = p.getProperty('LINE_TOKEN'), to = p.getProperty('LINE_TO');
-  if (!tok || !to) throw new Error('LINE_UNSET');
-  const res = UrlFetchApp.fetch('https://api.line.me/v2/bot/message/push', {
+const slackEsc_ = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+function sendSlack_(text) {
+  const url = props_().getProperty('SLACK_URL');
+  if (!url) throw new Error('SLACK_UNSET');
+  const res = UrlFetchApp.fetch(url, {
     method: 'post',
     contentType: 'application/json',
-    headers: { Authorization: 'Bearer ' + tok },
-    payload: JSON.stringify({ to: to, messages: [{ type: 'text', text: String(text).slice(0, 4900) }] }),
+    payload: JSON.stringify({ text: String(text).slice(0, 3900) }),
     muteHttpExceptions: true
   });
-  if (res.getResponseCode() !== 200) throw new Error('LINE_' + res.getResponseCode());
+  if (res.getResponseCode() !== 200) throw new Error('SLACK_' + res.getResponseCode() + ' ' + String(res.getContentText()).slice(0, 60));
 }
 
 // 通知に失敗しても、マニュアルの保存は取り消さない
 function notifyManual_(kind, m, who) {
-  if (!lineReady_()) return;
+  if (!slackReady_()) return;
   try {
-    const icon = { 追加: '🆕', 更新: '📝', 削除: '🗑' }[kind] || '📝';
+    const icon = { 追加: ':new:', 更新: ':memo:', 削除: ':wastebasket:' }[kind] || ':memo:';
     const name = who.admin ? '管理者' : who.staff.name + 'さん';
     const url = ScriptApp.getService().getUrl();
-    sendLine_([
+    sendSlack_([
       icon + ' マニュアルが' + kind + 'されました',
-      '「' + String(m.title || '（無題）') + '」（' + (CAT_NAMES[m.cat] || 'その他') + '）',
-      kind + 'した人：' + name,
-      Utilities.formatDate(new Date(), 'Asia/Tokyo', 'M月d日 HH:mm'),
-      kind !== '削除' && url ? url + '?m=' + encodeURIComponent(m.id) : ''
+      '*「' + slackEsc_(m.title || '（無題）') + '」*（' + (CAT_NAMES[m.cat] || 'その他') + '）',
+      kind + 'した人：' + slackEsc_(name) + '　' + Utilities.formatDate(new Date(), 'Asia/Tokyo', 'M月d日 HH:mm'),
+      kind !== '削除' && url ? '<' + url + '?m=' + encodeURIComponent(m.id) + '|アプリで開く>' : ''
     ].filter(Boolean).join('\n'));
   } catch (e) {
-    console.warn('LINE通知に失敗しました: ' + e.message);
+    console.warn('Slack通知に失敗しました: ' + e.message);
   }
 }
 
 // 空のまま保存すると通知を止める
-function setLine(token, channelToken, userId) {
+function setSlack(token, url) {
   requireAdmin_(token);
-  channelToken = String(channelToken || '').trim();
-  userId = String(userId || '').trim();
-  const p = props_();
-  if (!channelToken && !userId) {
-    p.deleteProperty('LINE_TOKEN');
-    p.deleteProperty('LINE_TO');
-    return false;
-  }
-  if (!/^U[0-9a-f]{32}$/.test(userId) || channelToken.length < 20) throw new Error('FORMAT');
-  p.setProperty('LINE_TOKEN', channelToken);
-  p.setProperty('LINE_TO', userId);
+  url = String(url || '').trim();
+  if (!url) { props_().deleteProperty('SLACK_URL'); return false; }
+  if (!SLACK_URL_RE.test(url)) throw new Error('FORMAT');
+  props_().setProperty('SLACK_URL', url);
   return true;
 }
 
-function testLine(token) {
+function testSlack(token) {
   requireAdmin_(token);
-  sendLine_('🌸 みらい歯科 院内マニュアル\nLINE通知のテストです。マニュアルが追加・更新・削除されると、ここにお知らせが届きます。');
+  sendSlack_(':cherry_blossom: *みらい歯科 院内マニュアル*\nSlack通知のテストです。マニュアルが追加・更新・削除されると、ここにお知らせが届きます。');
   return true;
 }
 
-// 初回だけ、エディタでこの関数を選んで「実行」し、外部への送信（LINE）を許可する
+// 初回だけ、エディタでこの関数を選んで「実行」し、外部への送信（Slack）を許可する
 function authorize() {
-  UrlFetchApp.fetch('https://api.line.me/v2/bot/info', { muteHttpExceptions: true });
+  UrlFetchApp.fetch('https://slack.com', { muteHttpExceptions: true });
   return 'OK';
 }
