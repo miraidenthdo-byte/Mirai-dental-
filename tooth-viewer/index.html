@@ -3141,7 +3141,16 @@ function traceCanals(I, solid, canal, depth, nx, ny, nz, sp, dMed, th, tmp, te =
   }
   // 4b) 平たい歯根の2本目の根管（上顎大臼歯の近心頬側根の MB2 など）：細く薄いため上の基準では拾えない。
   //     同じ歯根の断面（扁平な塊）の中で、検出済みの根管と 0.5〜2.5mm 離れて平行に走る、やや薄い暗点の列（長さ1mm以上）だけを緩い基準で採用する
-  if (!window.DEBUG_NOMB2) {
+  // MB2 は上顎大臼歯（6番・7番）の近心頬側根にある根管なので、上顎の大臼歯だけで探す（ほかの歯に余分な根管を足さない）。
+  // 歯番が未設定のときは、上顎で歯冠の断面が大きい（60mm²以上＝大臼歯）ときだけ
+  let mb2Target = false;
+  if ($('jaw').value === 'upper') {
+    const tn = $('toothNo').value;
+    if (tn) mb2Target = /^[12][67]$/.test(tn);
+    else { let mA = 0; for (let z = 0; z < nz; z++) { let a = 0; for (let i = z * nxy, e = i + nxy; i < e; i++) a += solid[i]; if (a > mA) mA = a; } mb2Target = mA * vs * vs >= 60; }
+  }
+  if (window.FORCE_MB2) mb2Target = true;
+  if (!window.DEBUG_NOMB2 && mb2Target) {
     const T2 = Math.max(srt[Math.floor(srt.length * (window.CT2 ?? 0.5))], 0.06 * (dMed - th));
     const id2 = [];
     for (let k = 0; k < cc.length; k++) if (cc[k] > T2) id2.push(k);
