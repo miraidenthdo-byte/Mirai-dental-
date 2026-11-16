@@ -129,7 +129,7 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 3
 
   <section>
     <h2><span class="num">2</span>歯の選択</h2>
-    <div class="hint">断面画像上で<b>抽出したい歯をダブルクリック</b>すると、その歯を認識して上顎／下顎を判定し、黄色い枠（範囲）を自動で置きます（歯冠・歯根のどこでも可）。枠の ■・● をドラッグして調整し、「範囲を決定して解析」で解析します。「🦷 歯を選択」を押してからクリックすると、解析の前に枠を調整できます。黄色い枠（ROI）の中から、その歯だけを抽出します。<br>
+    <div class="hint">断面画像上で<b>抽出したい歯をダブルクリック</b>すると、その歯を認識して上顎／下顎を判定し、黄色い枠（範囲）を自動で置きます（歯冠・歯根のどこでも可）。枠の ■・● をドラッグして調整し、「範囲を決定して解析」で解析します。「🦷 歯を選択」を押してからクリックすると、解析の前に枠を調整できます（もう一度押すと枠を消して閲覧モードに戻ります）。黄色い枠（ROI）の中から、その歯だけを抽出します。<br>
       <kbd>ホイール</kbd> スライス送り / <kbd>Ctrl</kbd>+<kbd>ホイール</kbd> 拡大 / <kbd>右ドラッグ</kbd> 移動</div>
     <div class="flex" style="margin-bottom:6px">
       <label class="muted">歯番 (FDI)</label>
@@ -1373,7 +1373,7 @@ class SliceView {
     }
     // ROI
     this.handles = []; this.faces = [];
-    if (roi && F) {
+    if (roi && F && !S.boxHidden) {
       // 傾けた枠（直方体）の辺をこの断面へ投影して描く
       const scr = (q) => { const [a, b] = this.toImg(q[0], q[1], q[2]); return [t.ox + (a + 0.5) * t.px, t.oy + (b + 0.5) * t.py]; };
       const C = F.corners.map(scr), dists = F.corners.map((q) => this.distMm(q));
@@ -3813,6 +3813,7 @@ $('brushBtn').onclick = () => setTool(S.tool === 'brush' ? 'view' : 'brush');
 /** 操作モード：閲覧 / 歯を選択 / 距離 / 除外ブラシ */
 function setTool(t) {
   S.tool = t; S.meas.on = t === 'meas'; S.brush.on = t === 'brush';
+  if (t === 'seed') S.boxHidden = false;
   if (t === 'meas') S.meas.pts = [];
   document.querySelectorAll('[data-tool]').forEach((b) => b.classList.toggle('on', b.dataset.tool === t));
   $('measBtn').classList.toggle('primary', t === 'meas'); $('brushBtn').classList.toggle('primary', t === 'brush');
@@ -3823,7 +3824,11 @@ function setTool(t) {
     meas: '距離：断面上で2点をクリックしてください', brush: '除外ブラシ：抽出から外したい部分（骨・隣在歯など）をなぞってください' }[t]);
   renderAll();
 }
-document.querySelectorAll('[data-tool]').forEach((b) => (b.onclick = () => setTool(b.dataset.tool)));
+// 「歯を選択」をもう一度押すと、範囲の枠を消して閲覧モードに戻る（次に「歯を選択」を押すか歯をダブルクリックすると再び表示）
+document.querySelectorAll('[data-tool]').forEach((b) => (b.onclick = () => {
+  if (b.dataset.tool === 'seed' && S.tool === 'seed') { S.boxHidden = true; setTool('view'); setStatus('範囲の枠を隠して閲覧モードに戻りました（「🦷 歯を選択」で再表示）'); return; }
+  setTool(b.dataset.tool);
+}));
 /** 1画面表示の切り替え（ダブルクリック／拡大ボタン） */
 function toggleSolo(el) {
   const V = $('views'), on = !(V.classList.contains('solo') && el.classList.contains('solo-on'));
