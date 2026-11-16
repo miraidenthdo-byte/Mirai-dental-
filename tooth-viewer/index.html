@@ -261,13 +261,16 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 3
 </div>
 
 <div class="dropzone" id="dropzone">ここにDICOMフォルダ／ファイルをドロップ</div>
-<div class="progress" id="progress"><div id="progressText">処理中…</div><div class="bar"><i id="progressBar"></i></div></div>
+<div class="progress" id="progress"><div id="progressText">処理中…</div><div class="bar"><i id="progressBar"></i></div><button id="progressCancel" hidden style="margin-top:10px;width:100%" title="範囲がおかしいときなどに解析を中止します（Esc キーでも可）">✖ 解析をキャンセル</button></div>
 
 <script>
 'use strict';
 const $ = (id) => document.getElementById(id);
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
-const sleep0 = () => new Promise((r) => setTimeout(r, 0));
+// 解析の区切りごとに画面へ制御を戻す。解析中にキャンセルが押されていたら、ここで解析を中止する
+const sleep0 = () => new Promise((r, rej) => setTimeout(() => {
+  if (S.busy && S.cancelReq) { const e = new Error('cancelled'); e.cancelled = true; rej(e); } else r();
+}, 0));
 
 /* =====================================================================
  *  DICOM パーサ（非圧縮 Implicit/Explicit Little Endian、JPEG Baseline）
@@ -692,7 +695,7 @@ const S = {
 function vget(x, y, z) { return S.vol.slices[z][y * S.vol.nx + x]; }
 
 function setStatus(t, warn) { const el = $('status'); el.textContent = t; el.className = warn ? 'warn' : ''; }
-function showProgress(t, p) { $('progress').classList.add('on'); $('progressText').textContent = t; $('progressBar').style.width = (p * 100).toFixed(0) + '%'; }
+function showProgress(t, p) { $('progressCancel').hidden = !S.busy; $('progressCancel').disabled = !!S.cancelReq; $('progress').classList.add('on'); $('progressText').textContent = t; $('progressBar').style.width = (p * 100).toFixed(0) + '%'; }
 function hideProgress() { $('progress').classList.remove('on'); }
 
 function setVolume(vol, note) {
@@ -3774,11 +3777,27 @@ function markDirty() {
 }
 function runExtract() {
   if (S.busy || !S.seed) return;
-  S.busy = true; S.dirty = false; $('decideBar').hidden = true;
-  extract().catch((e) => { hideProgress(); setStatus('抽出に失敗しました: ' + (e && e.message || e), true); console.error(e); })
+  S.busy = true; S.cancelReq = false; S.dirty = false; $('decideBar').hidden = true;
+  extract().catch((e) => {
+    hideProgress();
+    if (e && e.cancelled) {
+      // キャンセル：やり直しの予約も取り消し、範囲を調整してから「範囲を決定して解析」で再開できるようにする
+      S.rerun = false; S.autoAxisPending = false;
+      setStatus('解析をキャンセルしました。枠（範囲）や選択点を調整して、「範囲を決定して解析」で解析し直せます');
+      S.busy = false; markDirty(); renderAll();
+      return;
+    }
+    setStatus('抽出に失敗しました: ' + (e && e.message || e), true); console.error(e);
+  })
     .finally(() => { S.busy = false; if (S.rerun) { S.rerun = false; runExtract(); } });
 }
 $('extractBtn').onclick = runExtract;
+function cancelExtract() {
+  if (!S.busy || S.cancelReq) return;
+  S.cancelReq = true; $('progressCancel').disabled = true; $('progressText').textContent = 'キャンセルしています…';
+}
+$('progressCancel').onclick = cancelExtract;
+window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && S.busy) cancelExtract(); });
 // 不具合報告用の診断情報（患者情報・シリーズ名は含めない）
 $('copyDiag').onclick = async () => {
   const v = S.vol, val = (id) => $(id) && ($(id).type === 'checkbox' ? $(id).checked : $(id).value);
