@@ -129,7 +129,7 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 3
 
   <section>
     <h2><span class="num">2</span>歯の選択</h2>
-    <div class="hint">断面画像上で<b>抽出したい歯をダブルクリック</b>すると、その歯を認識してすぐ解析します（歯冠・歯根のどこでも可）。「🦷 歯を選択」を押してからクリックすると、解析の前に枠を調整できます。黄色い枠（ROI）の中から、その歯だけを抽出します。<br>
+    <div class="hint">断面画像上で<b>抽出したい歯をダブルクリック</b>すると、その歯を認識して上顎／下顎を判定し、黄色い枠（範囲）を自動で置きます（歯冠・歯根のどこでも可）。枠の ■・● をドラッグして調整し、「範囲を決定して解析」で解析します。「🦷 歯を選択」を押してからクリックすると、解析の前に枠を調整できます。黄色い枠（ROI）の中から、その歯だけを抽出します。<br>
       <kbd>ホイール</kbd> スライス送り / <kbd>Ctrl</kbd>+<kbd>ホイール</kbd> 拡大 / <kbd>右ドラッグ</kbd> 移動</div>
     <div class="flex" style="margin-bottom:6px">
       <label class="muted">歯番 (FDI)</label>
@@ -170,7 +170,7 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 3
     <label class="check"><input id="boneSep" type="checkbox" checked>骨と歯の濃度差で分離（骨が歯根に密着している場合）</label>
     <label class="check"><input id="hiRes" type="checkbox" checked>高精度モード（サブボクセル補間・推奨）</label>
     <label class="check"><input id="preview" type="checkbox" checked>断面にオーバーレイ表示</label>
-    <label class="check"><input id="autoExtract" type="checkbox">歯をクリックしたらすぐ解析する（範囲の調整をしない場合）</label>
+    <label class="check"><input id="autoExtract" type="checkbox">歯をクリック／ダブルクリックしたらすぐ解析する（範囲を手で調整しない全自動。歯軸合わせも自動）</label>
     <div class="flex"><button id="autoTh">ROIから自動設定</button></div>
     <div class="hint">・歯が骨とつながって抽出される → 「骨／歯の境界」の自動を外し、骨がオレンジ・歯が緑になるまで上げる／ROIを狭める<br>
       ・根管が途切れる → 「根管感度」を上げる<br>
@@ -234,7 +234,7 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 3
   <div class="grp"><button id="resetViews" title="拡大・移動を元に戻す（R キー）">表示リセット</button>
     <button id="resetMpr" title="十字線の回転（斜め断面）を元に戻す">回転リセット</button>
     <label class="check" style="margin:0"><input id="xhair" type="checkbox" checked>十字線</label></div>
-  <div class="help">ホイール：スライス送り ／ 右ドラッグ：明るさ・コントラスト ／ 中ドラッグ・Shift+ドラッグ：移動 ／ Ctrl+ホイール：拡大 ／ <b>歯をダブルクリック：その歯を抽出</b>（歯のない所：1画面表示） ／ ↑↓・PageUp/Down：スライス ／ <b>十字線の線（○）をドラッグ：回転（斜め断面）</b></div>
+  <div class="help">ホイール：スライス送り ／ 右ドラッグ：明るさ・コントラスト ／ 中ドラッグ・Shift+ドラッグ：移動 ／ Ctrl+ホイール：拡大 ／ <b>歯をダブルクリック：その歯に枠を自動で置く</b>（歯のない所：1画面表示） ／ ↑↓・PageUp/Down：スライス ／ <b>十字線の線（○）をドラッグ：回転（斜め断面）</b></div>
 </div>
 <div class="views" id="views">
   <div class="view"><canvas id="cvAx"></canvas><div class="vlabel"><i class="pl" style="background:#4f8bff"></i>アキシャル（水平断）<small id="lblAx"></small></div><div class="vinfo" id="infoAx"></div></div>
@@ -251,7 +251,7 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 3
       <div><i id="lgE"></i>エナメル質</div><div><i id="lgD"></i>象牙質</div>
       <div><i id="lgP"></i><span id="lgPtxt">歯髄・根管</span></div><div id="lgSrow" hidden><i id="lgS"></i><span id="lgStxt">根管の疑い（CTで薄い暗がり）</span></div><div id="lgBrow"><i id="lgB"></i>周囲の骨</div>
     </div>
-    <div class="empty3d" id="empty3d"><div id="emptyMsg">① DICOMを開く → ② 断面で歯をダブルクリック（すぐ解析）または「歯を選択」でクリック → ③ 範囲を調整 → ④「範囲を決定して解析」<br>
+    <div class="empty3d" id="empty3d"><div id="emptyMsg">① DICOMを開く → ② 断面で歯をダブルクリック（枠を自動で配置） → ③ 範囲を調整 → ④「範囲を決定して解析」<br>
       ドラッグで回転 / ホイールで拡大縮小 / ダブルクリックでリセット</div>
       <button id="go3d" class="primary" hidden>✅ 範囲を決定して解析</button></div>
     <div class="decide" id="decideBar" hidden><span>範囲を調整中です。決まったら押してください</span><button id="decideBtn" class="primary">✅ 範囲を決定して解析</button></div>
@@ -933,6 +933,30 @@ function setSeed(p) {
  * ダブルクリックした歯を選択して解析する。クリック点の近く（断面内2mm）に硬組織がなければ false。
  * 選択点は歯冠の中央へ自動で移す（歯根・咬頭・歯冠の端どこをクリックしても同じ歯・同じ結果）
  */
+/**
+ * ダブルクリック時の枠の自動設定（解析の前）：歯冠の断面（咬合面から 2.5〜5.5mm）の広がり＋周囲 1.5mm に枠の中心と幅を合わせ、
+ * 歯冠側は咬合面＋1mm まで（対合歯を枠に入れない）、根尖側は 20mm にする。ここで決めた枠を手で調整してから解析する
+ */
+function prefitBox() {
+  const v = S.vol, ci = S.crownInfo; if (!ci || !S.seed) return false;
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const mm of [2.5, 4, 5.5]) {
+    const z = Math.round(ci.zTop - ci.dir * mm / v.sz); if (z < 0 || z >= v.nz) continue;
+    const c = crownCentroid(v, z, ci.cx, ci.cy, ci.half, 12);
+    if (!c || !c.bb) continue;
+    x0 = Math.min(x0, c.bb[0]); x1 = Math.max(x1, c.bb[1]); y0 = Math.min(y0, c.bb[2]); y1 = Math.max(y1, c.bb[3]);
+  }
+  if (!(x1 > x0 && y1 > y0)) return false;
+  const m = 1.5, [sx, sy, sz] = S.seed;
+  const wx = (x1 - x0) * v.sx + 2 * m, wy = (y1 - y0) * v.sy + 2 * m;
+  setVal('roiX', clamp(Math.round(wx * 2) / 2, 4, 40)); setVal('roiY', clamp(Math.round(wy * 2) / 2, 4, 40));
+  S.shift = [Math.round(((x0 + x1) / 2 - sx) * v.sx * 10) / 10, Math.round(((y0 + y1) / 2 - sy) * v.sy * 10) / 10];
+  // 上方・下方（スライス番号の増える向きが「上方」）：歯冠側は咬合面＋1mm、根尖側は 20mm
+  const crownMm = clamp(Math.round((Math.abs(ci.zTop - sz) * v.sz + 1) * 2) / 2, 2, 40), rootMm = 20;
+  const crownIsUp = (ci.zTop - sz) > 0;
+  setVal('roiUp', crownIsUp ? crownMm : rootMm); setVal('roiDn', crownIsUp ? rootMm : crownMm);
+  return true;
+}
 function selectToothAt(p) {
   const v = S.vol, q = p.map((x, k) => clamp(Math.round(x), 0, [v.nx, v.ny, v.nz][k] - 1));
   const hardTh = v.p01 + 0.5 * (v.p999 - v.p01), r = Math.ceil(2 / v.sx), sl = v.slices[q[2]];
@@ -948,9 +972,21 @@ function selectToothAt(p) {
   setSeed(best); S.seedClick = q.slice();
   // ダブルクリックは全自動：以前に手で動かしたしきい値は使わず、選んだ歯から決め直す
   S.thManual = false;
-  setVal('tiltX', 0); setVal('tiltY', 0); setVal('tiltZ', 0); S.autoAxisPending = true;
+  setVal('tiltX', 0); setVal('tiltY', 0); setVal('tiltZ', 0);
+  S.crownInfo = null;
   autoThreshold(true);
-  if (S.busy) S.rerun = true; else runExtract();
+  const fitted = prefitBox();
+  if ($('autoExtract').checked) {
+    // 「すぐ解析する」設定のときは従来どおり全自動（歯軸合わせまで）
+    S.autoAxisPending = true;
+    if (S.busy) S.rerun = true; else runExtract();
+    return true;
+  }
+  // 既定：枠を自動で置いたところで止め、手で調整してから「範囲を決定して解析」で解析する。解析中に枠を勝手に変えない
+  S.autoAxisPending = false; S.autoFit = S.autoFit2 = false;
+  if (S.tool !== 'seed') setTool('seed');
+  renderAll(); markDirty();
+  setStatus((S.jawNote || '') + (fitted ? '枠（黄色）を自動で置きました。' : '') + '各断面の ■（面）・●（傾き）をドラッグして範囲を調整し、「範囲を決定して解析」（または Enter）で解析してください');
   return true;
 }
 function updateSeedInfo() {
@@ -987,7 +1023,7 @@ class SliceView {
     });
     canvas.addEventListener('wheel', (e) => this.wheel(e), { passive: false });
     canvas.addEventListener('pointerenter', () => { S.hoverView = this; });
-    canvas.addEventListener('pointerleave', () => { if (this.info) this.info.textContent = ''; });
+    canvas.addEventListener('pointerleave', () => { if (this.info) this.info.textContent = ''; if (this.hotKey) { this.hot = null; this.hotKey = ''; this.render(); } });
     // ダブルクリック：歯の上なら、その歯を選択してすぐ解析／歯がない所なら1画面表示の切り替え
     canvas.addEventListener('dblclick', (e) => {
       if (!S.vol || S.meas.on || S.brush.on) return;
@@ -1078,10 +1114,17 @@ class SliceView {
     if (S.brush.on) { this.drag = 'brush'; S.brush.groups.push([]); this.paint(e); return; }
     const [, , sx, sy] = this.evtImg(e), dpr = this.cv.width / this.cv.getBoundingClientRect().width;
     if (this.handles && S.seed && S.tool === 'seed') {
-      const h = this.handles.find((q) => Math.hypot(q.x - sx, q.y - sy) < 12 * dpr);
-      if (h) { this.drag = h.end === 'rot' ? 'rot' : 'tilt'; this.tiltEnd = h.end; return; }
-      const f = (this.faces || []).find((q) => Math.hypot(q.x - sx, q.y - sy) < 11 * dpr);
-      if (f) { this.drag = 'face'; this.face = f; return; }
+      const hit = this.hitHandle(sx, sy, dpr);
+      if (hit && hit.type === 'handle') { this.drag = hit.h.end === 'rot' ? 'rot' : 'tilt'; this.tiltEnd = hit.h.end; return; }
+      if (hit && hit.type === 'face') {
+        // つかんだ位置と面の位置のずれを覚えておき、ドラッグ開始時に面が跳ばないようにする
+        const [i, j] = this.evtImg(e), F = roiFrame(), f = hit.h;
+        const l = F.toLocal(...this.toVox(i - 0.5, j - 0.5));
+        const facePos = f.k === 0 ? F.shx + f.sg * F.hx : f.k === 1 ? F.shy + f.sg * F.hy : (f.sg > 0 ? F.up : -F.dn);
+        this.drag = 'face'; this.face = f; this.faceOff = l[f.k] - facePos; return;
+      }
+      // ハンドルの近く（枠の線のすぐそば）を押し損ねたときは、歯の選び直しにしない（枠が跳ぶのを防ぐ）
+      if (this.nearBoxEdge(sx, sy, dpr)) return;
     }
     if (S.tool === 'seed') { this.drag = 'pick'; this.pick(e); return; }
     // 閲覧：十字線の線の上（中心から離れた所）をつかむと回転、それ以外は十字線の移動
@@ -1123,6 +1166,15 @@ class SliceView {
   move(e) {
     if (S.vol) this.hover(e);
     if (!this.drag) {
+      // 枠の操作ハンドルの上ではカーソルを変え、そのハンドルを強調する
+      if (S.vol && S.seed && S.tool === 'seed') {
+        const [, , sx, sy] = this.evtImg(e), dpr = this.cv.width / this.cv.getBoundingClientRect().width, hit = this.hitHandle(sx, sy, dpr);
+        const hot = hit ? { type: hit.type, end: hit.h.end, k: hit.h.k, sg: hit.h.sg } : null;
+        const key = hot ? [hot.type, hot.end, hot.k, hot.sg].join() : '';
+        this.cv.style.cursor = hit ? (hit.type === 'face' ? 'move' : 'grab') : 'pointer';
+        if (key !== (this.hotKey || '')) { this.hot = hot; this.hotKey = key; this.render(); }
+        return;
+      }
       // 十字線の上では回転できることをカーソルで示す
       if (S.vol && S.tool === 'view' && $('xhair').checked) {
         const [, , sx, sy] = this.evtImg(e), dpr = this.cv.width / this.cv.getBoundingClientRect().width, X = this.xhairLines();
@@ -1151,10 +1203,28 @@ class SliceView {
       this.lastX = e.clientX; this.lastY = e.clientY; this.render();
     }
   }
+  /** 枠の操作ハンドル（● 傾き・回転、■ 面）のうち、押した位置に最も近いもの（画面上 22px 以内） */
+  hitHandle(sx, sy, dpr) {
+    let best = null, bd = 22 * dpr;
+    for (const h of this.handles || []) { const d = Math.hypot(h.x - sx, h.y - sy); if (d < bd) { bd = d; best = { type: 'handle', h }; } }
+    for (const h of this.faces || []) { const d = Math.hypot(h.x - sx, h.y - sy); if (d < bd) { bd = d; best = { type: 'face', h }; } }
+    return best;
+  }
+  /** 押した位置が枠の辺のすぐそば（8px 以内）か */
+  nearBoxEdge(sx, sy, dpr) {
+    const segs = this.boxSegs || [], tol = 8 * dpr;
+    for (const [a, b] of segs) {
+      const dx = b[0] - a[0], dy = b[1] - a[1], L2 = dx * dx + dy * dy || 1;
+      const t = clamp(((sx - a[0]) * dx + (sy - a[1]) * dy) / L2, 0, 1);
+      if (Math.hypot(a[0] + t * dx - sx, a[1] + t * dy - sy) < tol) return true;
+    }
+    return false;
+  }
   /** 枠の1面だけを動かす（反対側の面は固定。選択点は常に枠の内側） */
   moveFace(e) {
     const [i, j] = this.evtImg(e), F = roiFrame(); if (!F) return;
     const l = F.toLocal(...this.toVox(i - 0.5, j - 0.5)), { k, sg } = this.face;
+    l[k] -= this.faceOff || 0;
     if (k < 2) {
       const half = k === 0 ? F.hx : F.hy, c = k === 0 ? F.shx : F.shy;
       let lo = c - half, hi = c + half;
@@ -1310,11 +1380,13 @@ class SliceView {
       const inside = Math.min(...dists) <= 0 && Math.max(...dists) >= 0;
       ctx.strokeStyle = inside ? 'rgba(255,210,63,0.9)' : 'rgba(255,210,63,0.35)'; ctx.lineWidth = 1.3 * dpr;
       if (!inside) ctx.setLineDash([6, 4]);
-      ctx.beginPath();
-      for (const [p0i, p1i] of [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]]) { ctx.moveTo(...C[p0i]); ctx.lineTo(...C[p1i]); }
+      ctx.beginPath(); this.boxSegs = [];
+      for (const [p0i, p1i] of [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]]) { ctx.moveTo(...C[p0i]); ctx.lineTo(...C[p1i]); this.boxSegs.push([C[p0i], C[p1i]]); }
       ctx.stroke(); ctx.setLineDash([]);
       // 歯軸線と、傾きを変えるハンドル（コロナル・サジタル）
-      const top = scr(F.toVox(F.shx, F.shy, F.up + 3)), bot = scr(F.toVox(F.shx, F.shy, -F.dn - 3)), sp = scr(S.seed);
+      // ●（傾き・回転）は ■（面）と取り違えないよう、枠の端から画面上で 40px 以上（かつ 6mm 以上）離して置く
+      const pxPerMm = t.px / this.P().s, hoff = Math.max(6, 40 * dpr / pxPerMm);
+      const top = scr(F.toVox(F.shx, F.shy, F.up + hoff)), bot = scr(F.toVox(F.shx, F.shy, -F.dn - hoff)), sp = scr(S.seed);
       ctx.strokeStyle = '#ffd23f'; ctx.lineWidth = 2 * dpr;
       ctx.beginPath(); ctx.moveTo(...bot); ctx.lineTo(...top); ctx.stroke();
       ctx.fillStyle = '#ffd23f';
@@ -1323,17 +1395,18 @@ class SliceView {
       if (!editBox) { /* 閲覧中は枠の操作ハンドルを出さない（十字線の操作を優先） */ }
       else if (this.axis === 2) {
         // 水平断：枠の外側の●をドラッグして水平面内で回転
-        const rp = scr(F.toVox(F.shx + F.hx + 3, F.shy, 0));
+        const rp = scr(F.toVox(F.shx + F.hx + hoff, F.shy, 0));
         ctx.strokeStyle = 'rgba(255,210,63,0.7)'; ctx.lineWidth = 1.5 * dpr; ctx.setLineDash([4, 3]);
         ctx.beginPath(); ctx.moveTo(...sp); ctx.lineTo(...rp); ctx.stroke(); ctx.setLineDash([]);
-        ctx.beginPath(); ctx.arc(rp[0], rp[1], 6 * dpr, 0, Math.PI * 2);
+        ctx.beginPath(); ctx.arc(rp[0], rp[1], (this.hot && this.hot.type === 'handle' && this.hot.end === 'rot' ? 10 : 8) * dpr, 0, Math.PI * 2);
         ctx.fillStyle = '#1e232c'; ctx.fill(); ctx.lineWidth = 2 * dpr; ctx.strokeStyle = '#ffd23f'; ctx.stroke();
         ctx.beginPath(); ctx.arc(rp[0], rp[1], 2.5 * dpr, 0, Math.PI * 2); ctx.fillStyle = '#ffd23f'; ctx.fill();
         this.handles.push({ x: rp[0], y: rp[1], end: 'rot' });
       } else {
         for (const [pt, end] of [[top, 1], [bot, -1]]) {
-          ctx.beginPath(); ctx.arc(pt[0], pt[1], 6 * dpr, 0, Math.PI * 2);
-          ctx.fillStyle = '#1e232c'; ctx.fill(); ctx.lineWidth = 2 * dpr; ctx.strokeStyle = '#ffd23f'; ctx.stroke();
+          const hot = this.hot && this.hot.type === 'handle' && this.hot.end === end;
+          ctx.beginPath(); ctx.arc(pt[0], pt[1], (hot ? 10 : 8) * dpr, 0, Math.PI * 2);
+          ctx.fillStyle = hot ? '#ffd23f' : '#1e232c'; ctx.fill(); ctx.lineWidth = 2.5 * dpr; ctx.strokeStyle = hot ? '#fff' : '#ffd23f'; ctx.stroke();
           this.handles.push({ x: pt[0], y: pt[1], end });
         }
       }
@@ -1342,8 +1415,9 @@ class SliceView {
       if (editBox) for (const [k, sg, L] of [[0, 1, [F.shx + F.hx, F.shy, mz]], [0, -1, [F.shx - F.hx, F.shy, mz]], [1, 1, [F.shx, F.shy + F.hy, mz]], [1, -1, [F.shx, F.shy - F.hy, mz]], [2, 1, [F.shx, F.shy, F.up]], [2, -1, [F.shx, F.shy, -F.dn]]]) {
         const nrm = P.n[0] * F.Rm[k] + P.n[1] * F.Rm[3 + k] + P.n[2] * F.Rm[6 + k];
         if (Math.sqrt(Math.max(0, 1 - nrm * nrm)) < 0.5) continue;
-        const pt = scr(F.toVox(...L)), hs = 5 * dpr;
-        ctx.fillStyle = '#ffd23f'; ctx.fillRect(pt[0] - hs, pt[1] - hs, 2 * hs, 2 * hs);
+        const pt = scr(F.toVox(...L));
+        const hot = this.hot && this.hot.type === 'face' && this.hot.k === k && this.hot.sg === sg, hs = (hot ? 9 : 7) * dpr;
+        ctx.fillStyle = hot ? '#fff' : '#ffd23f'; ctx.fillRect(pt[0] - hs, pt[1] - hs, 2 * hs, 2 * hs);
         ctx.strokeStyle = '#1e232c'; ctx.lineWidth = 1.5 * dpr; ctx.strokeRect(pt[0] - hs, pt[1] - hs, 2 * hs, 2 * hs);
         this.faces.push({ x: pt[0], y: pt[1], k, sg });
       }
@@ -1497,6 +1571,7 @@ function crownSeed(b) {
   }
   const zc = Math.round(zTop - dir * 6.5 / v.sz);
   if (zc < 0 || zc >= v.nz) return false;
+  S.crownInfo = { zTop, dir, half, cx, cy };
   if (window.DEBUG_SEP) console.log('crownSeed', S.seed.join(','), '->', cx, cy, zc, 'top', zTop);
   if (cx === sx && cy === sy && zc === sz) return false;
   S.snapping = true;
@@ -1560,11 +1635,16 @@ function crownCentroid(v, z, x0, y0, th, Rmm) {
     // 1段（0.25mm）の収縮で面積は1〜2割しか減らない。3割以上減るか重心が1.5mm以上動いたら、何かが切り離された
     const c = [x0 - r + mx / cnt, y0 - r + my / cnt];
     const split = prevCnt && (cnt < 0.72 * prevCnt || Math.hypot(c[0] - prevC[0], c[1] - prevC[1]) * s > 1.5);
-    if (!touch && (!res || split || res.touch)) res = { c: c.map(Math.round), touch };
+    if (!touch && (!res || split || res.touch)) {
+      let i0 = w, i1 = -1, j0 = w, j1 = -1;
+      for (let q = 0; q < n; q++) if (comp[q]) { const i = q % w, j = (q / w) | 0; if (i < i0) i0 = i; if (i > i1) i1 = i; if (j < j0) j0 = j; if (j > j1) j1 = j; }
+      const g = cm / s;   // 収縮した分を戻して元の歯冠の広がりにする
+      res = { c: c.map(Math.round), touch, bb: [x0 - r + i0 - g, x0 - r + i1 + g, y0 - r + j0 - g, y0 - r + j1 + g] };
+    }
     else if (touch && split) res = null;
     prevCnt = cnt; prevC = c;
   }
-  if (res) return res.c;
+  if (res) { const out = res.c; out.bb = res.bb; return out; }
   return null;
 }
 

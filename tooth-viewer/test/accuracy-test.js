@@ -15,7 +15,9 @@ const CASES = [
   { name: '第一大臼歯 15°傾斜＋歯軸自動合わせ', tooth: 1, demo: { s: 0.15, noise: 110, tilt: 15 }, autoAxis: true },
   { name: '第一大臼歯 骨が歯根に密着', tooth: 1, demo: { s: 0.15, noise: 110, bone: 1250, pdl: 0 } },
   // ダブルクリックでの選択（歯根側をクリック → 歯冠へ寄せる → 歯軸に合わせて自動で再解析）
-  { name: '第一大臼歯 15°傾斜 ダブルクリック（全自動）', tooth: 1, demo: { s: 0.15, noise: 110, tilt: 15 }, dbl: true },
+  { name: '第一大臼歯 15°傾斜 ダブルクリック（全自動）', tooth: 1, demo: { s: 0.15, noise: 110, tilt: 15 }, dbl: true, auto: true },
+  // ダブルクリックで枠を自動で置き、そのまま「範囲を決定して解析」を押した場合
+  { name: '第一大臼歯 ダブルクリック→そのまま解析', tooth: 1, demo: { s: 0.15, noise: 110 }, dbl: true },
 ];
 
 (async () => {
@@ -34,7 +36,11 @@ const CASES = [
     await page.waitForFunction(() => !document.getElementById('extractBtn').disabled, null, { timeout: 120000 });
     if (c.dbl) {
       // 歯根の途中（歯冠から約6mm根尖側）をダブルクリックしたのと同じ操作
-      await page.evaluate((ti) => { const xs = [9.0, 17.8, 26.4], s = S.vol.sx; selectToothAt([xs[ti] / s, 13 / s, 18 / s]); }, c.tooth);
+      await page.evaluate(([ti, auto]) => {
+        const xs = [9.0, 17.8, 26.4], s = S.vol.sx; $('autoExtract').checked = auto;
+        selectToothAt([xs[ti] / s, 13 / s, 18 / s]);
+        if (!auto) runExtract();   // 「範囲を決定して解析」を押したのと同じ
+      }, [c.tooth, !!c.auto]);
     } else {
       await page.evaluate((ti) => {
         const xs = [9.0, 17.8, 26.4], s = S.vol.sx;
