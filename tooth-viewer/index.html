@@ -696,7 +696,7 @@ function showProgress(t, p) { $('progress').classList.add('on'); $('progressText
 function hideProgress() { $('progress').classList.remove('on'); }
 
 function setVolume(vol, note) {
-  S.vol = vol; S.seg = null; S.seed = null; S.thManual = false; S.diag = null; $('diagOut').textContent = ''; S.shift = [0, 0]; S.brush.groups = [];
+  S.vol = vol; S.seg = null; S.seed = null; S.thManual = false; S.diag = null; $('diagOut').textContent = ''; S.shift = [0, 0]; S.brush.groups = []; S.occl = null;
   S.cursor = [vol.nx >> 1, vol.ny >> 1, vol.nz >> 1]; S.mpr = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
   // 上下の向き（DICOM の向き情報）に合わせて枠の上方・下方を設定し直す
   if ($('jaw').value !== 'both') applyJaw();
@@ -840,6 +840,87 @@ function sampleVol(v, X, Y, Z, bg) {
 }
 /** ボリュームの +z（スライス番号の増える向き）が患者の上（頭側）なら 1、下なら -1（DICOM の向き情報から） */
 function supSign() { const d = S.vol && S.vol.dirs; return d && d[2] && d[2][2] < 0 ? -1 : 1; }
+/**
+ * クリック位置から上顎／下顎を判定し、上下の歯の境目（咬合面）を求める。
+ * クリック点のまわり（半径5mmの柱）でエナメル質の帯（歯冠）を探し、上下の歯冠の間で硬組織が最も少ない高さを咬合面とする。
+ * 咬合して接していても、咬頭のかみ合わせに沿った境目を位置ごと（±14mm の範囲の各 x,y）に「最も暗い高さ」として求める。
+ * 戻り値 { jaw: 'upper'|'lower', zO, map } または null（判定できないとき）。map があれば、反対側の顎の歯を抽出から外す
+ */
+function detectOcclusion(p) {
+  const v = S.vol, sg = supSign(), [x0, y0, z0] = p.map(Math.round);
+  const rx = Math.ceil(5 / v.sx), ry = Math.ceil(5 / v.sy), span = Math.round(30 / v.sz);
+  const hardTh = v.p01 + 0.5 * (v.p999 - v.p01);
+  const zA = Math.max(0, z0 - span), zB = Math.min(v.nz - 1, z0 + span);
+  const cv = [];
+  for (let z = zA; z <= zB; z += 2) { const sl = v.slices[z];
+    for (let y = Math.max(0, y0 - ry); y <= Math.min(v.ny - 1, y0 + ry); y += 2) for (let x = Math.max(0, x0 - rx); x <= Math.min(v.nx - 1, x0 + rx); x += 2) { const q = sl[y * v.nx + x]; if (q > hardTh) cv.push(q); } }
+  if (cv.length < 200) return null;
+  // エナメル質のしきい値：硬組織を3群（骨／象牙質／エナメル質）に分けた上側の境目
+  const enTh = Math.max(multiOtsu(cv, 2)[0], multiOtsu(cv, 3)[1]);
+  const nZ = zB - zA + 1, E = new Float32Array(nZ), H = new Float32Array(nZ);
+  for (let z = zA; z <= zB; z++) { const sl = v.slices[z]; let e = 0, h = 0;
+    for (let y = Math.max(0, y0 - ry); y <= Math.min(v.ny - 1, y0 + ry); y++) for (let x = Math.max(0, x0 - rx); x <= Math.min(v.nx - 1, x0 + rx); x++) {
+      if (((x - x0) / rx) ** 2 + ((y - y0) / ry) ** 2 > 1) continue;
+      const q = sl[y * v.nx + x]; if (q > enTh) e++; if (q > hardTh) h++; }
+    E[z - zA] = e; H[z - zA] = h; }
+  let eMax = 0; for (let k = 0; k < nZ; k++) eMax = Math.max(eMax, E[k]);
+  const eMin = Math.max(2 / (v.sx * v.sy), 0.15 * eMax), w3 = Math.round(3 / v.sz), w4 = Math.round(4 / v.sz);
+  // 咬合面の候補：両側 4mm 以内にエナメル質があり、両側 3mm 以内の最大値の 7 割以下に硬組織が減る局所最小
+  const hasE = (a, b) => { for (let k = Math.max(0, a); k <= Math.min(nZ - 1, b); k++) if (E[k] >= eMin) return true; return false; };
+  const maxH = (a, b) => { let m = 0; for (let k = Math.max(0, a); k <= Math.min(nZ - 1, b); k++) m = Math.max(m, H[k]); return m; };
+  let zO = -1, bd = Infinity;
+  for (let k = 1; k < nZ - 1; k++) {
+    if (H[k] > H[k - 1] || H[k] > H[k + 1]) continue;
+    if (!hasE(k - w4, k - 1) || !hasE(k + 1, k + w4)) continue;
+    if (H[k] > 0.7 * Math.min(maxH(k - w3, k - 1), maxH(k + 1, k + w3))) continue;
+    const d = Math.abs(k + zA - z0); if (d < bd) { bd = d; zO = k + zA; }
+  }
+  if (window.DEBUG_OCC) console.log('occE', enTh, eMin, Array.from(E).map(Math.round).join(','), '|', Array.from(H).map(Math.round).join(','));
+  let jaw;
+  if (zO >= 0) jaw = (z0 - zO) * sg < 0 ? 'lower' : 'upper';
+  else {
+    // 歯冠が片側だけ（対合歯が無い等）：エナメル質の帯の外側で硬組織（歯根と骨）が多い側が根尖側
+    let lo = -1, hi = -1; for (let k = 0; k < nZ; k++) if (E[k] >= eMin) { if (lo < 0) lo = k; hi = k; }
+    if (lo < 0) return null;
+    let sb = 0, sa = 0; for (let k = lo - Math.round(8 / v.sz); k <= lo - w3; k++) if (k >= 0) sb += H[k];
+    for (let k = hi + w3; k <= hi + Math.round(8 / v.sz); k++) if (k < nZ) sa += H[k];
+    jaw = (sb > sa) === (sg > 0) ? 'lower' : 'upper';   // 低い z 側に歯根 → z が上向きなら下顎
+    return { jaw, zO: null, map: null };
+  }
+  // 位置ごとの境目：zO±2.5mm の中で、3x3 で平均した CT 値が最も低い高さ。5x5 の中央値でならす
+  const R = Math.ceil(14 / v.sx), mx0 = Math.max(0, x0 - R), my0 = Math.max(0, y0 - R), mw = Math.min(v.nx - 1, x0 + R) - mx0 + 1, mh = Math.min(v.ny - 1, y0 + R) - my0 + 1;
+  const zr = Math.round(2.5 / v.sz), Z = new Float32Array(mw * mh);
+  for (let j = 0; j < mh; j++) for (let i = 0; i < mw; i++) {
+    const x = mx0 + i, y = my0 + j; let bz = zO, bv = Infinity;
+    for (let z = Math.max(0, zO - zr); z <= Math.min(v.nz - 1, zO + zr); z++) { const sl = v.slices[z]; let sm = 0, c = 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const xx = x + dx, yy = y + dy; if (xx < 0 || yy < 0 || xx >= v.nx || yy >= v.ny) continue; sm += sl[yy * v.nx + xx]; c++; }
+      if (sm / c < bv) { bv = sm / c; bz = z; } }
+    Z[j * mw + i] = bz;
+  }
+  const Zm = new Float32Array(mw * mh), buf = [];
+  for (let j = 0; j < mh; j++) for (let i = 0; i < mw; i++) { buf.length = 0;
+    for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) { const a = i + di, b = j + dj; if (a >= 0 && b >= 0 && a < mw && b < mh) buf.push(Z[b * mw + a]); }
+    buf.sort((a, b) => a - b); Zm[j * mw + i] = buf[buf.length >> 1]; }
+  return { jaw, zO, map: { x0: mx0, y0: my0, w: mw, h: mh, z: Zm } };
+}
+/** 体積座標 (X,Y,Z) が、選んだ顎と反対側（対合歯の側）にあるか */
+function opposingJaw(oc, below, X, Y, Z) {
+  let zm = oc.zO;
+  const m = oc.map;
+  if (m) { const i = Math.round(X) - m.x0, j = Math.round(Y) - m.y0; if (i >= 0 && j >= 0 && i < m.w && j < m.h) zm = m.z[j * m.w + i]; }
+  return below ? Z > zm + 0.5 : Z < zm - 0.5;
+}
+/** クリック位置で上顎／下顎を判定して設定する（歯番の設定より優先） */
+function applyClickJaw(p) {
+  S.jawNote = '';
+  if (window.DEBUG_NOJAW) { S.occl = null; return; }
+  const oc = detectOcclusion(p);
+  S.occl = oc;
+  if (!oc) return;
+  if (window.DEBUG_SEP) console.log('occlusion', oc.jaw, oc.zO);
+  if ($('jaw').value !== oc.jaw) { $('jaw').value = oc.jaw; applyJaw(); }
+  S.jawNote = oc.jaw === 'upper' ? '（クリック位置から上顎と判定し、下顎の歯は外しました）' : '（クリック位置から下顎と判定し、上顎の歯は外しました）';
+}
 function setSeed(p) {
   S.seed = p.slice(); S.cursor = p.slice(); S.autoFit = true; S.autoFit2 = true; S.fitNote = ''; S.seedNote = '';
   $('extractBtn').disabled = false; $('go3d').hidden = false;
@@ -860,6 +941,7 @@ function selectToothAt(p) {
   }
   if (!best) return false;
   S.shift = [0, 0];
+  applyClickJaw(best);
   setSeed(best); S.seedClick = q.slice();
   // ダブルクリックは全自動：以前に手で動かしたしきい値は使わず、選んだ歯から決め直す
   S.thManual = false;
@@ -1117,6 +1199,7 @@ class SliceView {
     if (i < 0 || j < 0 || i >= g.w || j >= g.h) return;
     const q = this.toVox(i - 0.5, j - 0.5).map((x, k) => clamp(Math.round(x), 0, [v.nx, v.ny, v.nz][k] - 1));
     S.shift = [0, 0];
+    applyClickJaw(q);
     setSeed(q); S.seedClick = q.slice();
   }
   wheel(e) {
@@ -1376,6 +1459,12 @@ function crownSeed(b) {
   // (x0,y0) の柱で選択点から歯冠側へたどり、エナメル質が現れた後で「ほとんど空気・軟組織」になる最初の高さ＝咬合面
   // （海綿骨の骨髄や歯髄腔は軟組織より濃いので咬合面と間違えない）。見つからなければ -1
   const topAt = (x0, y0) => {
+    // クリック時に咬合面が求まっていれば、それを使う（上下の歯が接していて空気の層が無くても正しく求まる）
+    if (S.occl && S.occl.zO != null) {
+      const m = S.occl.map, i = x0 - m.x0, j = y0 - m.y0;
+      const zm = i >= 0 && j >= 0 && i < m.w && j < m.h ? m.z[j * m.w + i] : S.occl.zO;
+      if ((zm - sz) * dir > 0 && Math.abs(zm - sz) <= steps) return Math.round(zm);
+    }
     let band = false, hMax = 0;
     for (let k = 0; k <= steps; k++) {
       const z = sz + dir * k; if (z < 0 || z >= v.nz) break;
@@ -1616,20 +1705,29 @@ function distanceTransform(mask, nx, ny, nz, sx, sy, sz) {
  * 前の断面の所属（対象歯／それ以外）をそのまま引き継ぎ、新しく現れた画素は同じ断面の中で近い方へ割り当てる。
  * その結果「対象歯」になった画素で、分水嶺が隣在歯（2）としていたものだけを対象歯に戻す（取り過ぎを防ぐため、救済のみ）
  */
-function rescueRoots(lab, dom, nx, ny, nz, maxGrow = 3) {
+function rescueRoots(lab, dom, nx, ny, nz, maxGrow = 3, sp = 0.19, zStart = -1, dirApical = 0) {
   const nxy = nx * ny, P = new Uint8Array(lab.length), G = new Uint8Array(nxy);
-  let z0 = -1, best = 0;
-  for (let z = 0; z < nz; z++) { let a = 0; for (let i = z * nxy, e = i + nxy; i < e; i++) if (lab[i] === 1) a++; if (a > best) { best = a; z0 = z; } }
+  // 隣の歯・骨の太い核そのものは取り戻さない（細い根尖が「流し込み」で取られた部分だけを戻す）。
+  // 取り戻してよい範囲：分水嶺で対象歯だった断面（根尖側へ 4mm 以内に限る）の輪郭から 1mm 以内。骨に沿って際限なく広がらないようにする
+  const lastZ = new Int32Array(nxy).fill(-1e6), A = new Float32Array(nxy), allowed = new Uint8Array(lab.length);
+  const kZ = Math.round(4 / sp), rA = 1.0 / sp * 3;
+  // 出発断面：呼び出し側が分かっていれば歯冠の中央（選択点）。無ければ対象歯の断面積が最大の断面
+  let z0 = zStart, best = 0;
+  if (z0 < 0) for (let z = 0; z < nz; z++) { let a = 0; for (let i = z * nxy, e = i + nxy; i < e; i++) if (lab[i] === 1) a++; if (a > best) { best = a; z0 = z; } }
   if (z0 < 0) return 0;
   for (let i = z0 * nxy, e = i + nxy; i < e; i++) P[i] = dom[i] ? (lab[i] === 1 ? 1 : 2) : 0;
   const q = new Int32Array(nxy);
   // 根尖の向き：最大断面から対象歯が長く続く側（歯冠側は咬合面までの数mmで短い。咬合する対向歯を引き継がないよう歯冠側には行わない）
   let zl = nz, zh = -1;
   for (let i = 0; i < lab.length; i++) if (lab[i] === 1) { const z = (i / nxy) | 0; if (z < zl) zl = z; if (z > zh) zh = z; }
-  const dirA = zh - z0 >= z0 - zl ? 1 : -1;
+  const dirA = dirApical || (zh - z0 >= z0 - zl ? 1 : -1);
   for (const dir of [dirA]) {
     for (let z = z0 + dir; z >= 0 && z < nz; z += dir) {
       const b = z * nxy, pb = (z - dir) * nxy; let h = 0, t = 0;
+      for (let k = 0; k < nxy; k++) if (lab[pb + k] === 1) lastZ[k] = z - dir;
+      for (let k = 0; k < nxy; k++) A[k] = (z - lastZ[k]) * dir <= kZ ? 0 : 1e9;
+      chamfer2(A, nx, ny);
+      for (let k = 0; k < nxy; k++) if (A[k] <= rA) allowed[b + k] = 1;
       for (let k = 0; k < nxy; k++) { const i = b + k; if (!dom[i]) continue; const pl = P[pb + k]; if (pl) { P[i] = pl; G[k] = 0; q[t++] = k; } }
       if (!t) break;
       while (h < t) {   // 同じ断面の中で近い方へ、引き継いだ画素から maxGrow 画素まで広げる（4近傍の幅優先）
@@ -1641,8 +1739,8 @@ function rescueRoots(lab, dom, nx, ny, nz, maxGrow = 3) {
     }
   }
   let n = 0;
-  for (let i = 0; i < lab.length; i++) if (lab[i] === 2 && P[i] === 1) { lab[i] = 1; n++; }
-  if (window.DEBUG_SEP) console.log('rescueRoots', z0, n);
+  for (let i = 0; i < lab.length; i++) if (lab[i] === 2 && P[i] === 1 && allowed[i] && !(lab.core && lab.core[i])) { lab[i] = 1; n++; }
+  if (window.DEBUG_SEP) { const hz = {}; for (let i = 0; i < lab.length; i++) if (lab[i] === 1 && P[i] === 1 && allowed[i]) { const z = (i / nxy) | 0; hz[z] = (hz[z] || 0) + 1; } console.log('rescueRoots', z0, n, 'dirA', dirA, 'zl', zl, 'zh', zh, JSON.stringify(hz).slice(0, 400)); }
   return n;
 }
 function splitNeighbors(domain, nx, ny, nz, sp, seedIdx, wb) {
@@ -1702,6 +1800,7 @@ function splitNeighbors(domain, nx, ny, nz, sp, seedIdx, wb) {
     }
     buckets[lv] = null;
   }
+  lab.core = new Uint8Array(n); for (let i = 0; i < n; i++) if (comp[i]) lab.core[i] = 1;   // 太い「核」（分水嶺の出発点）
   return lab;
 }
 
@@ -1880,6 +1979,18 @@ async function extract() {
         for (let x = Math.max(0, Math.floor(c[0] - rr)); x <= Math.min(ex - 1, Math.ceil(c[0] + rr)); x++)
           if ((x - c[0]) ** 2 + (y - c[1]) ** 2 + (z - c[2]) ** 2 <= rr * rr) excl[(z * ey + y) * ex + x] = 1;
   }
+  // 対合歯（選んだ顎と反対側の歯）を外す：クリック時に求めた咬合面より向こう側
+  const jv = $('jaw').value;
+  if (S.occl && S.occl.zO != null && jv !== 'both') {
+    const V0 = S.vol, below = (jv === 'lower') === (supSign() > 0), Rm = v.Rm, sm = v.sm, [cx, cy, cz] = v.seedIdx;
+    let nOpp = 0;
+    for (let k = 0; k < ez; k++) for (let j = 0; j < ey; j++) for (let i = 0; i < ex; i++) {
+      const lx = (i - cx) * v.s, ly = (j - cy) * v.s, lz = (k - cz) * v.s;
+      const X = (sm[0] + Rm[0] * lx + Rm[1] * ly + Rm[2] * lz) / V0.sx, Y = (sm[1] + Rm[3] * lx + Rm[4] * ly + Rm[5] * lz) / V0.sy, Z = (sm[2] + Rm[6] * lx + Rm[7] * ly + Rm[8] * lz) / V0.sz;
+      if (opposingJaw(S.occl, below, X, Y, Z)) { excl[(k * ey + j) * ex + i] = 1; nOpp++; }
+    }
+    if (window.DEBUG_SEP) console.log('opposing excl', nOpp);
+  }
   const hardE = new Uint8Array(en);
   for (let i = 0; i < en; i++) if (fe[i] >= th && !excl[i]) hardE[i] = 1;
   let core = hardE;
@@ -1963,7 +2074,11 @@ async function extract() {
       const h0 = holes2D(full, ex, ey, ez), dom = new Uint8Array(en);
       for (let i = 0; i < en; i++) dom[i] = full[i] | h0[i];
       const lab = splitNeighbors(dom, ex, ey, ez, [v.sx, v.sy, v.sz], seedIdx);
-      if (lab && !window.DEBUG_NORESCUE) rescueRoots(lab, dom, ex, ey, ez);
+      if (lab && !window.DEBUG_NORESCUE && $('jaw').value !== 'both') {
+        // 根尖の向き（ローカル z）：下顎は歯冠が上なので、z が上向きのボリュームでは下向き
+        const dA = ($('jaw').value === 'lower') === (supSign() > 0) ? -1 : 1;
+        rescueRoots(lab, dom, ex, ey, ez, 3, v.s, (seedIdx / (ex * ey)) | 0, dA);
+      }
       if (lab) {
         // 分水嶺の対象外だった薄い外層は、近い側（対象歯／隣在歯・骨）に割り当てる
         const A = new Uint8Array(en), Bm = new Uint8Array(en);
@@ -2726,7 +2841,7 @@ async function extract() {
   renderAll();
   const dg = S.diag;
   $('diagOut').textContent = `判定：歯質しきい値 ${dg.th} ／ 骨・歯の境界 ${dg.sep}${dg.manual ? '（手動）' : '（自動）'} ／ 象牙質の代表値 ${dg.dentin ?? '-'} ／ 枠の側面への接触 ${(dg.wall * 100).toFixed(1)}%` + (dg.wall > 0.03 ? ' → 骨・隣在歯へ漏れている可能性があります。「骨／歯の境界」を手動で上げてください' : '');
-  setStatus('抽出完了。' + (S.seedNote || '') + (S.fitNote || '') + (usedSep ? '（骨が歯根に密着していたため、骨との濃度差で分離しました）' : '') + (touches ? '⚠ 歯がROIの枠に接しています。ROIを広げるか、隣在歯・骨とつながっていないか確認してください。' : '3Dビューをドラッグして回転できます。'), touches);
+  setStatus('抽出完了。' + (S.jawNote || '') + (S.seedNote || '') + (S.fitNote || '') + (usedSep ? '（骨が歯根に密着していたため、骨との濃度差で分離しました）' : '') + (touches ? '⚠ 歯がROIの枠に接しています。ROIを広げるか、隣在歯・骨とつながっていないか確認してください。' : '3Dビューをドラッグして回転できます。'), touches);
 }
 
 /** ROI内の box 領域を u 倍に三線形補間 */
