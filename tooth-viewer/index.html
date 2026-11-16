@@ -2193,7 +2193,12 @@ async function extract() {
       const zLen = (t) => { let lo = -1, hi = -1; const exy = ex * ey; for (let z = 0; z < ez; z++) { let c = 0; for (let i = z * exy, e = i + exy; i < e; i++) c += t[i]; if (c >= 4) { if (lo < 0) lo = z; hi = z; } } return lo < 0 ? 0 : (hi - lo + 1) * v.s; };
       const l0 = zLen(res.toothE), l1 = zLen(alt.toothE);
       if (window.DEBUG_SEP) console.log('sep', thSep, f0, f1, l0, l1);
-      if ((f0 > 0.04 && f1 < f0 * 0.5) || (l1 - l0 > 2.0 && f1 < 0.04)) { res = alt; usedSep = true; }
+      // ただし濃度差で分けた結果の長さが通常の結果と大きく違うときは使わない（断面ごとの追跡で骨と分ける）：
+      // 短くなる＝歯根も骨と一緒に削れた（小児・若年者の歯根は象牙質が未成熟で骨と同程度の濃度）、
+      // 大きく伸びる＝歯根でなく骨の帯をたどった
+      // （通常の結果の奥の3割以上が骨＝骨の塊に大きく漏れているときは、長さが違っても濃度差で分けた結果を使う）
+      const lenOk = f0 > 0.3 || (l1 >= l0 - 2.0 && l1 <= l0 + 3.0);
+      if (lenOk && ((f0 > 0.04 && f1 < f0 * 0.5) || (l1 - l0 > 2.0 && f1 < 0.04))) { res = alt; usedSep = true; }
     }
   }
   // 漏れの検出：抽出した歯が枠（ROI）の側面に広く接している ＝ 骨・隣在歯へ漏れている。

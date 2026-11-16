@@ -29,6 +29,7 @@ const CASES = [
     if (only && !only.includes(ci)) continue;
     const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
     page.on('pageerror', (e) => console.error('PAGEERROR', e.message));
+    if (process.env.LOGS) page.on('console', (m) => { if (m.type() === 'log') console.log('LOG', m.text()); });
     if (process.env.FLAGS) await page.addInitScript((f) => Object.assign(window, f), JSON.parse(process.env.FLAGS));
     await page.goto(PAGE);
     await page.evaluate((o) => (window.DEMO_OPTS = o), c.demo);
