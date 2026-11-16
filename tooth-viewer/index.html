@@ -3139,6 +3139,83 @@ function traceCanals(I, solid, canal, depth, nx, ny, nz, sp, dMed, th, tmp, te =
     }
     if (added === before) break;
   }
+  // 4b) 平たい歯根の2本目の根管（上顎大臼歯の近心頬側根の MB2 など）：細く薄いため上の基準では拾えない。
+  //     同じ歯根の断面（扁平な塊）の中で、検出済みの根管と 0.5〜2.5mm 離れて平行に走る、やや薄い暗点の列（長さ1mm以上）だけを緩い基準で採用する
+  if (!window.DEBUG_NOMB2) {
+    const T2 = Math.max(srt[Math.floor(srt.length * (window.CT2 ?? 0.5))], 0.06 * (dMed - th));
+    const id2 = [];
+    for (let k = 0; k < cc.length; k++) if (cc[k] > T2) id2.push(k);
+    const n2 = id2.length, par2 = new Int32Array(n2);
+    for (let k = 0; k < n2; k++) par2[k] = k;
+    const find2 = (a) => { while (par2[a] !== a) { par2[a] = par2[par2[a]]; a = par2[a]; } return a; };
+    const byZ2 = new Map();
+    for (let k = 0; k < n2; k++) { const z = cz[id2[k]]; if (!byZ2.has(z)) byZ2.set(z, []); byZ2.get(z).push(k); }
+    for (const [z, A] of byZ2) for (let g = 1; g <= gap; g++) {
+      const Bl = byZ2.get(z + g); if (!Bl) continue;
+      for (const a of A) for (const b of Bl) if (Math.abs(cx[id2[a]] - cx[id2[b]]) <= link && Math.abs(cy[id2[a]] - cy[id2[b]]) <= link) { const ra = find2(a), rb = find2(b); if (ra !== rb) par2[ra] = rb; }
+    }
+    const grp2 = new Map();
+    for (let k = 0; k < n2; k++) { const r = find2(k); if (!grp2.has(r)) grp2.set(r, []); grp2.get(r).push(k); }
+    let maxAS = 0;
+    for (let z = 0; z < nz; z++) { let a = 0; for (let i = z * nxy, e = i + nxy; i < e; i++) a += solid[i]; if (a > maxAS) maxAS = a; }
+    // 断面でつながる歯質の塊（歯根）の面積(mm²)と扁平度（主軸の長さの比）
+    const seen2 = new Int32Array(nxy), st3 = new Int32Array(nxy); let stamp = 0;
+    const rootShape = (z, x, y) => {
+      stamp++; let sp3 = 0, a = 0, sx = 0, sy = 0, sxx = 0, syy = 0, sxy = 0; const q0 = y * nx + x;
+      st3[sp3++] = q0; seen2[q0] = stamp;
+      while (sp3) { const q = st3[--sp3], qx = q % nx, qy = (q / nx) | 0; a++; sx += qx; sy += qy; sxx += qx * qx; syy += qy * qy; sxy += qx * qy;
+        for (const j of [qx > 0 ? q - 1 : -1, qx < nx - 1 ? q + 1 : -1, qy > 0 ? q - nx : -1, qy < ny - 1 ? q + nx : -1]) if (j >= 0 && seen2[j] !== stamp && solid[z * nxy + j]) { seen2[j] = stamp; st3[sp3++] = j; } }
+      const mx = sx / a, my = sy / a, cxx = sxx / a - mx * mx, cyy = syy / a - my * my, cxy = sxy / a - mx * my;
+      const tr = cxx + cyy, det = cxx * cyy - cxy * cxy, dd = Math.sqrt(Math.max(0, tr * tr / 4 - det));
+      return { a: a * vs * vs, flat: Math.sqrt((tr / 2 + dd) / Math.max(1e-6, tr / 2 - dd)) };
+    };
+    const dLo = Math.round(0.5 / vs), dHi = Math.round(2.5 / vs), dSame = Math.round(0.4 / vs);
+    let nMb2 = 0;
+    const cand2 = [...grp2.values()].map((g) => { let lo = Infinity, hi = -1; for (const k of g) { const z = cz[id2[k]]; if (z < lo) lo = z; if (z > hi) hi = z; } return { g, len: (hi - lo + 1) * sp[2] }; })
+      .filter((c) => c.len >= (window.CLMIN2 ?? 1.0)).sort((a, b) => b.len - a.len);
+    for (const c of cand2) {
+      let ok = 0, tot = 0; const rs = [0, 0, 0, 0];
+      for (const k of c.g) {
+        const q = id2[k], z = cz[q], x = cx[q], y = cy[q]; tot++;
+        if (canal[z * nxy + y * nx + x]) { rs[0]++; continue; }
+        // 同じ断面で最も近い検出済みの根管までの距離が 0.5〜2.5mm で、両者の間が歯質だけでつながる（＝同じ歯根の中。歯根膜や根間を越えない）
+        // しかもその根管は細い（周囲0.8mmの根管の面積が1.5mm²未満＝歯髄腔ではなく歯根の根管）
+        let dmin2 = Infinity, bxn = -1, byn = -1;
+        for (let dy = -dHi; dy <= dHi; dy++) for (let dx = -dHi; dx <= dHi; dx++) {
+          const xx = x + dx, yy = y + dy; if (xx < 0 || yy < 0 || xx >= nx || yy >= ny) continue;
+          if (!canal[z * nxy + yy * nx + xx]) continue;
+          const d = dx * dx + dy * dy; if (d < dmin2) { dmin2 = d; bxn = xx; byn = yy; }
+        }
+        if (bxn < 0 || dmin2 > dHi * dHi) { rs[1]++; continue; }
+        let inside = true;
+        const nsmp = Math.ceil(Math.sqrt(dmin2)) * 2;
+        for (let t = 1; t < nsmp && inside; t++) { const xx = Math.round(x + (bxn - x) * t / nsmp), yy = Math.round(y + (byn - y) * t / nsmp); if (!solid[z * nxy + yy * nx + xx]) inside = false; }
+        if (!inside) { rs[1]++; continue; }
+        let ca = 0; const r8 = Math.round(0.8 / vs);
+        for (let dy = -r8; dy <= r8; dy++) for (let dx = -r8; dx <= r8; dx++) { const xx = bxn + dx, yy = byn + dy; if (xx >= 0 && yy >= 0 && xx < nx && yy < ny && dx * dx + dy * dy <= r8 * r8 && canal[z * nxy + yy * nx + xx]) ca++; }
+        if (ca * vs * vs >= 1.5) { rs[1]++; continue; }
+        if (dmin2 <= dSame * dSame) { rs[2]++; continue; }
+        if (dmin2 >= dLo * dLo && dmin2 <= dHi * dHi) ok++; else rs[3]++;
+      }
+      if (window.DEBUG_MB2 && ok >= 0.7 * tot) { const k0 = c.g[c.g.length >> 1], q0 = id2[k0], sh = rootShape(cz[q0], cx[q0], cy[q0]); console.log('mb2ok', c.len.toFixed(2), tot, ok, cz[q0], sh.a.toFixed(1), sh.flat.toFixed(2)); }
+      if (window.DEBUG_MB2 && c.len >= 1.5) console.log('mb2c', c.len.toFixed(2), tot, ok, rs.join('/'), cx[id2[c.g[0]]], cy[id2[c.g[0]]], cz[id2[c.g[0]]]);
+      // 歯冠・髄室の高さ（断面が最大断面の65%を超える）では採用しない。歯根の断面は扁平（主軸比1.5以上）か、単独の歯根（最大断面の30%以下）
+      let shapeOk = false;
+      if (tot && ok >= 0.7 * tot && ok * sp[2] >= 0.8) {
+        const k0 = c.g[c.g.length >> 1], q0 = id2[k0], sh = rootShape(cz[q0], cx[q0], cy[q0]), aMax = maxAS * vs * vs;
+        shapeOk = sh.a <= 0.3 * aMax || (sh.a <= 0.65 * aMax && sh.flat >= (window.MB2FLAT ?? 1.5));
+      }
+      if (shapeOk) {
+        nMb2++;
+        for (const k of c.g) { const q = id2[k], z = cz[q];
+          for (let dy = -rC; dy <= rC; dy++) for (let dx = -rC; dx <= rC; dx++) {
+            if (dx * dx + dy * dy > rC * rC + rC) continue;
+            const j = z * nxy + (cy[q] + dy) * nx + cx[q] + dx; if (solid[j]) canal[j] = 1;
+          } }
+      }
+    }
+    if (window.DEBUG_SEP) console.log('mb2', T2, cand2.length, nMb2);
+  }
   // 5) 根尖方向への延長：根管の途切れた端（細い根管の断面）から、1断面ずつ「近くの最も暗い点」をたどる。
   //    周囲より少しでも暗ければ（根管を疑う暗がり。石灰化で見えにくい根管も）描き、見えない区間が3mm続いたら止める。短い見えない区間（0.3mm以下）は線でつなぐ
   if (!window.DEBUG_NOEXT) {
