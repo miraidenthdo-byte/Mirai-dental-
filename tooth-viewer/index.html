@@ -3173,6 +3173,7 @@ function traceCanals(I, solid, canal, depth, nx, ny, nz, sp, dMed, th, tmp, te =
     let nMb2 = 0;
     const cand2 = [...grp2.values()].map((g) => { let lo = Infinity, hi = -1; for (const k of g) { const z = cz[id2[k]]; if (z < lo) lo = z; if (z > hi) hi = z; } return { g, len: (hi - lo + 1) * sp[2] }; })
       .filter((c) => c.len >= (window.CLMIN2 ?? 1.0)).sort((a, b) => b.len - a.len);
+    const passed = [];
     for (const c of cand2) {
       let ok = 0, tot = 0; const rs = [0, 0, 0, 0];
       for (const k of c.g) {
@@ -3205,13 +3206,27 @@ function traceCanals(I, solid, canal, depth, nx, ny, nz, sp, dMed, th, tmp, te =
         const k0 = c.g[c.g.length >> 1], q0 = id2[k0], sh = rootShape(cz[q0], cx[q0], cy[q0]), aMax = maxAS * vs * vs;
         shapeOk = sh.a <= 0.3 * aMax || (sh.a <= 0.65 * aMax && sh.flat >= (window.MB2FLAT ?? 1.5));
       }
-      if (shapeOk) {
-        nMb2++;
-        for (const k of c.g) { const q = id2[k], z = cz[q];
-          for (let dy = -rC; dy <= rC; dy++) for (let dx = -rC; dx <= rC; dx++) {
-            if (dx * dx + dy * dy > rC * rC + rC) continue;
-            const j = z * nxy + (cy[q] + dy) * nx + cx[q] + dx; if (solid[j]) canal[j] = 1;
-          } }
+      if (shapeOk) passed.push(c);
+    }
+    // 2本目の根管は1歯に1本（MB2）：最も長い候補を採用し、ほかはその延長上の断片（横0.4mm以内・縦1mm以内で続くもの）だけを足す。
+    // 細かな暗点の列を何本も足して根管が多すぎる表示にならないようにする
+    if (passed.length) {
+      passed.sort((a, b) => b.len - a.len);
+      const main = passed[0], keep = [main];
+      if (main.len >= (window.MB2MIN ?? 1.5)) {
+        const pts = main.g.map((k) => id2[k]), tolXY = Math.round(0.4 / vs), tolZ = Math.round(1.0 / sp[2]);
+        for (const c of passed.slice(1)) {
+          const ok2 = c.g.some((k) => { const q = id2[k]; return pts.some((p2) => Math.abs(cz[p2] - cz[q]) <= tolZ && Math.abs(cx[p2] - cx[q]) <= tolXY && Math.abs(cy[p2] - cy[q]) <= tolXY); });
+          if (ok2) { keep.push(c); for (const k of c.g) pts.push(id2[k]); }
+        }
+        for (const c of keep) {
+          nMb2++;
+          for (const k of c.g) { const q = id2[k], z = cz[q];
+            for (let dy = -rC; dy <= rC; dy++) for (let dx = -rC; dx <= rC; dx++) {
+              if (dx * dx + dy * dy > rC * rC + rC) continue;
+              const j = z * nxy + (cy[q] + dy) * nx + cx[q] + dx; if (solid[j]) canal[j] = 1;
+            } }
+        }
       }
     }
     if (window.DEBUG_SEP) console.log('mb2', T2, cand2.length, nMb2);
