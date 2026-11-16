@@ -2197,7 +2197,12 @@ async function extract() {
       // 短くなる＝歯根も骨と一緒に削れた（小児・若年者の歯根は象牙質が未成熟で骨と同程度の濃度）、
       // 大きく伸びる＝歯根でなく骨の帯をたどった
       // （通常の結果の奥の3割以上が骨＝骨の塊に大きく漏れているときは、長さが違っても濃度差で分けた結果を使う）
-      const lenOk = f0 > 0.3 || (l1 >= l0 - 2.0 && l1 <= l0 + 3.0);
+      // さらに、選択点より根尖側の体積が通常の結果の6割未満になる（＝歯根が骨と一緒に削れた）ときも使わない
+      const dA0 = ($('jaw').value === 'lower') === (supSign() > 0) ? -1 : 1, zS = (res.seedIdx / (ex * ey)) | 0;
+      const apV = (t) => { let c = 0; const exy = ex * ey; for (let z = 0; z < ez; z++) { if ((z - zS) * dA0 <= 0) continue; for (let i = z * exy, e = i + exy; i < e; i++) c += t[i]; } return c; };
+      const av0 = apV(res.toothE), av1 = apV(alt.toothE);
+      if (window.DEBUG_SEP) console.log('sep apical', av0, av1);
+      const lenOk = f0 > 0.3 || (l1 >= l0 - 2.0 && l1 <= l0 + 3.0 && ($('jaw').value === 'both' || av1 >= 0.6 * av0));
       if (lenOk && ((f0 > 0.04 && f1 < f0 * 0.5) || (l1 - l0 > 2.0 && f1 < 0.04))) { res = alt; usedSep = true; }
     }
   }
