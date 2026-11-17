@@ -716,9 +716,9 @@ function setVolume(vol, note) {
   const pct = (p) => samp[Math.min(samp.length - 1, Math.floor(p * samp.length))];
   vol.p01 = pct(0.01); vol.p999 = pct(0.999); vol.min = samp[0]; vol.max = samp[samp.length - 1];
   // 金属（冠・インレー・インプラント）が写っていると上位0.1%の値が極端に高くなり、硬組織の基準が象牙質より上になって歯を選べなくなる。
-  // 上位0.1%が上位1%の1.8倍を超えるとき（金属の尾）は、通常の比（約1.35倍）で頭打ちにする
+  // 上位0.1%が上位1%の1.55倍を超えるとき（金属・充填物の尾。通常は1.2〜1.45倍）は、通常の比（約1.35倍）で頭打ちにする
   const p99 = pct(0.99);
-  vol.metal = vol.p999 > vol.p01 + 1.8 * (p99 - vol.p01);
+  vol.metal = vol.p999 > vol.p01 + 1.55 * (p99 - vol.p01);
   if (vol.metal) vol.p999 = Math.round(vol.p01 + 1.35 * (p99 - vol.p01));
   const lo = Math.min(vol.min, -1000), hi = Math.max(vol.max, 1000);
   for (const id of ['wl', 'thHard', 'thEnamel', 'sepTh']) { $(id).min = lo; $(id).max = hi; }
@@ -2932,6 +2932,28 @@ async function extract() {
       if (window.DEBUG_SEP) console.log('canal near enamel', nr);
     }
   }
+  // 歯冠の修復物（充填物・インレー・金属冠）：エナメル質より明らかに明るく、歯の表面に出ている塊。
+  // その直下の暗い層（裏層材・セメント・二次う蝕・アーチファクト）は根管ではないので、修復物から 0.8mm 以内の「根管」は消す。
+  // （根管充填材は歯の内部にあり表面に出ていないので対象外）
+  if (!window.DEBUG_NOREST) {
+    const tRest = S.vol.p01 + 1.75 * (dMed - S.vol.p01);
+    const br = new Uint8Array(fn); let nb = 0;
+    for (let i = 0; i < fn; i++) if (I[i] >= tRest && (solidF[i] || canalF[i])) { br[i] = 1; nb++; }
+    if (nb) {
+      const cc = components26(br, fx, fy, fz), out = new Uint8Array(cc.size.length);
+      for (let i = 0; i < fn; i++) {
+        const l = cc.lab[i]; if (!l || out[l]) continue;
+        const x = i % fx, y = ((i / fx) | 0) % fy, z = (i / fxy) | 0;
+        for (const [j, ok] of [[i - 1, x > 0], [i + 1, x < fx - 1], [i - fx, y > 0], [i + fx, y < fy - 1], [i - fxy, z > 0], [i + fxy, z < fz - 1]])
+          if (ok && !solidF[j] && !canalF[j] && !br[j]) { out[l] = 1; break; }
+      }
+      const rm = new Uint8Array(fn); let nr = 0;
+      for (let i = 0; i < fn; i++) if (br[i] && out[cc.lab[i]] && cc.size[cc.lab[i]] * fvol > 0.5) rm[i] = 1;
+      const near = dilate6(rm, fx, fy, fz, Math.max(1, Math.round(0.8 / fmin)));
+      for (let i = 0; i < fn; i++) if (canalF[i] && near[i]) { canalF[i] = 0; susF[i] = 0; solidF[i] = 1; nr++; }
+      if (window.DEBUG_SEP) console.log('canal near restoration', Math.round(tRest), nr);
+    }
+  }
   // 歯髄腔の天井より歯冠側にだけある「根管」の塊（咬合面の裂溝の暗がり）は消す
   {
     const cc = components26(canalF, fx, fy, fz);
@@ -2957,6 +2979,14 @@ async function extract() {
           let nr2 = 0;
           for (let i = 0; i < fn; i++) { if (!canalF[i]) continue; const z = (i / fxy) | 0; if ((z - lim) * up > 0) { canalF[i] = 0; susF[i] = 0; solidF[i] = 1; nr2++; } }
           if (window.DEBUG_SEP) console.log('canal beyond roof', zr, nr2);
+        }
+        // 髄腔とつながっていない「根管」の塊で、髄室の中心より歯冠側にあるもの（修復物の下の暗がりなど）も消す
+        let zs = 0, zn = 0; for (let i = 0; i < fn; i++) if (canalF[i] && cc.lab[i] === big) { const z = (i / fxy) | 0; if (ar[z] >= 0.3 * amx) { zs += z; zn++; } }
+        if (zn) {
+          const zc = zs / zn; let nr3 = 0;
+          const dropC = cc.size.map((_, q) => q > 0 && q !== big && (up > 0 ? cc.zlo[q] > zc : cc.zhi[q] < zc));
+          for (let i = 0; i < fn; i++) if (canalF[i] && dropC[cc.lab[i]]) { canalF[i] = 0; susF[i] = 0; solidF[i] = 1; nr3++; }
+          if (window.DEBUG_SEP) console.log('crown blobs', Math.round(zc), nr3);
         }
       }
     }
