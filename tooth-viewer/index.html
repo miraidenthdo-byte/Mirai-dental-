@@ -1340,7 +1340,17 @@ class SliceView {
       const f = Math.exp(-e.deltaY * 0.0015), cw = this.cv.width / 2, ch = this.cv.height / 2;
       this.panX = sx - cw - (sx - cw - this.panX) * f; this.panY = sy - ch - (sy - ch - this.panY) * f;
       this.zoom *= f; this.render();
-    } else this.step(Math.sign(e.deltaY));
+    } else {
+      // 水平断（断面の法線が上下方向）：下スクロールで下顎（尾側）へ、上スクロールで上顎（頭側）へ。
+      // 患者座標の +z が頭側（DICOM）。法線の患者 z 成分の符号で送り方向を決める
+      let d = Math.sign(e.deltaY);
+      const P = this.P(), D = S.vol.dirs;
+      if (D) {
+        const pz = P.n[0] * D[0][2] + P.n[1] * D[1][2] + P.n[2] * D[2][2];
+        if (Math.abs(pz) > 0.7) d = -d * Math.sign(pz);
+      }
+      this.step(d);
+    }
   }
   render() {
     const cv = this.cv, dpr = Math.min(window.devicePixelRatio || 1, 2);
