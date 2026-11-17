@@ -2640,12 +2640,24 @@ async function extract() {
   // 歯の表面付近（部分容積効果で暗く見える層）は根管候補から除外する
   const depth = distanceTransform(solidF, fx, fy, fz, fsp[0], fsp[1], fsp[2]);
   const dS = Math.max(0.3, 2.2 * Math.min(v.sx, v.sy, v.sz)), dW = Math.max(0.1, 0.7 * Math.min(v.sx, v.sy, v.sz));
+  // 局所のノイズ（金属・充填物のアーチファクトで象牙質が明暗の縞になる所）：象牙質の中央値より明るい側のばらつき（RMS）を約0.8mmの範囲で求める。
+  // 根管は暗い側にしか無いので、明るい側のばらつきは根管の影響を受けない。通常の象牙質では全体のσと同程度、アーチファクトのある所では大きくなる
+  const sigL = new Float32Array(fn);
+  if (!window.DEBUG_NOLSIG) {
+    const Q = new Float32Array(fn), Cn = new Float32Array(fn);
+    for (let i = 0; i < fn; i++) if (solidF[i] && I[i] > dMed && I[i] < te) { const d = I[i] - dMed; Q[i] = d * d; Cn[i] = 1; }
+    const rb = Math.max(1, Math.round(0.8 / fmin));
+    boxBlur3(Q, fx, fy, fz, rb, 1); boxBlur3(Cn, fx, fy, fz, rb, 1);
+    let nHi = 0;
+    for (let i = 0; i < fn; i++) { sigL[i] = Cn[i] > 0.05 ? Math.sqrt(Q[i] / Cn[i]) : sigma; if (solidF[i] && sigL[i] > 1.5 * sigma) nHi++; }
+    if (window.DEBUG_SEP) console.log('local sigma high', nHi, Math.round(sigma));
+  }
   const strong = new Uint8Array(fn), weak = new Uint8Array(fn);
   for (let i = 0; i < fn; i++) {
     if (!solidF[i]) continue;
-    const hat = C[i] - B[i], d = depth[i];
-    if (holesF[i] || (d >= dS && ((hat > kHigh * sigma && hat >= 0.5 * Hm[i]) || I[i] < th))) strong[i] = 1;
-    if (strong[i] || (d >= dW && hat > kLow * sigma && hat >= 0.62 * Hm[i])) weak[i] = 1;
+    const hat = C[i] - B[i], d = depth[i], sg = Math.max(sigma, sigL[i] || 0);
+    if (holesF[i] || (d >= dS && ((hat > kHigh * sg && hat >= 0.5 * Hm[i]) || I[i] < th))) strong[i] = 1;
+    if (strong[i] || (d >= dW && hat > kLow * sg && hat >= 0.62 * Hm[i])) weak[i] = 1;
   }
   // 根管内の不透過物（根管充填材・貼薬・ファイル・ポスト）：エナメル質並みに明るいが、断面上で周囲8方向（0.6mm先）がすべて
   // 象牙質（歯の中で、エナメル質より暗い）に囲まれている画素は根管とみなす。エナメル質は歯の表面にあり外側が歯の外なので該当しない
@@ -3376,7 +3388,7 @@ function traceCanals(I, solid, canal, depth, nx, ny, nz, sp, dMed, th, tmp, te =
     if (window.DEBUG_SEP) console.log('mb2', T2, cand2.length, nMb2);
   }
   // 5) 根尖方向への延長：根管の途切れた端（細い根管の断面）から、1断面ずつ「近くの最も暗い点」をたどる。
-  //    周囲より少しでも暗ければ（根管を疑う暗がり。石灰化で見えにくい根管も）描き、見えない区間が3mm続いたら止める。短い見えない区間（0.3mm以下）は線でつなぐ
+  //    周囲より少しでも暗ければ（根管を疑う暗がり。石灰化で見えにくい根管も）描き、見えない区間が3mm続いたら止める。見えない区間（2mm以下）は「根管の疑い」（黄色）の線でつなぐ
   if (!window.DEBUG_NOEXT) {
     let ezs = 0, en = 0, szs = 0, sn = 0;
     for (let i = 0; i < I.length; i += 7) { if (!solid[i]) continue; const z = (i / nxy) | 0; szs += z; sn++; if (I[i] >= te) { ezs += z; en++; } }
@@ -3384,7 +3396,7 @@ function traceCanals(I, solid, canal, depth, nx, ny, nz, sp, dMed, th, tmp, te =
     // 根管を疑う薄い暗がりも拾う（石灰化などで途中が見えにくい根管）。「根管感度」で調整（既定45%→上位90%の暗さ）
     const sensE = +$('thCanal').value / 100;
     const Tlow = srt[Math.floor(srt.length * (window.CEXT ?? clamp(0.1 + (0.45 - sensE) * 0.8, 0.02, 0.6)))];
-    const ws = Math.max(1, Math.round(0.15 / vs)), maxMiss = Math.max(2, Math.round((window.CMISS ?? 3.0) / sp[2])), gapFill = Math.max(1, Math.round(0.3 / sp[2]));
+    const ws = Math.max(1, Math.round(0.15 / vs)), maxMiss = Math.max(2, Math.round((window.CMISS ?? 3.0) / sp[2])), gapFill = Math.max(1, Math.round((window.CGAP ?? 2.0) / sp[2]));
     const maxEndA = Math.PI * (0.6 / vs) ** 2;
     const conAt = (i) => { let m = 0; for (const [dx, dy] of ring) m += Math.min(Is[i + dy * nx + dx], dMed); return m / 12 - Is[i]; };
     // 「はっきり見える」（従来の基準＝暗さ上位65%）より薄い暗がりと、見えない区間をつないだ線は「疑い」として記録（黄色で表示）
