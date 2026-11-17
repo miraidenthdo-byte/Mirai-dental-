@@ -35,6 +35,7 @@ const CASES = [
     await page.evaluate((o) => (window.DEMO_OPTS = o), c.demo);
     await page.click('#demoBtn');
     await page.waitForFunction(() => !document.getElementById('extractBtn').disabled, null, { timeout: 120000 });
+    if (process.env.LOGS) console.log('VOL', JSON.stringify(await page.evaluate(() => ({ metal: S.vol.metal, p01: S.vol.p01, p999: S.vol.p999 }))));
     if (c.dbl) {
       // 歯根の途中（歯冠から約6mm根尖側）をダブルクリックしたのと同じ操作
       await page.evaluate(([ti, auto]) => {

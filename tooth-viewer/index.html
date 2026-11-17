@@ -715,6 +715,11 @@ function setVolume(vol, note) {
   samp.sort((a, b) => a - b);
   const pct = (p) => samp[Math.min(samp.length - 1, Math.floor(p * samp.length))];
   vol.p01 = pct(0.01); vol.p999 = pct(0.999); vol.min = samp[0]; vol.max = samp[samp.length - 1];
+  // 金属（冠・インレー・インプラント）が写っていると上位0.1%の値が極端に高くなり、硬組織の基準が象牙質より上になって歯を選べなくなる。
+  // 上位0.1%が上位1%の1.8倍を超えるとき（金属の尾）は、通常の比（約1.35倍）で頭打ちにする
+  const p99 = pct(0.99);
+  vol.metal = vol.p999 > vol.p01 + 1.8 * (p99 - vol.p01);
+  if (vol.metal) vol.p999 = Math.round(vol.p01 + 1.35 * (p99 - vol.p01));
   const lo = Math.min(vol.min, -1000), hi = Math.max(vol.max, 1000);
   for (const id of ['wl', 'thHard', 'thEnamel', 'sepTh']) { $(id).min = lo; $(id).max = hi; }
   $('ww').max = Math.max(100, hi - lo);
@@ -879,6 +884,33 @@ function detectOcclusion(p) {
     const d = Math.abs(k + zA - z0); if (d < bd) { bd = d; zO = k + zA; }
   }
   if (window.DEBUG_OCC) console.log('occE', enTh, eMin, Array.from(E).map(Math.round).join(','), '|', Array.from(H).map(Math.round).join(','));
+  // 歯冠の無い歯（治療中・残根）：エナメル質の帯が無いので、クリックした歯の上端と対合歯（金属冠など）の間の
+  // 「硬組織がほとんど無い層」（0.6mm以上）を咬合面とする。反対側 6mm 以内に対合歯の硬組織があること
+  if (zO < 0 && !window.DEBUG_NOGAP) {
+    const k0 = z0 - zA; let hRef = 0;
+    for (let k = Math.max(0, k0 - w3); k <= Math.min(nZ - 1, k0 + w3); k++) hRef = Math.max(hRef, H[k]);
+    const runN = Math.max(2, Math.round(0.6 / v.sz)), far = Math.round(6 / v.sz);
+    let best = -1, bestD = Infinity;
+    for (const dir of [1, -1]) {
+      let run = 0, start = -1;
+      for (let k = k0; k >= 0 && k < nZ; k += dir) {
+        if (H[k] <= 0.12 * hRef) { if (!run) start = k; run++; }
+        else if (run) {
+          if (run >= runN) {
+            // 隙間の向こう側に対合歯（硬組織）があるか
+            // 対合歯の歯冠（エナメル質または金属）が隙間の向こう 6mm 以内にあり、クリック点から隙間までにはエナメル質が無い（＝歯冠の無い歯）
+            let opp = 0, oppE = false, ownE = false;
+            for (let j = k; j >= 0 && j < nZ && Math.abs(j - k) <= far; j += dir) { opp = Math.max(opp, H[j]); if (E[j] >= eMin) oppE = true; }
+            for (let j = k0; j !== start && j >= 0 && j < nZ; j += dir) if (E[j] >= eMin) ownE = true;
+            if (opp >= 0.3 * hRef && oppE && !ownE) { const c = Math.round((start + k - dir) / 2); const d = Math.abs(c - k0); if (d < bestD) { bestD = d; best = c; } }
+            break;
+          }
+          run = 0;
+        }
+      }
+    }
+    if (best >= 0 && hRef > 0) { zO = best + zA; if (window.DEBUG_SEP) console.log('occlusion gap', zO); }
+  }
   let jaw;
   if (zO >= 0) jaw = (z0 - zO) * sg < 0 ? 'lower' : 'upper';
   else {
@@ -945,6 +977,31 @@ function prefitBox() {
     const c = crownCentroid(v, z, ci.cx, ci.cy, ci.half, 12);
     if (!c || !c.bb) continue;
     x0 = Math.min(x0, c.bb[0]); x1 = Math.max(x1, c.bb[1]); y0 = Math.min(y0, c.bb[2]); y1 = Math.max(y1, c.bb[3]);
+  }
+  // 歯冠の無い歯（治療中・残根）：エナメル質の詰まった歯冠が無く、上の方法では断面が求まらない。
+  // 歯の上端から 3〜8mm の各断面で、歯質（しきい値以上）のうち選択点に最も近い塊が周囲（半径7mm）から離れていれば、その広がりを使う
+  if (!(x1 > x0 && y1 > y0)) {
+    const th = +$('thHard').value, R = Math.ceil(7 / v.sx);
+    for (const mm of [3, 4, 5, 6, 7, 8]) {
+      const z = Math.round(ci.zTop - ci.dir * mm / v.sz); if (z < 0 || z >= v.nz) continue;
+      const sl = v.slices[z], w = 2 * R + 1, seen = new Uint8Array(w * w);
+      let p0 = -1, bd = Infinity;
+      for (let j = 0; j < w; j++) for (let i = 0; i < w; i++) {
+        const x = ci.cx - R + i, y = ci.cy - R + j; if (x < 0 || y < 0 || x >= v.nx || y >= v.ny || sl[y * v.nx + x] < th) continue;
+        const d = (i - R) ** 2 + (j - R) ** 2; if (d < bd) { bd = d; p0 = j * w + i; }
+      }
+      if (p0 < 0 || Math.sqrt(bd) * v.sx > 3) continue;
+      const st = [p0]; seen[p0] = 1; let cnt = 0, touch = false, a0 = w, a1 = -1, b0 = w, b1 = -1;
+      while (st.length) { const q = st.pop(), i = q % w, j = (q / w) | 0; cnt++;
+        if (i === 0 || j === 0 || i === w - 1 || j === w - 1) touch = true;
+        if (i < a0) a0 = i; if (i > a1) a1 = i; if (j < b0) b0 = j; if (j > b1) b1 = j;
+        for (const [t, ok] of [[q - 1, i > 0], [q + 1, i < w - 1], [q - w, j > 0], [q + w, j < w - 1]]) {
+          if (!ok || seen[t]) continue; const x = ci.cx - R + t % w, y = ci.cy - R + ((t / w) | 0);
+          if (x < 0 || y < 0 || x >= v.nx || y >= v.ny || sl[y * v.nx + x] < th) continue; seen[t] = 1; st.push(t); } }
+      if (touch || cnt * v.sx * v.sy < 6) continue;
+      x0 = Math.min(x0, ci.cx - R + a0); x1 = Math.max(x1, ci.cx - R + a1); y0 = Math.min(y0, ci.cy - R + b0); y1 = Math.max(y1, ci.cy - R + b1);
+    }
+    if (window.DEBUG_SEP) console.log('prefit fallback', x0, x1, y0, y1);
   }
   if (!(x1 > x0 && y1 > y0)) return false;
   const m = 1.5, [sx, sy, sz] = S.seed;
@@ -1654,7 +1711,9 @@ function autoThreshold(quiet, noSnap) {
   const f = roiValues(roi, true);
   const samp = [];
   const st = Math.max(1, Math.floor(f.length / 300000));
-  for (let i = 0; i < f.length; i += st) samp.push(f[i]);
+  // 金属（冠・充填物）の画素はしきい値の推定から除く（歯質・エナメル質のしきい値が金属側に引っ張られないように）
+  const mcap = S.vol.metal ? S.vol.p999 * 1.15 : Infinity;
+  for (let i = 0; i < f.length; i += st) if (f[i] <= mcap) samp.push(f[i]);
   const [t1, t2, t3] = multiOtsu(samp, 3);
   // 硬組織/エナメル の2しきい値を、t1 以上の画素で再推定（空気の影響を除く）
   const hard = samp.filter((x) => x >= t1);
@@ -1670,7 +1729,7 @@ function autoThreshold(quiet, noSnap) {
       const sl = v.slices[z];
       for (let y = Math.max(0, sy - r[1]); y <= Math.min(v.ny - 1, sy + r[1]); y++) for (let x = Math.max(0, sx - r[0]); x <= Math.min(v.nx - 1, sx + r[0]); x++) {
         if (((x - sx) / r[0]) ** 2 + ((y - sy) / r[1]) ** 2 + ((z - sz) / r[2]) ** 2 > 1) continue;
-        const val = sl[y * v.nx + x]; if (val > cut) sv.push(val);
+        const val = sl[y * v.nx + x]; if (val > cut && val <= mcap) sv.push(val);
       }
     }
     if (sv.length > 500) { const [a2] = multiOtsu(sv, 2); if (a2 > t1 && a2 < b - 100) a = a2; }
@@ -2202,7 +2261,7 @@ async function extract() {
       const apV = (t) => { let c = 0; const exy = ex * ey; for (let z = 0; z < ez; z++) { if ((z - zS) * dA0 <= 0) continue; for (let i = z * exy, e = i + exy; i < e; i++) c += t[i]; } return c; };
       const av0 = apV(res.toothE), av1 = apV(alt.toothE);
       if (window.DEBUG_SEP) console.log('sep apical', av0, av1);
-      const lenOk = f0 > 0.3 || (l1 >= l0 - 2.0 && l1 <= l0 + 3.0 && ($('jaw').value === 'both' || av1 >= 0.6 * av0));
+      const lenOk = (f0 > 0.3 && av1 >= 0.06 * av0) || (l1 >= l0 - 2.0 && l1 <= l0 + 3.0 && ($('jaw').value === 'both' || av1 >= 0.6 * av0));
       if (lenOk && ((f0 > 0.04 && f1 < f0 * 0.5) || (l1 - l0 > 2.0 && f1 < 0.04))) { res = alt; usedSep = true; }
     }
   }
@@ -2291,6 +2350,31 @@ async function extract() {
     }
     if (zIso >= 0) zStart = zIso;
     if (zStart < 0) zStart = best < 0 && bestAny > 0 ? zAny : szE;
+    // 歯冠の無い歯（治療中・残根）：上端は薄い壁だけで断面が小さく、そこから追跡すると壁の一部しか取れない。
+    // 選択点の断面で、選択点を含む歯質の塊（2D）が周囲から離れていて、開始断面の塊より1.3倍以上大きければ、そこから追跡する
+    let initT = res.toothE;
+    {
+      // 選択点の断面から開始断面の手前まで（歯冠側へ）順に調べ、最初に見つかった「離れた大きな塊」の断面から追跡する
+      const sx0 = res.seedIdx % ex, sy0 = ((res.seedIdx / ex) | 0) % ey, step = zStart > szE ? 1 : -1;
+      for (let z = szE; z !== zStart && z >= 0 && z < ez; z += step) {
+        const zb = z * exy; let s0 = -1, bd = Infinity;
+        const R0 = Math.round(2 / v.s);
+        for (let dy = -R0; dy <= R0; dy++) for (let dx = -R0; dx <= R0; dx++) { const x = sx0 + dx, y = sy0 + dy; if (x < 0 || y < 0 || x >= ex || y >= ey || !cand[zb + y * ex + x]) continue; const d = dx * dx + dy * dy; if (d < bd) { bd = d; s0 = y * ex + x; } }
+        if (s0 < 0) continue;
+        const comp = new Uint8Array(exy), st = [s0]; comp[s0] = 1; let a = 0, touch = false;
+        while (st.length) { const q = st.pop(), x = q % ex, y = (q / ex) | 0; a++;
+          if (x <= roi.x0 || x >= roi.x1 || y <= roi.y0 || y >= roi.y1) touch = true;
+          for (const [t, ok] of [[q - 1, x > 0], [q + 1, x < ex - 1], [q - ex, y > 0], [q + ex, y < ey - 1]]) if (ok && !comp[t] && cand[zb + t]) { comp[t] = 1; st.push(t); } }
+        if (touch) continue;
+        if (a * v.s * v.s > 8 && a > 1.3 * Math.max(0, bestIso) && Math.abs(z - zStart) * v.s > 3) {
+          if (window.DEBUG_SEP) console.log('track start moved', zStart, '->', z, a, bestIso);
+          initT = res.toothE.slice();
+          for (let q = 0; q < exy; q++) initT[zb + q] = comp[q] || res.toothE[zb + q] ? 1 : 0;
+          zStart = z;
+        }
+        break;
+      }
+    }
     // 水平に走る歯根膜（根分岐部の天井・根尖の下など）：Z方向の谷（クロージングとの差）が大きく、象牙質より暗い画素。
     // ノイズの小さなくぼみは除き、面積 0.25mm² 以上のまとまりだけを使う
     let seam = null;
@@ -2346,7 +2430,7 @@ async function extract() {
     }
     const apical = wallLo / Math.max(1, nLo) >= wallHi / Math.max(1, nHi) ? -1 : 1;
     const ro = window.TRIM ? Math.max(1, Math.round(0.3 / v.sx)) : 0;
-    const trk = trackSlices(cand, res.toothE, zStart, ex, ey, ez, seam, valley, Math.max(2, Math.round(0.4 / v.sz)), apical, ro);
+    const trk = trackSlices(cand, initT, zStart, ex, ey, ez, seam, valley, Math.max(2, Math.round(0.4 / v.sz)), apical, ro);
     if (window.DEBUG_TRK) window.DBG = { trk, cand, fe, seam, ex, ey, ez, zStart, init: res.toothE };
     let s0 = res.seedIdx;
     if (!trk[s0]) { let bd = Infinity; for (let i = 0; i < en; i++) if (trk[i]) { const d = Math.abs(((i / exy) | 0) - szE); if (d < bd) { bd = d; s0 = i; } } }
@@ -2552,6 +2636,27 @@ async function extract() {
     const hat = C[i] - B[i], d = depth[i];
     if (holesF[i] || (d >= dS && ((hat > kHigh * sigma && hat >= 0.5 * Hm[i]) || I[i] < th))) strong[i] = 1;
     if (strong[i] || (d >= dW && hat > kLow * sigma && hat >= 0.62 * Hm[i])) weak[i] = 1;
+  }
+  // 根管内の不透過物（根管充填材・貼薬・ファイル・ポスト）：エナメル質並みに明るいが、断面上で周囲8方向（0.6mm先）がすべて
+  // 象牙質（歯の中で、エナメル質より暗い）に囲まれている画素は根管とみなす。エナメル質は歯の表面にあり外側が歯の外なので該当しない
+  let nRad = 0;
+  if (!window.DEBUG_NORADIO) {
+    // 根管充填材・ファイル等はエナメル質より明らかに明るい（エナメル質のしきい値＋象牙質との差の半分以上）
+    const tRad = te + 0.5 * Math.max(0, te - dMed);
+    const rr = Math.max(2, Math.round(0.6 / fmin)), dirs8 = [];
+    for (let k = 0; k < 8; k++) dirs8.push([Math.round(rr * Math.cos(k * Math.PI / 4)), Math.round(rr * Math.sin(k * Math.PI / 4))]);
+    for (let z = 0; z < fz; z++) for (let y = rr; y < fy - rr; y++) for (let x = rr; x < fx - rr; x++) {
+      const i = z * fxy + y * fx + x;
+      if (!solidF[i] || I[i] < tRad || depth[i] < 0.3) continue;
+      let ok = true;
+      for (const [dx, dy] of dirs8) { const j = i + dy * fx + dx; if (!solidF[j] || I[j] >= te) { ok = false; break; } }
+      // さらに外側（1.2mm先）も歯の中（エナメル質の小島ではなく、歯根・歯冠の中心部に埋まった物）
+      if (ok) for (const [dx, dy] of dirs8) { const xx = x + 2 * dx, yy = y + 2 * dy; if (xx < 0 || yy < 0 || xx >= fx || yy >= fy || !solidF[z * fxy + yy * fx + xx]) { ok = false; break; } }
+      if (ok) { strong[i] = 1; weak[i] = 1; nRad++; }
+    }
+    // 不透過物のまわりの細い隙間（充填材と根管壁の間）も根管の候補へ
+    if (nRad) for (let i = 0; i < fn; i++) if (strong[i] && I[i] >= te) for (const j of [i - 1, i + 1, i - fx, i + fx, i - fxy, i + fxy]) if (j >= 0 && j < fn && solidF[j] && I[j] >= te) weak[j] = 1;
+    if (window.DEBUG_SEP) console.log('radiopaque canal', nRad);
   }
   const canalF = hysteresis(strong, weak, fx, fy, fz);
   const DBF = window.DEBUG_FINE ? (window.DBGF = { fx, fy, fz, I, solidF, strong, weak, c0: canalF.slice(), sigma, dMed, kLow, kHigh, C, B }) : null;
