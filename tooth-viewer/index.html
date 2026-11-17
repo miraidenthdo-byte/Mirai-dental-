@@ -2932,6 +2932,21 @@ async function extract() {
       const drop = cc.size.map((_, q) => q > 0 && q !== big && (up > 0 ? cc.zlo[q] > roof : cc.zhi[q] < roof));
       let nr = 0; for (let i = 0; i < fn; i++) if (canalF[i] && drop[cc.lab[i]]) { canalF[i] = 0; susF[i] = 0; solidF[i] = 1; nr++; }
       if (window.DEBUG_SEP) console.log('canal above roof', nr);
+      // 髄室の天井：最大の塊（歯髄腔）の断面積が最大断面の30%以上ある、最も歯冠側の高さ。
+      // そこから歯冠側へ 1.5mm（髄角の分）を超える「根管」は、う蝕・充填物・裂溝の暗がりなどの誤検出として消す（塊から垂れ下がった部分も、離れた塊も）
+      if (!window.DEBUG_NOROOF) {
+        const ar = new Float64Array(fz); let amx = 0;
+        for (let i = 0; i < fn; i++) if (canalF[i] && cc.lab[i] === big) ar[(i / fxy) | 0]++;
+        for (let z = 0; z < fz; z++) amx = Math.max(amx, ar[z]);
+        let zr = -1;
+        for (let z = up > 0 ? fz - 1 : 0; z >= 0 && z < fz; z -= up) if (ar[z] >= 0.3 * amx) { zr = z; break; }
+        if (zr >= 0) {
+          const lim = zr + up * Math.round((window.ROOFM ?? 1.5) / fsp[2]);
+          let nr2 = 0;
+          for (let i = 0; i < fn; i++) { if (!canalF[i]) continue; const z = (i / fxy) | 0; if ((z - lim) * up > 0) { canalF[i] = 0; susF[i] = 0; solidF[i] = 1; nr2++; } }
+          if (window.DEBUG_SEP) console.log('canal beyond roof', zr, nr2);
+        }
+      }
     }
   }
   // 歯（象牙質＋根管）の最大の塊だけ残す：骨を外したあとに離れて残った骨片（枠の端の塊など）を消す
