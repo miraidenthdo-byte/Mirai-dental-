@@ -129,7 +129,7 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 3
 
   <section>
     <h2><span class="num">2</span>歯の選択</h2>
-    <div class="hint">断面画像上で<b>抽出したい歯をダブルクリック</b>すると、その歯を認識して上顎／下顎を判定し、黄色い枠（範囲）を自動で置きます（歯冠・歯根のどこでも可）。枠の ■・● をドラッグして調整し、「範囲を決定して解析」で解析します。「🦷 歯を選択」を押してからクリックすると、解析の前に枠を調整できます（もう一度押すと枠を消して閲覧モードに戻ります）。黄色い枠（ROI）の中から、その歯だけを抽出します。<br><b>➰ 囲んで選択</b>：単根歯など選びにくい歯は、水平断で歯根の断面をドラッグで囲むと、歯根を上下に追って歯軸・根尖・歯冠の向きを求め、枠を置いてそのまま解析します。<br>
+    <div class="hint">断面画像上で<b>抽出したい歯をダブルクリック</b>すると、その歯を認識して上顎／下顎を判定し、黄色い枠（範囲）を自動で置きます（歯冠・歯根のどこでも可）。枠の ■・● をドラッグして調整し、「範囲を決定して解析」で解析します。「🦷 歯を選択」を押してからクリックすると、解析の前に枠を調整できます（もう一度押すと枠を消して閲覧モードに戻ります）。黄色い枠（ROI）の中から、その歯だけを抽出します。<br><b>➕ 根管を追加</b>：根管が抽出されないときは、解析後に断面上で根管の暗い所を歯冠側から根尖側へ順にクリックし、Enter で3Dに反映します。<br><b>➰ 囲んで選択</b>：単根歯など選びにくい歯は、水平断で歯根の断面をドラッグで囲むと、歯根を上下に追って歯軸・根尖・歯冠の向きを求め、枠を置いてそのまま解析します。<br>
       <kbd>ホイール</kbd> スライス送り / <kbd>Ctrl</kbd>+<kbd>ホイール</kbd> 拡大 / <kbd>右ドラッグ</kbd> 移動</div>
     <div class="flex" style="margin-bottom:6px">
       <label class="muted">歯番 (FDI)</label>
@@ -228,6 +228,12 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 3
     <button data-tool="lasso" title="水平断で歯根（または歯）の断面をドラッグで囲むと、その歯を歯冠から歯根まで自動で認識して抽出">➰ 囲んで選択</button>
     <button data-tool="meas" title="2点間の距離">📏 距離</button>
     <button data-tool="brush" title="抽出から外す部分をなぞる">🖌 除外ブラシ</button>
+    <button data-tool="canal" title="抽出されなかった根管を、断面上で根管の場所をクリックして手で追加する">➕ 根管を追加</button>
+  </div>
+  <div class="grp" id="canalBar" hidden><span>根管</span>
+    <button id="canalOk" title="置いた点を根管として3Dに反映（Enter）">✔ 確定して反映</button>
+    <button id="canalUndo" title="最後に置いた点を取り消す（Backspace）">↶ 1点戻す</button>
+    <button id="canalClear" title="手で追加した根管をすべて消して解析し直す">手動の根管を消す</button>
   </div>
   <div class="grp"><span>W/L</span>
     <button data-wlp="bone">骨</button><button data-wlp="tooth">歯</button><button data-wlp="soft">軟組織</button><button data-wlp="auto">自動</button>
@@ -700,7 +706,7 @@ function showProgress(t, p) { $('progressCancel').hidden = !S.busy; $('progressC
 function hideProgress() { $('progress').classList.remove('on'); }
 
 function setVolume(vol, note) {
-  S.vol = vol; S.seg = null; S.seed = null; S.thManual = false; S.diag = null; $('diagOut').textContent = ''; S.shift = [0, 0]; S.brush.groups = []; S.occl = null; S.lasso = null;
+  S.vol = vol; S.seg = null; S.seed = null; S.thManual = false; S.diag = null; $('diagOut').textContent = ''; S.shift = [0, 0]; S.brush.groups = []; S.occl = null; S.lasso = null; S.mc = { cur: [], list: [] };
   S.cursor = [vol.nx >> 1, vol.ny >> 1, vol.nz >> 1]; S.mpr = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
   // 上下の向き（DICOM の向き情報）に合わせて枠の上方・下方を設定し直す
   if ($('jaw').value !== 'both') applyJaw();
@@ -1135,6 +1141,97 @@ function selectTilted(best, q, tl, jawFix) {
   if (window.DEBUG_SEP) console.log('tilted select', r.join(','), 'tilt', $('tiltX').value, $('tiltY').value, 'roi', $('roiX').value, $('roiY').value, $('roiUp').value, $('roiDn').value, 'shift', S.shift);
   return fitted;
 }
+/**
+ * 手で置いた根管の点列から根管を作る（高精度格子）。点と点の間は、2点を結ぶ線のまわり 0.6mm の範囲で
+ * 「暗いほど通りやすい」最短経路（Dijkstra、26近傍）を探し、経路＋そのまわり 0.4mm の暗い画素（経路と象牙質の中間より低い）を根管にする。
+ * 経路のまわり 0.15mm は値によらず根管にする（とても細い・写っていない根管も線として残す）
+ */
+function traceManualCanal(F, ptsVox) {
+  const { I, nx, ny, nz, sp, dMed } = F, n = nx * ny * nz, nxy = nx * ny, mark = new Uint8Array(n), fmin = Math.min(...sp);
+  const P = ptsVox.map((p) => F.toFine(...p).map((q, k) => clamp(Math.round(q), 0, [nx, ny, nz][k] - 1)));
+  const path = [];
+  for (let s = 0; s + 1 < P.length; s++) {
+    const A = P[s], B = P[s + 1], rc = Math.max(2, Math.round(0.6 / fmin));
+    const lo = [0, 1, 2].map((k) => Math.max(0, Math.min(A[k], B[k]) - rc)), hi = [0, 1, 2].map((k) => Math.min([nx, ny, nz][k] - 1, Math.max(A[k], B[k]) + rc));
+    const bw = hi[0] - lo[0] + 1, bh = hi[1] - lo[1] + 1, bd = hi[2] - lo[2] + 1, bn = bw * bh * bd;
+    const AB = [0, 1, 2].map((k) => (B[k] - A[k]) * sp[k]), L2 = AB[0] ** 2 + AB[1] ** 2 + AB[2] ** 2 || 1;
+    const inC = new Uint8Array(bn); let iMin = Infinity;
+    for (let z = 0, q = 0; z < bd; z++) for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++, q++) {
+      const d = [(x + lo[0] - A[0]) * sp[0], (y + lo[1] - A[1]) * sp[1], (z + lo[2] - A[2]) * sp[2]];
+      const t = clamp((d[0] * AB[0] + d[1] * AB[1] + d[2] * AB[2]) / L2, 0, 1);
+      if (Math.hypot(d[0] - t * AB[0], d[1] - t * AB[1], d[2] - t * AB[2]) <= rc * fmin) { inC[q] = 1; iMin = Math.min(iMin, I[((z + lo[2]) * ny + y + lo[1]) * nx + x + lo[0]]); }
+    }
+    const den = Math.max(1, dMed - iMin);
+    const cost = (gi) => { const r = clamp((I[gi] - iMin) / den, 0, 1.5); return 1 + 40 * r * r; };
+    // Dijkstra（二分ヒープ）
+    const dist = new Float32Array(bn).fill(Infinity), from = new Int32Array(bn).fill(-1), done = new Uint8Array(bn);
+    const hk = [], hv = [];
+    const push = (k, v) => { hk.push(k); hv.push(v); let i = hk.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (hv[p] <= hv[i]) break; [hk[p], hk[i]] = [hk[i], hk[p]]; [hv[p], hv[i]] = [hv[i], hv[p]]; i = p; } };
+    const pop = () => { const k = hk[0]; const lk = hk.pop(), lv = hv.pop(); if (hk.length) { hk[0] = lk; hv[0] = lv; let i = 0; for (;;) { const l = 2 * i + 1, r = l + 1; let m = i; if (l < hk.length && hv[l] < hv[m]) m = l; if (r < hk.length && hv[r] < hv[m]) m = r; if (m === i) break; [hk[m], hk[i]] = [hk[i], hk[m]]; [hv[m], hv[i]] = [hv[i], hv[m]]; i = m; } } return k; };
+    const li = (p) => ((p[2] - lo[2]) * bh + (p[1] - lo[1])) * bw + (p[0] - lo[0]);
+    const sA = li(A), sB = li(B); inC[sA] = inC[sB] = 1;
+    dist[sA] = 0; push(sA, 0);
+    while (hk.length) {
+      const q = pop(); if (done[q]) continue; done[q] = 1; if (q === sB) break;
+      const x = q % bw, y = ((q / bw) | 0) % bh, z = (q / (bw * bh)) | 0;
+      for (let dz = -1; dz <= 1; dz++) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        if (!dx && !dy && !dz) continue;
+        const X = x + dx, Y = y + dy, Z = z + dz; if (X < 0 || Y < 0 || Z < 0 || X >= bw || Y >= bh || Z >= bd) continue;
+        const t = (Z * bh + Y) * bw + X; if (!inC[t] || done[t]) continue;
+        const gi = ((Z + lo[2]) * ny + Y + lo[1]) * nx + X + lo[0];
+        const nd = dist[q] + Math.hypot(dx * sp[0], dy * sp[1], dz * sp[2]) * cost(gi);
+        if (nd < dist[t]) { dist[t] = nd; from[t] = q; push(t, nd); }
+      }
+    }
+    const seg = [];
+    for (let q = sB; q >= 0; q = from[q]) { const x = q % bw, y = ((q / bw) | 0) % bh, z = (q / (bw * bh)) | 0; seg.push(((z + lo[2]) * ny + y + lo[1]) * nx + x + lo[0]); if (q === sA) break; }
+    seg.reverse(); for (const g of seg) path.push(g);
+  }
+  if (!path.length) return { mark, n: 0 };
+  // 経路の値の中央値から象牙質へ 35% の値までの暗い画素を、経路からつながる範囲（経路から 0.35mm 以内）で根管にする
+  const pv = path.map((g) => I[g]).sort((a, b) => a - b), thr = pv[pv.length >> 1] + (window.MCT ?? 0.35) * (dMed - pv[pv.length >> 1]);
+  const r1 = Math.max(1, Math.round(0.12 / fmin)), r2 = Math.max(r1, Math.round((window.MCR ?? 0.35) / fmin));
+  const near = new Uint8Array(n);
+  for (const g of path) {
+    const x0 = g % nx, y0 = ((g / nx) | 0) % ny, z0 = (g / nxy) | 0;
+    for (let dz = -r2; dz <= r2; dz++) for (let dy = -r2; dy <= r2; dy++) for (let dx = -r2; dx <= r2; dx++) {
+      const d2 = dx * dx + dy * dy + dz * dz; if (d2 > r2 * r2) continue;
+      const X = x0 + dx, Y = y0 + dy, Z = z0 + dz; if (X < 0 || Y < 0 || Z < 0 || X >= nx || Y >= ny || Z >= nz) continue;
+      const gi = (Z * ny + Y) * nx + X;
+      if (d2 <= r1 * r1) mark[gi] = 1; else near[gi] = 1;
+    }
+  }
+  const st = []; for (let i = 0; i < n; i++) if (mark[i]) st.push(i);
+  while (st.length) { const q = st.pop(), x = q % nx, y = ((q / nx) | 0) % ny, z = (q / nxy) | 0;
+    for (const [t, ok] of [[q - 1, x > 0], [q + 1, x < nx - 1], [q - nx, y > 0], [q + nx, y < ny - 1], [q - nxy, z > 0], [q + nxy, z < nz - 1]])
+      if (ok && near[t] && !mark[t] && I[t] < thr) { mark[t] = 1; st.push(t); } }
+  let c = 0; for (let i = 0; i < n; i++) c += mark[i];
+  return { mark, n: c, len: path.length };
+}
+function canalStatus() {
+  const c = S.mc.cur.length;
+  setStatus(c ? `根管を追加：${c} 点（歯冠側→根尖側へ続けてクリック。置き終えたら「✔ 確定して反映」／Enter、Backspace で1点戻す）` : '根管を追加：断面上で根管と思われる暗い所を、歯冠側から根尖側へ順にクリックしてください');
+}
+/** 置いた点を確定して根管として反映する（解析済みなら3Dをすぐ更新、未解析なら次の解析で反映） */
+function confirmCanal() {
+  if (!S.mc || S.mc.cur.length < 2) { setStatus('根管の点を2点以上置いてください（歯冠側から根尖側へ）', true); return; }
+  const pts = S.mc.cur; S.mc.list.push(pts); S.mc.cur = [];
+  const F = S.seg && S.seg.fine;
+  if (!F || !F.I) { setStatus('根管を登録しました。「範囲を決定して解析」で反映されます'); renderAll(); return; }
+  const r = traceManualCanal({ I: F.I, nx: F.nx, ny: F.ny, nz: F.nz, sp: F.sp, dMed: F.dMed, toFine: F.toFine }, pts);
+  const lab = F.labels; let add = 0;
+  for (let i = 0; i < lab.length; i++) if (r.mark[i] && lab[i] !== 3) { lab[i] = 3; add++; }
+  let nc = 0; for (let i = 0; i < lab.length; i++) if (lab[i] === 3) nc++;
+  F.rgba = buildFields(F.I, lab, F.solid, F.nx, F.ny, F.nz, F.th, F.te, F.dMed, F.fmin);
+  renderer.mode = 'tooth'; $('mode3d').value = 'tooth';
+  renderer.setData(F.rgba, lab, F.nx, F.ny, F.nz, F.sp[0], F.sp[1], F.sp[2], F.sus); updateLegend();
+  if ($('smoothOn').checked) applySmooth();
+  // 統計の「歯髄・根管 体積」を更新
+  const dts = $('segStats').querySelectorAll('dt');
+  for (const dt of dts) if (dt.textContent === '歯髄・根管 体積') dt.nextElementSibling.textContent = (nc * F.fvol).toFixed(1) + ' mm³';
+  setStatus(`根管を追加しました（${S.mc.list.length} 本目、${(add * F.fvol).toFixed(2)} mm³）。続けて別の根管の点を置けます。枠を変えて解析し直しても反映されます`);
+  renderAll();
+}
 /** 上顎／下顎を決め打ちする（囲んで選択：歯根の追跡で歯冠の向きが分かっているとき）。咬合面の判定と食い違えば対合歯の除外に使わない */
 function setJawFixed(j) {
   if (S.occl && S.occl.jaw !== j) S.occl = null;
@@ -1148,6 +1245,7 @@ function setJawFixed(j) {
  */
 function lassoSelect(pts) {
   const v = S.vol; if (!v || pts.length < 4) return false;
+  if (S.mc) S.mc = { cur: [], list: [] };
   const z0 = clamp(Math.round(pts.reduce((a, p) => a + p[2], 0) / pts.length), 0, v.nz - 1);
   let bx0 = Infinity, bx1 = -Infinity, by0 = Infinity, by1 = -Infinity;
   for (const p of pts) { bx0 = Math.min(bx0, p[0]); bx1 = Math.max(bx1, p[0]); by0 = Math.min(by0, p[1]); by1 = Math.max(by1, p[1]); }
@@ -1318,6 +1416,7 @@ function lassoSelect(pts) {
   return true;
 }
 function selectToothAt(p) {
+  if (S.mc) S.mc = { cur: [], list: [] };
   const v = S.vol, q = p.map((x, k) => clamp(Math.round(x), 0, [v.nx, v.ny, v.nz][k] - 1));
   const hardTh = v.p01 + 0.5 * (v.p999 - v.p01), r = Math.ceil(2 / v.sx), sl = v.slices[q[2]];
   // クリック点に最も近い硬組織の画素（歯髄・歯根膜の上をクリックしても、その歯の象牙質を選ぶ）
@@ -1403,7 +1502,7 @@ class SliceView {
     canvas.addEventListener('pointerleave', () => { if (this.info) this.info.textContent = ''; if (this.hotKey) { this.hot = null; this.hotKey = ''; this.render(); } });
     // ダブルクリック：歯の上なら、その歯を選択してすぐ解析／歯がない所なら1画面表示の切り替え
     canvas.addEventListener('dblclick', (e) => {
-      if (!S.vol || S.meas.on || S.brush.on || S.tool === 'lasso') return;
+      if (!S.vol || S.meas.on || S.brush.on || S.tool === 'lasso' || S.tool === 'canal') return;
       const [i, j] = this.evtImg(e), g = this.geom();
       if (i < 0 || j < 0 || i >= g.w || j >= g.h) return;
       if (!selectToothAt(this.toVox(i - 0.5, j - 0.5)) && S.tool === 'view') toggleSolo(canvas.parentElement);
@@ -1489,6 +1588,11 @@ class SliceView {
       return;
     }
     if (S.brush.on) { this.drag = 'brush'; S.brush.groups.push([]); this.paint(e); return; }
+    if (S.tool === 'canal') {
+      const [i, j] = this.evtImg(e), g = this.geom();
+      if (i >= 0 && j >= 0 && i < g.w && j < g.h) { S.mc.cur.push(this.toVox(i - 0.5, j - 0.5)); canalStatus(); renderAll(); }
+      return;
+    }
     if (S.tool === 'lasso') {
       const [i, j] = this.evtImg(e);
       this.drag = 'lasso'; this.lassoPts = [this.toVox(i - 0.5, j - 0.5)]; this.lassoScr = [this.evtImg(e).slice(2)]; return;
@@ -1836,6 +1940,17 @@ class SliceView {
         L.forEach((q, k) => { const [a, b] = this.toImg(...q), X = t.ox + (a + 0.5) * t.px, Y = t.oy + (b + 0.5) * t.py; k ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); });
         ctx.closePath(); ctx.stroke(); ctx.setLineDash([]);
       }
+    }
+    // 手で追加する根管：置いた点（この断面の近く ±1mm は塗りつぶし）と点を結ぶ線
+    if (S.mc && (S.mc.cur.length || (S.mc.list.length && S.tool === 'canal'))) {
+      const draw = (L, col) => {
+        const Q = L.map((q) => { const [a, b] = this.toImg(...q); return [t.ox + (a + 0.5) * t.px, t.oy + (b + 0.5) * t.py, Math.abs(this.distMm(q)) < 1]; });
+        ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = 1.2 * dpr; ctx.setLineDash([4, 3]); ctx.beginPath();
+        Q.forEach((q, k) => (k ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]))); ctx.stroke(); ctx.setLineDash([]);
+        for (const [x0, y0, on] of Q) { ctx.beginPath(); ctx.arc(x0, y0, (on ? 3.5 : 2) * dpr, 0, Math.PI * 2); on ? ctx.fill() : ctx.stroke(); }
+      };
+      for (const L of S.mc.list) draw(L, '#3ddc84');
+      if (S.mc.cur.length) draw(S.mc.cur, '#ff5ad1');
     }
     // 距離計測
     if (S.meas.pts.length) {
@@ -3347,6 +3462,17 @@ async function extract() {
     let nr = 0; for (let i = 0; i < fn; i++) if (canalF[i] && !touch[cc.lab[i]]) { canalF[i] = 0; susF[i] = 0; nr++; }
     if (window.DEBUG_SEP) console.log('float canal', nr);
   }
+  // 手で追加した根管（ボリューム座標の点列）を高精度格子へ
+  const sIdxMm0 = v.seedIdx.map((q) => q * v.s);
+  const org0 = [(roi.x0 + box.x0 + 0.5 / u - 0.5) * v.sx, (roi.y0 + box.y0 + 0.5 / u - 0.5) * v.sy, (roi.z0 + box.z0 + 0.5 / u - 0.5) * v.sz];
+  const toFine = (x, y, z) => { const V0 = S.vol, Rm0 = v.Rm, a = x * V0.sx - v.sm[0], b = y * V0.sy - v.sm[1], c = z * V0.sz - v.sm[2];
+    return [0, 1, 2].map((k) => (Rm0[k] * a + Rm0[3 + k] * b + Rm0[6 + k] * c + sIdxMm0[k] - org0[k]) / fsp[k]); };
+  if (S.mc && S.mc.list.length) {
+    let nm = 0;
+    for (const c of S.mc.list) { const r = traceManualCanal({ I, nx: fx, ny: fy, nz: fz, sp: fsp, dMed, toFine }, c);
+      for (let i = 0; i < fn; i++) if (r.mark[i]) { canalF[i] = 1; susF[i] = 0; nm++; } }
+    if (window.DEBUG_SEP) console.log('manual canal', S.mc.list.length, nm);
+  }
   showProgress('高精度処理中…（ラベル・表面）', 0.78); await sleep0();
   const labF = new Uint8Array(fn);
   const cnt = [0, 0, 0, 0, 0];
@@ -3405,7 +3531,7 @@ async function extract() {
     if (i < 0 || j < 0 || kk < 0 || i >= fx || j >= fy || kk >= fz) return 0;
     const q = (kk * fy + j) * fx + i; return labF[q] === 3 && susF[q] ? 5 : labF[q];
   };
-  S.seg = { roi: roi.key, roiObj: roi, labels, labelAt, labelAtS, localToVolMm, dirsL, fine: { labels: labF, rgba, sus: susTex, nx: fx, ny: fy, nz: fz, sp: fsp, origin, u, box, sigma, dMed } };
+  S.seg = { roi: roi.key, roiObj: roi, labels, labelAt, labelAtS, localToVolMm, dirsL, fine: { labels: labF, rgba, sus: susTex, nx: fx, ny: fy, nz: fz, sp: fsp, origin, u, box, sigma, dMed, I, solid: solidF, th, te, fmin, toFine, fvol } };
   $('axisAuto').disabled = false;
   // ダブルクリックで選んだ歯は、1回目の解析結果から歯軸を求め、傾き・枠を合わせてもう一度解析する（傾いた歯も歯軸に沿って抽出）
   if (S.autoAxisPending && !window.DEBUG_NOAXIS) {
@@ -4356,10 +4482,12 @@ function setTool(t) {
   document.querySelectorAll('[data-tool]').forEach((b) => b.classList.toggle('on', b.dataset.tool === t));
   $('measBtn').classList.toggle('primary', t === 'meas'); $('brushBtn').classList.toggle('primary', t === 'brush');
   $('measOut').textContent = t === 'meas' ? '断面上で2点をクリック' : '';
-  for (const v of views) v.cv.style.cursor = { view: 'crosshair', seed: 'pointer', meas: 'crosshair', brush: 'cell', lasso: 'crosshair' }[t];
+  for (const v of views) v.cv.style.cursor = { view: 'crosshair', seed: 'pointer', meas: 'crosshair', brush: 'cell', lasso: 'crosshair', canal: 'copy' }[t];
+  $('canalBar').hidden = t !== 'canal';
   setStatus({ view: '閲覧：クリック／ドラッグで十字線を移動、ホイールでスライス送り、右ドラッグで明るさ・コントラスト',
     seed: '歯を選択：断面上で、抽出したい歯（象牙質）をクリックしてください',
     meas: '距離：断面上で2点をクリックしてください',
+    canal: '根管を追加：断面上で根管と思われる暗い所を、歯冠側から根尖側へ順にクリックしてください（スライスを送りながら複数の断面に置けます）。置き終えたら「✔ 確定して反映」または Enter。点と点の間はCTの暗い所を通る道筋を自動で探します',
     lasso: '囲んで選択：水平断（アキシャル）で、抽出したい歯の歯根の断面をドラッグで囲んでください（隣の歯根・骨を入れず、白い輪の少し外側をなぞる）。歯冠から根尖まで自動で認識して解析します',
     brush: '除外ブラシ：抽出から外したい部分（骨・隣在歯など）をなぞってください' }[t]);
   renderAll();
@@ -4397,6 +4525,13 @@ window.addEventListener('keydown', (e) => {
   else if (e.key === 'r' || e.key === 'R') $('resetViews').click();
   else if (e.key === 'Escape' && S.tool !== 'view') setTool('view');
 });
+$('canalOk').onclick = confirmCanal;
+$('canalUndo').onclick = () => { if (S.mc && S.mc.cur.pop()) { canalStatus(); renderAll(); } };
+$('canalClear').onclick = () => {
+  if (!S.mc) return;
+  const had = S.mc.list.length; S.mc = { cur: [], list: [] }; renderAll();
+  if (had && S.seg) { setStatus('手動の根管を消して解析し直します…'); runExtract(); } else setStatus('手動の根管を消しました');
+};
 $('brushUndo').onclick = () => { if (S.brush.groups.pop()) markDirty(); renderAll(); };
 $('brushClear').onclick = () => { const had = S.brush.groups.length; S.brush.groups = []; renderAll(); if (had) markDirty(); };
 $('brushR').addEventListener('input', () => syncOut('brushR'));
@@ -4523,7 +4658,13 @@ $('go3d').onclick = runExtract;
 $('decideBtn').onclick = runExtract;
 // Enter キーでも決定
 window.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && S.dirty && !/INPUT|SELECT|TEXTAREA|BUTTON/.test(document.activeElement.tagName)) runExtract();
+  if (/INPUT|SELECT|TEXTAREA|BUTTON/.test(document.activeElement.tagName)) return;
+  if (S.tool === 'canal') {
+    if (e.key === 'Enter') { e.preventDefault(); confirmCanal(); }
+    else if (e.key === 'Backspace') { e.preventDefault(); $('canalUndo').click(); }
+    return;
+  }
+  if (e.key === 'Enter' && S.dirty) runExtract();
 });
 // 想定外のエラーも必ず画面に表示する
 window.addEventListener('error', (e) => { hideProgress(); S.busy = false; setStatus('エラーが発生しました: ' + (e.message || e.error), true); });
