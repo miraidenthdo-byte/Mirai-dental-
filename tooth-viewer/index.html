@@ -940,6 +940,8 @@ function detectOcclusion(p) {
 }
 /** 体積座標 (X,Y,Z) が、選んだ顎と反対側（対合歯の側）にあるか */
 function opposingJaw(oc, below, X, Y, Z) {
+  // 傾いた撮影では、咬合面は咬合平面に合わせて起こした仮想ボリュームの座標で求めてある
+  if (oc.toVirt) [X, Y, Z] = oc.toVirt(X, Y, Z);
   let zm = oc.zO;
   const m = oc.map;
   if (m) { const i = Math.round(X) - m.x0, j = Math.round(Y) - m.y0; if (i >= 0 && j >= 0 && i < m.w && j < m.h) zm = m.z[j * m.w + i]; }
@@ -1014,6 +1016,123 @@ function prefitBox() {
   setVal('roiUp', crownIsUp ? crownMm : rootMm); setVal('roiDn', crownIsUp ? rootMm : crownMm);
   return true;
 }
+/**
+ * クリック点のまわり（半径7mmの柱）で咬合平面の傾きを推定する。柱を傾けて（せん断して）硬組織の高さ方向の分布をとり、
+ * 上下のエナメル質の帯にはさまれた「硬組織の谷」が最も深くなる傾きを採る。
+ * 戻り値 { tx, ty（mm あたりの高さの変化）, deg（傾きの角度）, u（法線＝ボリュームの mm 座標で +z 側を向く単位ベクトル）} または null
+ */
+function occlTilt(p) {
+  const v = S.vol, [x0, y0, z0] = p.map(Math.round);
+  const rx = Math.ceil(7 / v.sx), ry = Math.ceil(7 / v.sy), span = Math.round(30 / v.sz);
+  const hardTh = v.p01 + 0.5 * (v.p999 - v.p01);
+  const zA = Math.max(0, z0 - span), zB = Math.min(v.nz - 1, z0 + span), nZ = zB - zA + 1;
+  const cv = [];
+  for (let z = zA; z <= zB; z += 2) { const sl = v.slices[z];
+    for (let y = Math.max(0, y0 - ry); y <= Math.min(v.ny - 1, y0 + ry); y += 2) for (let x = Math.max(0, x0 - rx); x <= Math.min(v.nx - 1, x0 + rx); x += 2) { const q = sl[y * v.nx + x]; if (q > hardTh) cv.push(q); } }
+  if (cv.length < 200) return null;
+  const enTh = Math.max(multiOtsu(cv, 2)[0], multiOtsu(cv, 3)[1]);
+  const st = Math.max(1, Math.round(0.38 / v.sx)), pts = [];
+  for (let dy = -ry; dy <= ry; dy += st) for (let dx = -rx; dx <= rx; dx += st) {
+    const x = x0 + dx, y = y0 + dy;
+    if ((dx / rx) ** 2 + (dy / ry) ** 2 > 1 || x < 0 || y < 0 || x >= v.nx || y >= v.ny) continue;
+    pts.push([dx, dy, y * v.nx + x]);
+  }
+  const np = pts.length, Hb = new Uint8Array(np * nZ), Eb = new Uint8Array(np * nZ);
+  for (let k = 0; k < nZ; k++) { const sl = v.slices[zA + k];
+    for (let i = 0; i < np; i++) { const q = sl[pts[i][2]]; if (q > hardTh) Hb[i * nZ + k] = 1; if (q > enTh) Eb[i * nZ + k] = 1; } }
+  const w3 = Math.round(3 / v.sz), w4 = Math.round(4 / v.sz), lim = Math.round(12 / v.sz), k0 = z0 - zA;
+  const H = new Float32Array(nZ), E = new Float32Array(nZ), Nc = new Float32Array(nZ);
+  // 傾き (tx, ty)（mm/mm）での谷の深さ：谷の硬組織量 ÷ 両側 3mm の最大値の小さい方（小さいほど深い）
+  const score = (tx, ty) => {
+    H.fill(0); E.fill(0); Nc.fill(0);
+    const gx = tx * v.sx / v.sz, gy = ty * v.sy / v.sz;
+    for (let i = 0; i < np; i++) {
+      const off = Math.round(gx * pts[i][0] + gy * pts[i][1]), b = i * nZ;
+      for (let k = Math.max(0, -off), e = Math.min(nZ, nZ - off); k < e; k++) { H[k] += Hb[b + k + off]; E[k] += Eb[b + k + off]; Nc[k]++; }
+    }
+    let eMax = 0; for (let k = 0; k < nZ; k++) { if (Nc[k] < 0.8 * np) { H[k] = E[k] = 0; } eMax = Math.max(eMax, E[k]); }
+    const eMin = Math.max(2 / (v.sx * v.sy) / (st * st), 0.15 * eMax);
+    let best = Infinity;
+    for (let k = Math.max(1, k0 - lim); k < Math.min(nZ - 1, k0 + lim); k++) {
+      if (H[k] > H[k - 1] || H[k] > H[k + 1] || Nc[k] < 0.8 * np) continue;
+      let eb = false, ea = false, mb = 0, ma = 0;
+      for (let j = Math.max(0, k - w4); j < k; j++) if (E[j] >= eMin) eb = true;
+      for (let j = k + 1; j <= Math.min(nZ - 1, k + w4); j++) if (E[j] >= eMin) ea = true;
+      if (!eb || !ea) continue;
+      for (let j = Math.max(0, k - w3); j < k; j++) mb = Math.max(mb, H[j]);
+      for (let j = k + 1; j <= Math.min(nZ - 1, k + w3); j++) ma = Math.max(ma, H[j]);
+      const m = Math.min(mb, ma); if (m <= 0) continue;
+      best = Math.min(best, H[k] / m);
+    }
+    return best;
+  };
+  let bt = [0, 0], bs = score(0, 0);
+  const s0 = bs;
+  for (let a = -0.6; a <= 0.601; a += 0.2) for (let b = -0.6; b <= 0.601; b += 0.2) {
+    if (!a && !b) continue; const s = score(a, b); if (s < bs) { bs = s; bt = [a, b]; } }
+  const c = bt.slice();
+  for (const [da, db] of [[-0.1, 0], [0.1, 0], [0, -0.1], [0, 0.1], [-0.1, -0.1], [0.1, 0.1], [-0.1, 0.1], [0.1, -0.1]]) {
+    const s = score(c[0] + da, c[1] + db); if (s < bs) { bs = s; bt = [c[0] + da, c[1] + db]; } }
+  // 水平のままで上下の歯冠の間の谷が見えている（s0 < 0.78）なら傾けない。傾けたときだけ谷がはっきり現れる（≤ 0.55）ときに限る
+  // （歯冠の無い歯・前歯・混合歯列では、谷が浅いまま傾きだけ大きく出ることがあるので採らない）
+  if (!(s0 >= 0.78) || !(bs <= 0.55) || !(bs < 0.7 * s0)) bt = [0, 0];
+  const [tx, ty] = bt, n = Math.hypot(tx, ty, 1), u = [-tx / n, -ty / n, 1 / n];
+  const deg = Math.atan(Math.hypot(tx, ty)) * 180 / Math.PI;
+  if (window.DEBUG_SEP) console.log('occlTilt', tx.toFixed(2), ty.toFixed(2), deg.toFixed(1), 's0', s0.toFixed(2), 'best', bs.toFixed(2));
+  return { tx, ty, deg, u };
+}
+/**
+ * 傾いた撮影：枠を咬合平面の法線に傾け、その向きで起こした仮想ボリューム（クリック点の周り 横±16mm・縦±32mm）の中で
+ * 上下の判定・しきい値・歯冠の中心・枠の自動設定を行い、選択点と咬合面を元のボリュームへ戻す
+ */
+function selectTilted(best, q, tl) {
+  const V0 = S.vol, u = tl.u, deg = 180 / Math.PI;
+  setVal('tiltX', clamp(Math.round(Math.asin(clamp(-u[1], -1, 1)) * deg * 2) / 2, -60, 60));
+  setVal('tiltY', clamp(Math.round(Math.atan2(u[0], u[2]) * deg * 2) / 2, -60, 60));
+  const Rm = tiltR();
+  let s = Math.min(V0.sx, V0.sy, V0.sz);
+  const hx = 16, hz = 32;
+  while ((2 * hx / s + 1) ** 2 * (2 * hz / s + 1) > 14e6) s *= 1.15;
+  const ci = Math.round(hx / s), ck = Math.round(hz / s), n = 2 * ci + 1, nzv = 2 * ck + 1, bg = V0.p01 ?? -1000;
+  const cm = [best[0] * V0.sx, best[1] * V0.sy, best[2] * V0.sz];
+  const slices = [];
+  for (let k = 0; k < nzv; k++) {
+    const a = new Int16Array(n * n), lz = (k - ck) * s;
+    for (let j = 0; j < n; j++) { const ly = (j - ci) * s;
+      for (let i = 0; i < n; i++) { const lx = (i - ci) * s;
+        a[j * n + i] = sampleVol(V0, (cm[0] + Rm[0] * lx + Rm[1] * ly + Rm[2] * lz) / V0.sx, (cm[1] + Rm[3] * lx + Rm[4] * ly + Rm[5] * lz) / V0.sy, (cm[2] + Rm[6] * lx + Rm[7] * ly + Rm[8] * lz) / V0.sz, bg); } }
+    slices.push(a);
+  }
+  const VV = { nx: n, ny: n, nz: nzv, sx: s, sy: s, sz: s, slices, dirs: V0.dirs, p01: V0.p01, p999: V0.p999, metal: V0.metal, min: V0.min, max: V0.max };
+  // 仮想ボリュームのボクセル ⇔ 元のボリュームのボクセル
+  const toOrig = (P) => { const l = [(P[0] - ci) * s, (P[1] - ci) * s, (P[2] - ck) * s];
+    return [0, 1, 2].map((r) => (cm[r] + Rm[r * 3] * l[0] + Rm[r * 3 + 1] * l[1] + Rm[r * 3 + 2] * l[2]) / [V0.sx, V0.sy, V0.sz][r]); };
+  const toVirt = (X, Y, Z) => { const a = X * V0.sx - cm[0], b = Y * V0.sy - cm[1], c = Z * V0.sz - cm[2];
+    return [(Rm[0] * a + Rm[3] * b + Rm[6] * c) / s + ci, (Rm[1] * a + Rm[4] * b + Rm[7] * c) / s + ci, (Rm[2] * a + Rm[5] * b + Rm[8] * c) / s + ck]; };
+  let fitted = false, seedV = [ci, ci, ck];
+  S.vol = VV;
+  try {
+    applyClickJaw(seedV);
+    // 起こした断面でも上下の歯冠の間（咬合面）が求まらなければ、傾きの推定を採らず通常の方法に戻す
+    if (!S.occl || S.occl.zO == null) { if (window.DEBUG_SEP) console.log('tilted: no occlusion, fallback'); S.occl = null; return null; }
+    S.seed = seedV.slice();
+    autoThreshold(true);
+    seedV = S.seed.slice();
+    fitted = prefitBox();
+  } finally { S.vol = V0; }
+  if (S.occl) S.occl.toVirt = toVirt;
+  S.crownInfo = null;
+  // 選択点を元のボリュームへ戻す。ローカル座標の原点を厳密に合わせるため、戻した点（端数あり）から見た枠のずれを補正する
+  const P = toOrig(seedV), r = P.map((x, k) => clamp(Math.round(x), 0, [V0.nx, V0.ny, V0.nz][k] - 1));
+  const d = [r[0] * V0.sx - P[0] * V0.sx, r[1] * V0.sy - P[1] * V0.sy, r[2] * V0.sz - P[2] * V0.sz];
+  const dl = [Rm[0] * d[0] + Rm[3] * d[1] + Rm[6] * d[2], Rm[1] * d[0] + Rm[4] * d[1] + Rm[7] * d[2], Rm[2] * d[0] + Rm[5] * d[1] + Rm[8] * d[2]];
+  S.shift = [Math.round((S.shift[0] - dl[0]) * 10) / 10, Math.round((S.shift[1] - dl[1]) * 10) / 10];
+  if (fitted) { setVal('roiUp', Math.max(2, Math.round((+$('roiUp').value - dl[2]) * 2) / 2)); setVal('roiDn', Math.max(2, Math.round((+$('roiDn').value + dl[2]) * 2) / 2)); }
+  setSeed(r); S.seedClick = q.slice();
+  S.seedNote = '（咬合平面の傾き ' + tl.deg.toFixed(0) + '° に合わせて枠を傾け、歯冠の中央へ選択点を移しました）';
+  if (window.DEBUG_SEP) console.log('tilted select', r.join(','), 'tilt', $('tiltX').value, $('tiltY').value, 'roi', $('roiX').value, $('roiY').value, $('roiUp').value, $('roiDn').value, 'shift', S.shift);
+  return fitted;
+}
 function selectToothAt(p) {
   const v = S.vol, q = p.map((x, k) => clamp(Math.round(x), 0, [v.nx, v.ny, v.nz][k] - 1));
   const hardTh = v.p01 + 0.5 * (v.p999 - v.p01), r = Math.ceil(2 / v.sx), sl = v.slices[q[2]];
@@ -1025,14 +1144,22 @@ function selectToothAt(p) {
   }
   if (!best) return false;
   S.shift = [0, 0];
-  applyClickJaw(best);
-  setSeed(best); S.seedClick = q.slice();
-  // ダブルクリックは全自動：以前に手で動かしたしきい値は使わず、選んだ歯から決め直す
   S.thManual = false;
   setVal('tiltX', 0); setVal('tiltY', 0); setVal('tiltZ', 0);
   S.crownInfo = null;
-  autoThreshold(true);
-  const fitted = prefitBox();
+  // 頭が傾いて撮影されている（咬合平面が水平断に対して傾いている）ときは、咬合平面に合わせて起こした仮想の断面で
+  // 上下の判定・歯冠の中心・枠の自動設定を行い、枠を咬合平面の法線（歯軸のおおよその向き）に傾ける
+  const tl = window.DEBUG_NOTILT ? null : occlTilt(best);
+  let fitted;
+  if (tl && tl.deg >= 8) fitted = selectTilted(best, q, tl);
+  if (fitted == null) {
+    setVal('tiltX', 0); setVal('tiltY', 0); S.shift = [0, 0];
+    applyClickJaw(best);
+    setSeed(best); S.seedClick = q.slice();
+    // ダブルクリックは全自動：以前に手で動かしたしきい値は使わず、選んだ歯から決め直す
+    autoThreshold(true);
+    fitted = prefitBox();
+  }
   if ($('autoExtract').checked) {
     // 「すぐ解析する」設定のときは従来どおり全自動（歯軸合わせまで）
     S.autoAxisPending = true;
@@ -1604,7 +1731,7 @@ function crownSeed(b) {
   // （海綿骨の骨髄や歯髄腔は軟組織より濃いので咬合面と間違えない）。見つからなければ -1
   const topAt = (x0, y0) => {
     // クリック時に咬合面が求まっていれば、それを使う（上下の歯が接していて空気の層が無くても正しく求まる）
-    if (S.occl && S.occl.zO != null) {
+    if (S.occl && S.occl.zO != null && !S.occl.toVirt) {
       const m = S.occl.map, i = x0 - m.x0, j = y0 - m.y0;
       const zm = i >= 0 && j >= 0 && i < m.w && j < m.h ? m.z[j * m.w + i] : S.occl.zO;
       if ((zm - sz) * dir > 0 && Math.abs(zm - sz) <= steps) return Math.round(zm);
