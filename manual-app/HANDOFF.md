@@ -14,6 +14,7 @@
   - `data/notion-manuals.json`：Notion から取り込んだマニュアルの原本（82件）、`data/validate.js`：その検査
   - `data/fix-diag.py`：**index.html を直したら必ず実行**（後述）
   - `data/test-gas.js`：Code.gs の模擬テスト（`node data/test-gas.js Code.gs`）
+  - `data/make-gift.py` と `gift/`：ほかの医院へ配る版（パスワード類・医院名・先生の名前・Notionリンクを除いたもの）と、受け取る側の説明書
 
 ## 2. いまの状態（2026年11月時点）
 

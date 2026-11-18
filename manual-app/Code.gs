@@ -1,5 +1,5 @@
 /**
- * みらい歯科 院内マニュアル — Googleスプレッドシート版サーバー
+ * 院内マニュアル — Googleスプレッドシート版サーバー
  *
  * index.html をウェブアプリとして配信し、マニュアル・スタッフ・進み具合・ログイン中の端末を
  * スプレッドシートに保存します。index.html 内の体験モード（LocalServer）と同じ動きです。
@@ -25,7 +25,7 @@ const FAIL_LIMIT = 20;                        // 10分間にこの回数失敗�
 
 function doGet() {
   return HtmlService.createHtmlOutputFromFile('index')
-    .setTitle('みらい歯科 院内マニュアル')
+    .setTitle(appTitle_())
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover');
 }
 
@@ -36,10 +36,18 @@ function props_() {
 }
 
 // データ用のスプレッドシート（初回は自動で作成）
+// 医院名（管理者ページで設定。未設定なら「院内マニュアル」とだけ表示）
+function clinicName_() {
+  return props_().getProperty('CLINIC_NAME') || '';
+}
+function appTitle_() {
+  return (clinicName_() ? clinicName_() + ' ' : '') + '院内マニュアル';
+}
+
 function book_() {
   const id = props_().getProperty('SHEET_ID');
   if (id) return SpreadsheetApp.openById(id);
-  const ss = SpreadsheetApp.create('みらい歯科 院内マニュアル データ');
+  const ss = SpreadsheetApp.create(appTitle_() + ' データ');
   props_().setProperty('SHEET_ID', ss.getId());
   return ss;
 }
@@ -235,7 +243,7 @@ function remap_(manualId, map) {
 /* ---------- 画面から呼ばれる関数（ログイン不要） ---------- */
 
 function status() {
-  return { hasAdminPin: !!pinOf_('admin'), initialized: props_().getProperty('INITIALIZED') === '1' };
+  return { hasAdminPin: !!pinOf_('admin'), initialized: props_().getProperty('INITIALIZED') === '1', clinicName: clinicName_() };
 }
 
 // 初回だけ、サンプルのマニュアルを登録する
@@ -302,7 +310,8 @@ function getAll(token) {
     progress: progress,
     hasEditPin: !!pinOf_('edit'),
     hasAdminPin: !!pinOf_('admin'),
-    initialized: props_().getProperty('INITIALIZED') === '1'
+    initialized: props_().getProperty('INITIALIZED') === '1',
+    clinicName: clinicName_()
   };
 }
 
@@ -451,6 +460,14 @@ function revokeAll(token) {
   return withLock_(() => { removeWhere_('sessions', r => r[1] !== ADMIN_ID); return true; });
 }
 
+function setClinicName(token, name) {
+  requireAdmin_(token);
+  name = String(name || '').replace(/\s+/g, ' ').trim();
+  if (name.length > 20) throw new Error('FORMAT');
+  if (name) props_().setProperty('CLINIC_NAME', name); else props_().deleteProperty('CLINIC_NAME');
+  return name;
+}
+
 function setPin(token, kind, next) {
   requireAdmin_(token);
   if (!PIN_KEYS[kind]) throw new Error('KIND');
@@ -488,7 +505,7 @@ const MEDIA_MAX_BYTES = 25 * 1024 * 1024;
 function mediaFolder_() {
   const id = props_().getProperty('MEDIA_FOLDER_ID');
   if (id) return DriveApp.getFolderById(id);
-  const folder = DriveApp.createFolder('みらい歯科 院内マニュアル 画像・動画');
+  const folder = DriveApp.createFolder(appTitle_() + ' 画像・動画');
   props_().setProperty('MEDIA_FOLDER_ID', folder.getId());
   return folder;
 }
@@ -576,7 +593,7 @@ function setSlack(token, url) {
 
 function testSlack(token) {
   requireAdmin_(token);
-  sendSlack_(':cherry_blossom: *みらい歯科 院内マニュアル*\nSlack通知のテストです。マニュアルが追加・更新・削除されると、ここにお知らせが届きます。');
+  sendSlack_(':cherry_blossom: *' + slackEsc_(appTitle_()) + '*\nSlack通知のテストです。マニュアルが追加・更新・削除されると、ここにお知らせが届きます。');
   return true;
 }
 
