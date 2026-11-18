@@ -129,7 +129,7 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 3
 
   <section>
     <h2><span class="num">2</span>歯の選択</h2>
-    <div class="hint">断面画像上で<b>抽出したい歯をダブルクリック</b>すると、その歯を認識して上顎／下顎を判定し、黄色い枠（範囲）を自動で置きます（歯冠・歯根のどこでも可）。枠の ■・● をドラッグして調整し、「範囲を決定して解析」で解析します。「🦷 歯を選択」を押してからクリックすると、解析の前に枠を調整できます（もう一度押すと枠を消して閲覧モードに戻ります）。黄色い枠（ROI）の中から、その歯だけを抽出します。<br>
+    <div class="hint">断面画像上で<b>抽出したい歯をダブルクリック</b>すると、その歯を認識して上顎／下顎を判定し、黄色い枠（範囲）を自動で置きます（歯冠・歯根のどこでも可）。枠の ■・● をドラッグして調整し、「範囲を決定して解析」で解析します。「🦷 歯を選択」を押してからクリックすると、解析の前に枠を調整できます（もう一度押すと枠を消して閲覧モードに戻ります）。黄色い枠（ROI）の中から、その歯だけを抽出します。<br><b>➰ 囲んで選択</b>：単根歯など選びにくい歯は、水平断で歯根の断面をドラッグで囲むと、歯根を上下に追って歯軸・根尖・歯冠の向きを求め、枠を置いてそのまま解析します。<br>
       <kbd>ホイール</kbd> スライス送り / <kbd>Ctrl</kbd>+<kbd>ホイール</kbd> 拡大 / <kbd>右ドラッグ</kbd> 移動</div>
     <div class="flex" style="margin-bottom:6px">
       <label class="muted">歯番 (FDI)</label>
@@ -225,6 +225,7 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 3
   <div class="grp"><span>操作</span>
     <button data-tool="view" class="on" title="クリック／ドラッグで十字線を移動して画像を見る">🖱 閲覧</button>
     <button data-tool="seed" title="断面上でクリックした歯を選択">🦷 歯を選択</button>
+    <button data-tool="lasso" title="水平断で歯根（または歯）の断面をドラッグで囲むと、その歯を歯冠から歯根まで自動で認識して抽出">➰ 囲んで選択</button>
     <button data-tool="meas" title="2点間の距離">📏 距離</button>
     <button data-tool="brush" title="抽出から外す部分をなぞる">🖌 除外ブラシ</button>
   </div>
@@ -699,7 +700,7 @@ function showProgress(t, p) { $('progressCancel').hidden = !S.busy; $('progressC
 function hideProgress() { $('progress').classList.remove('on'); }
 
 function setVolume(vol, note) {
-  S.vol = vol; S.seg = null; S.seed = null; S.thManual = false; S.diag = null; $('diagOut').textContent = ''; S.shift = [0, 0]; S.brush.groups = []; S.occl = null;
+  S.vol = vol; S.seg = null; S.seed = null; S.thManual = false; S.diag = null; $('diagOut').textContent = ''; S.shift = [0, 0]; S.brush.groups = []; S.occl = null; S.lasso = null;
   S.cursor = [vol.nx >> 1, vol.ny >> 1, vol.nz >> 1]; S.mpr = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
   // 上下の向き（DICOM の向き情報）に合わせて枠の上方・下方を設定し直す
   if ($('jaw').value !== 'both') applyJaw();
@@ -1085,7 +1086,7 @@ function occlTilt(p) {
  * 傾いた撮影：枠を咬合平面の法線に傾け、その向きで起こした仮想ボリューム（クリック点の周り 横±16mm・縦±32mm）の中で
  * 上下の判定・しきい値・歯冠の中心・枠の自動設定を行い、選択点と咬合面を元のボリュームへ戻す
  */
-function selectTilted(best, q, tl) {
+function selectTilted(best, q, tl, jawFix) {
   const V0 = S.vol, u = tl.u, deg = 180 / Math.PI;
   setVal('tiltX', clamp(Math.round(Math.asin(clamp(-u[1], -1, 1)) * deg * 2) / 2, -60, 60));
   setVal('tiltY', clamp(Math.round(Math.atan2(u[0], u[2]) * deg * 2) / 2, -60, 60));
@@ -1113,8 +1114,9 @@ function selectTilted(best, q, tl) {
   S.vol = VV;
   try {
     applyClickJaw(seedV);
+    if (jawFix) setJawFixed(jawFix);
     // 起こした断面でも上下の歯冠の間（咬合面）が求まらなければ、傾きの推定を採らず通常の方法に戻す
-    if (!S.occl || S.occl.zO == null) { if (window.DEBUG_SEP) console.log('tilted: no occlusion, fallback'); S.occl = null; return null; }
+    else if (!S.occl || S.occl.zO == null) { if (window.DEBUG_SEP) console.log('tilted: no occlusion, fallback'); S.occl = null; return null; }
     S.seed = seedV.slice();
     autoThreshold(true);
     seedV = S.seed.slice();
@@ -1129,9 +1131,188 @@ function selectTilted(best, q, tl) {
   S.shift = [Math.round((S.shift[0] - dl[0]) * 10) / 10, Math.round((S.shift[1] - dl[1]) * 10) / 10];
   if (fitted) { setVal('roiUp', Math.max(2, Math.round((+$('roiUp').value - dl[2]) * 2) / 2)); setVal('roiDn', Math.max(2, Math.round((+$('roiDn').value + dl[2]) * 2) / 2)); }
   setSeed(r); S.seedClick = q.slice();
-  S.seedNote = '（咬合平面の傾き ' + tl.deg.toFixed(0) + '° に合わせて枠を傾け、歯冠の中央へ選択点を移しました）';
+  S.seedNote = jawFix ? '' : '（咬合平面の傾き ' + tl.deg.toFixed(0) + '° に合わせて枠を傾け、歯冠の中央へ選択点を移しました）';
   if (window.DEBUG_SEP) console.log('tilted select', r.join(','), 'tilt', $('tiltX').value, $('tiltY').value, 'roi', $('roiX').value, $('roiY').value, $('roiUp').value, $('roiDn').value, 'shift', S.shift);
   return fitted;
+}
+/** 上顎／下顎を決め打ちする（囲んで選択：歯根の追跡で歯冠の向きが分かっているとき）。咬合面の判定と食い違えば対合歯の除外に使わない */
+function setJawFixed(j) {
+  if (S.occl && S.occl.jaw !== j) S.occl = null;
+  if ($('jaw').value !== j) { $('jaw').value = j; applyJaw(); }
+  S.jawNote = j === 'upper' ? '（囲んだ歯根から上顎の歯と判定）' : '（囲んだ歯根から下顎の歯と判定）';
+}
+/**
+ * 囲んで選択：水平断で歯根（または歯）の断面をドラッグで囲む → 囲んだ中の歯質を1枚ずつ上下へ追跡し、
+ * 歯根の向き（歯軸）・根尖の位置・歯冠の向き（エナメル質のある側）を求めて、枠をその歯に合わせて置き、そのまま解析する。
+ * pts: 囲んだ線の点（ボクセル座標）
+ */
+function lassoSelect(pts) {
+  const v = S.vol; if (!v || pts.length < 4) return false;
+  const z0 = clamp(Math.round(pts.reduce((a, p) => a + p[2], 0) / pts.length), 0, v.nz - 1);
+  let bx0 = Infinity, bx1 = -Infinity, by0 = Infinity, by1 = -Infinity;
+  for (const p of pts) { bx0 = Math.min(bx0, p[0]); bx1 = Math.max(bx1, p[0]); by0 = Math.min(by0, p[1]); by1 = Math.max(by1, p[1]); }
+  if ((bx1 - bx0) * v.sx < 1 || (by1 - by0) * v.sy < 1) { setStatus('囲んだ範囲が小さすぎます。歯根の断面を一回り大きく囲んでください', true); return false; }
+  // 追跡の窓：囲んだ範囲＋周囲 12mm（窓の端に着いたら追跡をやめる）
+  const M = Math.ceil(12 / v.sx), wx0 = Math.max(0, Math.floor(bx0) - M), wy0 = Math.max(0, Math.floor(by0) - M);
+  const w = Math.min(v.nx - 1, Math.ceil(bx1) + M) - wx0 + 1, h = Math.min(v.ny - 1, Math.ceil(by1) + M) - wy0 + 1, n = w * h;
+  // 囲んだ多角形の内側
+  const inPoly = new Uint8Array(n);
+  for (let j = 0; j < h; j++) { const y = wy0 + j;
+    for (let i = 0; i < w; i++) { const x = wx0 + i; let c = false;
+      for (let a = 0, b = pts.length - 1; a < pts.length; b = a++) {
+        const [xa, ya] = pts[a], [xb, yb] = pts[b];
+        if ((ya > y) !== (yb > y) && x < (xb - xa) * (y - ya) / (yb - ya) + xa) c = !c; }
+      if (c) inPoly[j * w + i] = 1; } }
+  // 断面の値（3x3 平均でノイズをならす）
+  const sm = (z) => { const sl = v.slices[z], o = new Float32Array(n);
+    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) { let s = 0, c = 0;
+      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { const x = wx0 + i + di, y = wy0 + j + dj; if (x < 0 || y < 0 || x >= v.nx || y >= v.ny) continue; s += sl[y * v.nx + x]; c++; }
+      o[j * w + i] = s / c; } return o; };
+  const I0 = sm(z0);
+  // 歯質のしきい値：囲んだ範囲＋1mm の中で2クラス Otsu（歯根膜・骨髄 / 歯質）。低すぎるときは全体の基準で下限
+  const grow = (m, r) => { let a = m; for (let t = 0; t < r; t++) { const b = new Uint8Array(n);
+    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) { const q = j * w + i; if (a[q]) { b[q] = 1; continue; }
+      if ((i > 0 && a[q - 1]) || (i < w - 1 && a[q + 1]) || (j > 0 && a[q - w]) || (j < h - 1 && a[q + w]) ||
+        (i > 0 && j > 0 && a[q - w - 1]) || (i < w - 1 && j > 0 && a[q - w + 1]) || (i > 0 && j < h - 1 && a[q + w - 1]) || (i < w - 1 && j < h - 1 && a[q + w + 1])) b[q] = 1; }
+    a = b; } return a; };
+  const shrink = (m, r) => { let a = m; for (let t = 0; t < r; t++) { const b = new Uint8Array(n);
+    for (let j = 1; j < h - 1; j++) for (let i = 1; i < w - 1; i++) { const q = j * w + i;
+      if (a[q] && a[q - 1] && a[q + 1] && a[q - w] && a[q + w]) b[q] = 1; }
+    a = b; } return a; };
+  const ring = grow(inPoly, Math.round(1 / v.sx)), vals = [];
+  for (let q = 0; q < n; q++) if (ring[q]) vals.push(I0[q]);
+  const T = Math.max(multiOtsu(vals, 2)[0], v.p01 + 0.3 * (v.p999 - v.p01));
+  // 連結成分（4近傍）：seedMask と重なるものだけ残す
+  const keepTouching = (m, seedMask) => { const out = new Uint8Array(n), seen = new Uint8Array(n);
+    for (let q0 = 0; q0 < n; q0++) { if (!m[q0] || seen[q0]) continue;
+      const comp = [q0]; seen[q0] = 1; let hit = false;
+      for (let k = 0; k < comp.length; k++) { const q = comp[k], i = q % w; if (seedMask[q]) hit = true;
+        for (const [t, ok] of [[q - 1, i > 0], [q + 1, i < w - 1], [q - w, q >= w], [q + w, q < n - w]]) if (ok && m[t] && !seen[t]) { seen[t] = 1; comp.push(t); } }
+      if (hit) for (const q of comp) out[q] = 1; }
+    return out; };
+  // 穴埋め（歯髄・根管を断面に含める）
+  const fill = (m) => { const out = new Uint8Array(n), st = [];
+    for (let k = 0; k < w; k++) for (const q of [k, (h - 1) * w + k]) if (!m[q] && !out[q]) { out[q] = 1; st.push(q); }
+    for (let k = 0; k < h; k++) for (const q of [k * w, k * w + w - 1]) if (!m[q] && !out[q]) { out[q] = 1; st.push(q); }
+    while (st.length) { const q = st.pop(), i = q % w; for (const [t, ok] of [[q - 1, i > 0], [q + 1, i < w - 1], [q - w, q >= w], [q + w, q < n - w]]) if (ok && !m[t] && !out[t]) { out[t] = 1; st.push(t); } }
+    const r = new Uint8Array(n); for (let q = 0; q < n; q++) r[q] = out[q] ? 0 : 1; return r; };
+  const stats = (m, I) => { let a = 0, sx = 0, sy = 0, edge = false;
+    for (let q = 0; q < n; q++) if (m[q]) { a++; const i = q % w, j = (q / w) | 0; sx += i; sy += j; if (i === 0 || j === 0 || i === w - 1 || j === h - 1) edge = true; }
+    return { a, cx: a ? wx0 + sx / a : 0, cy: a ? wy0 + sy / a : 0, edge }; };
+  // 最初の断面：囲んだ中の歯質（最大の塊の 2 割以上の塊）
+  let R0 = new Uint8Array(n); for (let q = 0; q < n; q++) R0[q] = inPoly[q] && I0[q] > T ? 1 : 0;
+  R0 = fill(R0);
+  const s0 = stats(R0);
+  if (s0.a * v.sx * v.sy < 0.8) { setStatus('囲んだ中に歯質が見つかりません。歯根の断面（白い輪）を囲んでください', true); return false; }
+  // 歯根の象牙質の代表値（囲んだ断面の歯質の中央値）。追跡は歯質と骨の中間より上（骨髄・薄い骨とのつながりを切る）、エナメル質は象牙質より明らかに高い値
+  const dv = []; for (let q = 0; q < n; q++) if (R0[q] && I0[q] > T) dv.push(I0[q]);
+  dv.sort((a, b) => a - b);
+  const dMed = dv[dv.length >> 1], T2 = T + 0.35 * (dMed - T), enTh = dMed + 0.6 * (dMed - T);
+  // 上下それぞれへ追跡：前の断面を1画素広げた範囲の歯質だけをつなぐ（細い橋は収縮→膨張で切る）。
+  // 1枚で面積が 25% を超えて増えたら隣の歯・骨に触れたとみなし、前の断面の内側に限る
+  const minA = Math.max(3, Math.round(0.12 / (v.sx * v.sy))), maxK = Math.round(28 / v.sz);
+  // 前の断面を (dx,dy) 画素ずらした形
+  const shiftM = (m, dx, dy) => { if (!dx && !dy) return m; const o = new Uint8Array(n);
+    for (let j = 0; j < h; j++) { const jj = j - dy; if (jj < 0 || jj >= h) continue;
+      for (let i = 0; i < w; i++) { const ii = i - dx; if (ii >= 0 && ii < w && m[jj * w + ii]) o[j * w + i] = 1; } }
+    return o; };
+  const track = (dir) => {
+    let prev = R0, pa = s0.a, pc = [s0.cx, s0.cy]; const cs = [], px = []; let end = 'limit', en = 0, tot = 0, contact = 0;
+    for (let k = 1; k <= maxK; k++) {
+      const z = z0 + dir * k; if (z < 0 || z >= v.nz) { end = 'border'; break; }
+      const I = sm(z), allow = grow(prev, 1);
+      const c = new Uint8Array(n); for (let q = 0; q < n; q++) c[q] = allow[q] && I[q] > T2 ? 1 : 0;
+      const core = keepTouching(shrink(c, 1), shrink(prev, 1));
+      let m = core.some((x) => x) ? keepTouching(grow(core, 1).map((x, q) => x & c[q]), prev) : keepTouching(c, prev);
+      m = fill(m);
+      let st = stats(m);
+      if (st.a > 1.25 * pa || st.a > 2.2 * s0.a) {
+        // 骨・隣の歯に触れた：前の断面の形を、これまでの歯根の進み方（中心の移動）の分だけずらした範囲に限る（広がらない・細れば細る）
+        contact++;
+        let vx = 0, vy = 0; const nb = Math.min(cs.length, Math.round(2 / v.sz));
+        if (nb >= 4) { const a0 = cs[cs.length - nb], a1 = cs[cs.length - 1]; vx = (a1[0] - a0[0]) / (nb - 1); vy = (a1[1] - a0[1]) / (nb - 1); }
+        const pr = shiftM(prev, Math.round(pc[0] + vx) - Math.round(pc[0]), Math.round(pc[1] + vy) - Math.round(pc[1]));
+        const c2 = new Uint8Array(n); for (let q = 0; q < n; q++) c2[q] = pr[q] && I[q] > T2 ? 1 : 0;
+        m = fill(keepTouching(c2, shrink(pr, 1).some((x) => x) ? shrink(pr, 1) : pr)); st = stats(m);
+        if (st.a) { st.cx = pc[0] + vx; st.cy = pc[1] + vy; }
+      }
+      if (st.a < minA) { end = 'vanish'; break; }
+      if (st.edge) { end = 'leak'; break; }
+      pc = [st.cx, st.cy];
+      for (let q = 0; q < n; q++) if (m[q]) { tot++; if (I[q] > enTh) en++; if ((q & 3) === 0) px.push([wx0 + q % w, wy0 + ((q / w) | 0), z]); }
+      cs.push([st.cx, st.cy, z, st.a]); prev = m; pa = st.a;
+    }
+    return { cs, end, en: tot ? en / tot : 0, px, contact };
+  };
+  const A = track(1), B = track(-1), eA = A.en, eB = B.en;
+  // 歯冠の向き：エナメル質を多く含む側。どちらにも無ければ（歯冠の無い歯）、細って消える側を根尖とみなす
+  let apDir;
+  if (Math.max(eA, eB) > 0.05 && Math.abs(eA - eB) > 0.03) apDir = eA > eB ? -1 : 1;
+  else if (A.end === 'vanish' && B.end !== 'vanish') apDir = 1;
+  else if (B.end === 'vanish' && A.end !== 'vanish') apDir = -1;
+  else { const occ = detectOcclusion([Math.round(s0.cx), Math.round(s0.cy), z0]); apDir = occ ? ((occ.jaw === 'upper') === (supSign() > 0) ? 1 : -1) : (A.cs.length <= B.cs.length ? 1 : -1); }
+  const ap = apDir > 0 ? A : B, cr = apDir > 0 ? B : A;
+  // 歯軸：根尖側の追跡＋歯冠側 4mm までの断面の中心を通る直線（主成分）
+  const crN = Math.round(4 / v.sz);
+  const P = [[s0.cx, s0.cy, z0]].concat(ap.cs.map((c) => c.slice(0, 3)), cr.cs.slice(0, crN).map((c) => c.slice(0, 3)))
+    .map((p) => [p[0] * v.sx, p[1] * v.sy, p[2] * v.sz]);
+  let u = [0, 0, 1];
+  if (P.length >= Math.round(3 / v.sz)) {
+    const m = [0, 1, 2].map((k) => P.reduce((a, p) => a + p[k], 0) / P.length), C = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+    for (const p of P) for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) C[a][b] += (p[a] - m[a]) * (p[b] - m[b]);
+    let e = [0, 0, 1];
+    for (let it = 0; it < 50; it++) { const t = C.map((r) => r[0] * e[0] + r[1] * e[1] + r[2] * e[2]); const l = Math.hypot(...t) || 1; e = t.map((x) => x / l); }
+    if (e[2] < 0) e = e.map((x) => -x);
+    if (e[2] > Math.cos(40 * Math.PI / 180)) u = e;
+  }
+  const deg = Math.acos(clamp(u[2], -1, 1)) * 180 / Math.PI;
+  const apex = ap.end === 'vanish' && ap.cs.length ? ap.cs[ap.cs.length - 1].slice(0, 3) : null;
+  const jaw = apDir * supSign() > 0 ? 'upper' : 'lower';
+  if (window.DEBUG_SEP) console.log('lasso', 'z0', z0, 'T', Math.round(T), Math.round(T2), 'en', Math.round(enTh), 'A0', s0.a, 'up', A.cs.length, A.end, A.contact, eA.toFixed(2), 'dn', B.cs.length, B.end, B.contact, eB.toFixed(2), 'apDir', apDir, 'jaw', jaw, 'deg', deg.toFixed(1), 'apex', apex && apex.map(Math.round).join(','));
+  // 枠：歯軸に傾け、選択点は囲んだ断面の中心（選んだ歯から動かさない）。上下の判定は追跡で求めた向きに合わせる
+  const best = [Math.round(s0.cx), Math.round(s0.cy), z0];
+  S.shift = [0, 0]; S.thManual = false; S.crownInfo = null; S.boxHidden = false;
+  applyClickJaw(best); setJawFixed(jaw);
+  setSeed(best); S.seedClick = best.slice();
+  const dg = 180 / Math.PI;
+  setVal('tiltX', deg >= 3 ? clamp(Math.round(Math.asin(clamp(-u[1], -1, 1)) * dg * 2) / 2, -60, 60) : 0);
+  setVal('tiltY', deg >= 3 ? clamp(Math.round(Math.atan2(u[0], u[2]) * dg * 2) / 2, -60, 60) : 0);
+  setVal('tiltZ', 0);
+  const F = roiFrame();
+  // 横幅：根尖側の追跡＋歯冠側（咬合面の近くまで）の断面の広がり＋1.5mm（隣の歯に触れて止めた断面も含む）
+  let lx0 = Infinity, lx1 = -Infinity, ly0 = Infinity, ly1 = -Infinity, cTop = -Infinity;
+  const crSign = -apDir;   // 歯冠側（ボリュームの z の向き）
+  const acc = (q) => { const l = F.toLocal(...q); lx0 = Math.min(lx0, l[0]); lx1 = Math.max(lx1, l[0]); ly0 = Math.min(ly0, l[1]); ly1 = Math.max(ly1, l[1]); return l; };
+  for (const p of pts) acc([p[0], p[1], z0]);
+  for (const q of ap.px) acc(q);
+  for (const q of cr.px) { const l = acc(q); cTop = Math.max(cTop, l[2] * crSign * Math.sign(F.Rm[8] || 1)); }
+  const mg = 1.5;
+  setVal('roiX', clamp(Math.round((lx1 - lx0 + 2 * mg) * 2) / 2, 4, 40)); setVal('roiY', clamp(Math.round((ly1 - ly0 + 2 * mg) * 2) / 2, 4, 40));
+  S.shift = [Math.round((lx0 + lx1) / 2 * 10) / 10, Math.round((ly0 + ly1) / 2 * 10) / 10];
+  // 歯冠側：咬合面（求まっていれば）＋1mm、歯冠まで追えた（上が空いていた）ならその上端＋1mm、どちらも無ければ 12mm
+  const crownUp = crSign > 0;
+  let crownMm = 12;
+  if (S.occl && S.occl.zO != null) {
+    const mo = S.occl.map, i = best[0] - mo.x0, j = best[1] - mo.y0;
+    const zm = i >= 0 && j >= 0 && i < mo.w && j < mo.h ? mo.z[j * mo.w + i] : S.occl.zO;
+    crownMm = Math.abs(zm - z0) * v.sz / Math.max(0.5, u[2]) + 1;
+  } else if (cr.end === 'vanish' && cTop > 0) crownMm = cTop + 1;
+  // 根尖側：根尖まで追えたら根尖＋2.5mm、追えなければ 20mm
+  let rootMm = 20;
+  if (apex) rootMm = Math.abs(F.toLocal(...apex)[2]) + 2.5;
+  crownMm = clamp(Math.round(crownMm * 2) / 2, 3, 40); rootMm = clamp(Math.round(rootMm * 2) / 2, 6, 40);
+  setVal('roiUp', crownUp ? crownMm : rootMm); setVal('roiDn', crownUp ? rootMm : crownMm);
+  // しきい値は選んだ歯のまわりで決め直す（選択点は動かさない）
+  autoThreshold(true, true);
+  S.lasso = { pts: pts.map((p) => [p[0], p[1], z0]) };
+  S.seedNote = '（囲んだ歯根から歯軸' + (deg >= 3 ? ' ' + deg.toFixed(0) + '°' : '') + '・' + (apex ? '根尖の位置' : '歯根の向き') + 'を求めて枠を置きました）';
+  S.autoAxisPending = false; S.autoFit = S.autoFit2 = false;
+  if (S.tool !== 'seed') setTool('seed');
+  renderAll(); markDirty();
+  setStatus((S.jawNote || '') + S.seedNote + ' 解析します…');
+  if (window.DEBUG_SEP) console.log('lasso box', 'tilt', $('tiltX').value, $('tiltY').value, 'roi', $('roiX').value, $('roiY').value, $('roiUp').value, $('roiDn').value, 'shift', S.shift);
+  if (S.busy) S.rerun = true; else runExtract();
+  return true;
 }
 function selectToothAt(p) {
   const v = S.vol, q = p.map((x, k) => clamp(Math.round(x), 0, [v.nx, v.ny, v.nz][k] - 1));
@@ -1192,6 +1373,15 @@ class SliceView {
     canvas.addEventListener('pointerdown', (e) => this.down(e));
     canvas.addEventListener('pointermove', (e) => this.move(e));
     canvas.addEventListener('pointerup', (e) => {
+      if (this.drag === 'lasso') {
+        this.drag = null; canvas.releasePointerCapture(e.pointerId);
+        const pts = this.lassoPts || []; this.lassoPts = null; this.lassoScr = null;
+        // 水平断（法線がほぼ上下）でだけ使える
+        if (Math.abs(this.P().n[2]) < 0.9) { setStatus('囲んで選択は水平断（アキシャル）で使ってください', true); this.render(); return; }
+        if (pts.length < 6) { setStatus('歯根の断面のまわりをドラッグで一周囲んでください', true); this.render(); return; }
+        lassoSelect(pts);
+        return;
+      }
       if (this.drag === 'tilt' || this.drag === 'rot' || this.drag === 'face' || this.drag === 'brush') {
         if (this.drag !== 'brush') S.autoFit = S.autoFit2 = false;   // 枠を手で調整したら自動調整しない
         this.drag = null; canvas.releasePointerCapture(e.pointerId);
@@ -1210,7 +1400,7 @@ class SliceView {
     canvas.addEventListener('pointerleave', () => { if (this.info) this.info.textContent = ''; if (this.hotKey) { this.hot = null; this.hotKey = ''; this.render(); } });
     // ダブルクリック：歯の上なら、その歯を選択してすぐ解析／歯がない所なら1画面表示の切り替え
     canvas.addEventListener('dblclick', (e) => {
-      if (!S.vol || S.meas.on || S.brush.on) return;
+      if (!S.vol || S.meas.on || S.brush.on || S.tool === 'lasso') return;
       const [i, j] = this.evtImg(e), g = this.geom();
       if (i < 0 || j < 0 || i >= g.w || j >= g.h) return;
       if (!selectToothAt(this.toVox(i - 0.5, j - 0.5)) && S.tool === 'view') toggleSolo(canvas.parentElement);
@@ -1296,6 +1486,10 @@ class SliceView {
       return;
     }
     if (S.brush.on) { this.drag = 'brush'; S.brush.groups.push([]); this.paint(e); return; }
+    if (S.tool === 'lasso') {
+      const [i, j] = this.evtImg(e);
+      this.drag = 'lasso'; this.lassoPts = [this.toVox(i - 0.5, j - 0.5)]; this.lassoScr = [this.evtImg(e).slice(2)]; return;
+    }
     const [, , sx, sy] = this.evtImg(e), dpr = this.cv.width / this.cv.getBoundingClientRect().width;
     if (this.handles && S.seed && S.tool === 'seed') {
       const hit = this.hitHandle(sx, sy, dpr);
@@ -1369,6 +1563,10 @@ class SliceView {
       return;
     }
     if (this.drag === 'pick') this.pick(e);
+    else if (this.drag === 'lasso') {
+      const [i, j, sx, sy] = this.evtImg(e), L = this.lassoScr[this.lassoScr.length - 1], dpr = this.cv.width / this.cv.getBoundingClientRect().width;
+      if (Math.hypot(sx - L[0], sy - L[1]) >= 3 * dpr) { this.lassoPts.push(this.toVox(i - 0.5, j - 0.5)); this.lassoScr.push([sx, sy]); this.render(); }
+    }
     else if (this.drag === 'cursor') this.moveCursor(e);
     else if (this.drag === 'xrot') this.rotateXhair(e);
     else if (this.drag === 'wl') {
@@ -1625,6 +1823,15 @@ class SliceView {
         if (Math.abs(dd) >= b.r) continue;
         const [a0, b0] = this.toImg(...b.c), rr = Math.sqrt(b.r * b.r - dd * dd) * mmPx;
         ctx.beginPath(); ctx.arc(t.ox + (a0 + 0.5) * t.px, t.oy + (b0 + 0.5) * t.py, rr, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    // 囲んで選択：なぞっている線／最後に囲んだ線（その断面の近くだけ）
+    {
+      const L = this.lassoPts || (S.lasso && S.tool !== 'view' && Math.abs(this.distMm(S.lasso.pts[0])) < P.s * 1.5 ? S.lasso.pts : null);
+      if (L && L.length > 1) {
+        ctx.strokeStyle = '#ff5ad1'; ctx.lineWidth = 1.5 * dpr; ctx.setLineDash(this.lassoPts ? [] : [4, 3]); ctx.beginPath();
+        L.forEach((q, k) => { const [a, b] = this.toImg(...q), X = t.ox + (a + 0.5) * t.px, Y = t.oy + (b + 0.5) * t.py; k ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); });
+        ctx.closePath(); ctx.stroke(); ctx.setLineDash([]);
       }
     }
     // 距離計測
@@ -4146,10 +4353,12 @@ function setTool(t) {
   document.querySelectorAll('[data-tool]').forEach((b) => b.classList.toggle('on', b.dataset.tool === t));
   $('measBtn').classList.toggle('primary', t === 'meas'); $('brushBtn').classList.toggle('primary', t === 'brush');
   $('measOut').textContent = t === 'meas' ? '断面上で2点をクリック' : '';
-  for (const v of views) v.cv.style.cursor = { view: 'crosshair', seed: 'pointer', meas: 'crosshair', brush: 'cell' }[t];
+  for (const v of views) v.cv.style.cursor = { view: 'crosshair', seed: 'pointer', meas: 'crosshair', brush: 'cell', lasso: 'crosshair' }[t];
   setStatus({ view: '閲覧：クリック／ドラッグで十字線を移動、ホイールでスライス送り、右ドラッグで明るさ・コントラスト',
     seed: '歯を選択：断面上で、抽出したい歯（象牙質）をクリックしてください',
-    meas: '距離：断面上で2点をクリックしてください', brush: '除外ブラシ：抽出から外したい部分（骨・隣在歯など）をなぞってください' }[t]);
+    meas: '距離：断面上で2点をクリックしてください',
+    lasso: '囲んで選択：水平断（アキシャル）で、抽出したい歯の歯根の断面をドラッグで囲んでください（隣の歯根・骨を入れず、白い輪の少し外側をなぞる）。歯冠から根尖まで自動で認識して解析します',
+    brush: '除外ブラシ：抽出から外したい部分（骨・隣在歯など）をなぞってください' }[t]);
   renderAll();
 }
 // 「歯を選択」をもう一度押すと、範囲の枠を消して閲覧モードに戻る（次に「歯を選択」を押すか歯をダブルクリックすると再び表示）
