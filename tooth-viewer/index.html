@@ -1225,10 +1225,10 @@ function lassoSelect(pts) {
       const core = keepTouching(shrink(c, 1), shrink(prev, 1));
       let m = core.some((x) => x) ? keepTouching(grow(core, 1).map((x, q) => x & c[q]), prev) : keepTouching(c, prev);
       m = fill(m);
-      let st = stats(m);
+      let st = stats(m), ct = false;
       if (st.a > 1.25 * pa || st.a > 2.2 * s0.a) {
         // 骨・隣の歯に触れた：前の断面の形を、これまでの歯根の進み方（中心の移動）の分だけずらした範囲に限る（広がらない・細れば細る）
-        contact++;
+        contact++; ct = true;
         let vx = 0, vy = 0; const nb = Math.min(cs.length, Math.round(2 / v.sz));
         if (nb >= 4) { const a0 = cs[cs.length - nb], a1 = cs[cs.length - 1]; vx = (a1[0] - a0[0]) / (nb - 1); vy = (a1[1] - a0[1]) / (nb - 1); }
         const pr = shiftM(prev, Math.round(pc[0] + vx) - Math.round(pc[0]), Math.round(pc[1] + vy) - Math.round(pc[1]));
@@ -1239,7 +1239,7 @@ function lassoSelect(pts) {
       if (st.a < minA) { end = 'vanish'; break; }
       if (st.edge) { end = 'leak'; break; }
       pc = [st.cx, st.cy];
-      for (let q = 0; q < n; q++) if (m[q]) { tot++; if (I[q] > enTh) en++; if ((q & 3) === 0) px.push([wx0 + q % w, wy0 + ((q / w) | 0), z]); }
+      for (let q = 0; q < n; q++) if (m[q]) { tot++; if (I[q] > enTh) en++; if (!ct && (q & 3) === 0) px.push([wx0 + q % w, wy0 + ((q / w) | 0), z]); }
       cs.push([st.cx, st.cy, z, st.a]); prev = m; pa = st.a;
     }
     return { cs, end, en: tot ? en / tot : 0, px, contact };
@@ -1279,14 +1279,17 @@ function lassoSelect(pts) {
   setVal('tiltY', deg >= 3 ? clamp(Math.round(Math.atan2(u[0], u[2]) * dg * 2) / 2, -60, 60) : 0);
   setVal('tiltZ', 0);
   const F = roiFrame();
-  // 横幅：根尖側の追跡＋歯冠側（咬合面の近くまで）の断面の広がり＋1.5mm（隣の歯に触れて止めた断面も含む）
+  // 横幅：囲んだ断面の歯（歯軸に垂直な面へ投影した広がり）を基準に、追跡した断面のうち隣の歯・骨に触れていないものを
+  // 基準から各辺 2mm（歯冠のふくらみ）までに限って加え、＋1mm。隣の歯まで追ってしまっても枠が広がらない
   let lx0 = Infinity, lx1 = -Infinity, ly0 = Infinity, ly1 = -Infinity, cTop = -Infinity;
   const crSign = -apDir;   // 歯冠側（ボリュームの z の向き）
   const acc = (q) => { const l = F.toLocal(...q); lx0 = Math.min(lx0, l[0]); lx1 = Math.max(lx1, l[0]); ly0 = Math.min(ly0, l[1]); ly1 = Math.max(ly1, l[1]); return l; };
-  for (const p of pts) acc([p[0], p[1], z0]);
-  for (const q of ap.px) acc(q);
-  for (const q of cr.px) { const l = acc(q); cTop = Math.max(cTop, l[2] * crSign * Math.sign(F.Rm[8] || 1)); }
-  const mg = 1.5;
+  for (let q = 0; q < n; q++) if (R0[q]) acc([wx0 + q % w, wy0 + ((q / w) | 0), z0]);
+  const ref = [lx0 - 2, lx1 + 2, ly0 - 2, ly1 + 2];
+  const acc2 = (q) => { const l = F.toLocal(...q); if (l[0] < ref[0] || l[0] > ref[1] || l[1] < ref[2] || l[1] > ref[3]) return null; return acc(q); };
+  for (const q of ap.px) acc2(q);
+  for (const q of cr.px) { const l = acc2(q); if (l) cTop = Math.max(cTop, l[2] * crSign * Math.sign(F.Rm[8] || 1)); }
+  const mg = 1.0;
   setVal('roiX', clamp(Math.round((lx1 - lx0 + 2 * mg) * 2) / 2, 4, 40)); setVal('roiY', clamp(Math.round((ly1 - ly0 + 2 * mg) * 2) / 2, 4, 40));
   S.shift = [Math.round((lx0 + lx1) / 2 * 10) / 10, Math.round((ly0 + ly1) / 2 * 10) / 10];
   // 歯冠側：咬合面（求まっていれば）＋1mm、歯冠まで追えた（上が空いていた）ならその上端＋1mm、どちらも無ければ 12mm
