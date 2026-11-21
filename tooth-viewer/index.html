@@ -72,6 +72,7 @@ select, input[type=number] { background: var(--panel2); color: var(--text); bord
 .vlabel small { color: var(--muted); font-weight: 400; margin-left: 6px; }
 .vtools { position: absolute; right: 6px; top: 6px; display: flex; gap: 4px; }
 .vtools button { padding: 3px 7px; font-size: 12px; background: rgba(30,35,44,.85); }
+.vtools button.on { background: var(--accent); color: #04131f; border-color: var(--accent); font-weight: 700; }
 .legend { position: absolute; left: 8px; bottom: 8px; background: rgba(15,18,23,.78); border: 1px solid var(--line);
   border-radius: 6px; padding: 6px 9px; font-size: 12px; pointer-events: none; }
 .legend div { display: flex; align-items: center; gap: 6px; margin: 2px 0; }
@@ -187,7 +188,7 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 3
     <div class="struct" hidden><input type="color" id="colB" value="#8fa3b8"><span>周囲の骨</span><input type="range" id="opB" min="0" max="100" value="0"><output id="opBO"></output></div>
     <div class="row"><label>透かし表示</label><input id="glass" type="range" min="0" max="100" value="75"><output id="glassO"></output></div>
     <label class="check"><input id="pulpGrad" type="checkbox">根管を高さで色分け（走行が分かりやすい）</label>
-    <label class="check" title="解析結果（歯・根管の範囲）から表面をなめらかに作り直して表示します。STL出力もなめらかな面になります。解析結果（計測値）は変わりません"><input id="smoothOn" type="checkbox">表面をなめらかに（模型風）</label>
+    <label class="check" title="解析結果（歯・根管の範囲）から表面をなめらかに作り直して表示します（根管も、細い根管が途切れないようにならします）。STL出力もなめらかな面になります。解析結果（計測値）は変わりません"><input id="smoothOn" type="checkbox">表面をなめらかに（模型風）</label>
     <div class="row" id="smoothWrap" hidden><label>なめらかさ</label><input id="smoothR" type="range" min="1" max="8" value="4"><output id="smoothRO"></output></div>
     <div class="flex" style="margin:6px 0">
       <button data-preset="solid">不透明</button>
@@ -252,6 +253,7 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 3
     <div class="vtools">
       <select id="mode3d" title="3Dで表示する対象"><option value="tooth">抽出した歯</option><option value="ct">CT全体</option></select>
       <span id="ctThWrap" hidden style="display:flex;align-items:center;gap:4px;background:rgba(30,35,44,.85);padding:2px 6px;border-radius:5px;font-size:12px">しきい値<input id="ctTh" type="range" style="width:110px"><output id="ctThO"></output></span>
+      <button id="canalSmooth" title="根管の表面をなめらかにして表示（太い所はならし、細い根管は太さのそろった管にする）。もう一度押すと元に戻ります。計測値は変わりません" disabled>〰 根管をなめらかに</button>
       <button id="max3d" title="3D表示を最大化">⤢ 拡大</button></div>
     <canvas id="gizmo" style="position:absolute;right:8px;bottom:8px;width:96px;height:96px;left:auto;top:auto;inset:auto 8px 8px auto;pointer-events:none"></canvas>
     <div class="legend" id="legend">
@@ -1223,9 +1225,9 @@ function confirmCanal() {
   for (let i = 0; i < lab.length; i++) if (r.mark[i] && lab[i] !== 3) { lab[i] = 3; add++; }
   let nc = 0; for (let i = 0; i < lab.length; i++) if (lab[i] === 3) nc++;
   F.rgba = buildFields(F.I, lab, F.solid, F.nx, F.ny, F.nz, F.th, F.te, F.dMed, F.fmin);
+  F.rgbaSmooth = null; F.cs = null;
   renderer.mode = 'tooth'; $('mode3d').value = 'tooth';
-  renderer.setData(F.rgba, lab, F.nx, F.ny, F.nz, F.sp[0], F.sp[1], F.sp[2], F.sus); updateLegend();
-  if ($('smoothOn').checked) applySmooth();
+  applySmooth();
   // 統計の「歯髄・根管 体積」を更新
   const dts = $('segStats').querySelectorAll('dt');
   for (const dt of dts) if (dt.textContent === '歯髄・根管 体積') dt.nextElementSibling.textContent = (nc * F.fvol).toFixed(1) + ' mm³';
@@ -3541,7 +3543,8 @@ async function extract() {
   showProgress('3Dデータを作成中…', 0.9); await sleep0();
   renderer.mode = 'tooth'; $('mode3d').value = 'tooth'; $('ctThWrap').hidden = true;
   renderer.setData(rgba, labF, fx, fy, fz, fsp[0], fsp[1], fsp[2], susTex); updateLegend();
-  if ($('smoothOn').checked) applySmooth();
+  $('canalSmooth').disabled = false;
+  if ($('smoothOn').checked || S.canalSmooth) applySmooth();
   hideProgress();
   $('empty3d').style.display = 'none';
   $('stlBtn').disabled = false;
@@ -4693,7 +4696,51 @@ document.querySelectorAll('[data-preset]').forEach((b) => (b.onclick = () => {
 }));
 $('max3d').onclick = () => toggleSolo($('cv3d').parentElement);
 /** 表示中の3Dフィールド（なめらか表示なら作り直したもの） */
-function curRgba(F) { return $('smoothOn').checked && F.rgbaSmooth ? F.rgbaSmooth : F.rgba; }
+function curRgba(F) {
+  const base = $('smoothOn').checked && F.rgbaSmooth ? F.rgbaSmooth : F.rgba;
+  // 「表面をなめらかに（模型風）」のときも根管は同じ方法でならす（細い根管が途切れない）
+  if (!S.canalSmooth && !$('smoothOn').checked) return base;
+  if (!F.cs || F.csBase !== base) { F.cs = smoothCanalRgba(F, base); F.csBase = base; }
+  return F.cs;
+}
+/** 3 方向それぞれ半径 r の最大値フィルタ（分離型） */
+function maxFilter3(a, nx, ny, nz, r) {
+  const n = a.length, t = new Float32Array(n), nxy = nx * ny;
+  const pass = (src, dst, len, stride, count, base) => {
+    for (let c = 0; c < count; c++) { const b0 = base(c);
+      for (let i = 0; i < len; i++) { let m = -Infinity; for (let k = Math.max(0, i - r); k <= Math.min(len - 1, i + r); k++) { const v = src[b0 + k * stride]; if (v > m) m = v; } dst[b0 + i * stride] = m; } }
+  };
+  pass(a, t, nx, 1, ny * nz, (c) => c * nx);
+  pass(t, a, ny, nx, nx * nz, (c) => ((c / nx) | 0) * nxy + (c % nx));
+  pass(a, t, nz, nxy, nxy, (c) => c);
+  a.set(t); return a;
+}
+/**
+ * 根管だけをなめらかにした表示用の場（計測には使わない）。根管のマスクを約0.15mm幅でならし、
+ * 近く（約0.3mm）の最大値で割ってから 0.5 の面をとる：太い所は普通にならした面、細い根管はならしても消えず太さのそろった管になる
+ */
+function smoothCanalRgba(F, base) {
+  const { nx, ny, nz, sp, labels: L } = F, n = L.length, vs = Math.min(...sp);
+  const C = new Float32Array(n); for (let i = 0; i < n; i++) if (L[i] === 3) C[i] = 1;
+  boxBlur3(C, nx, ny, nz, Math.max(1, Math.round((window.CSR ?? 0.15) / vs / 1.4)), 3);
+  const M = Float32Array.from(C); maxFilter3(M, nx, ny, nz, Math.max(1, Math.round((window.CSM ?? 0.3) / vs)));
+  const out = Uint8Array.from(base);
+  for (let i = 0; i < n; i++) {
+    const m = M[i]; if (m < 0.02) { out[i * 4 + 2] = 0; continue; }
+    const c = Math.min(1, C[i] / Math.max(m, 0.02)) * Math.min(1, m / 0.06);   // 根管から遠い所（裾）は 0 へ
+    out[i * 4 + 2] = Math.round(c * 255);
+    if (c > 0.35 && out[i * 4 + 1] < 140) out[i * 4 + 1] = 140;   // 根管は必ず歯の内側
+  }
+  return out;
+}
+$('canalSmooth').onclick = () => {
+  S.canalSmooth = !S.canalSmooth;
+  $('canalSmooth').classList.toggle('on', S.canalSmooth);
+  $('canalSmooth').textContent = S.canalSmooth ? '〰 根管をなめらかに（ON）' : '〰 根管をなめらかに';
+  if (!(S.seg && S.seg.fine) || renderer.mode === 'ct') return;
+  showProgress('根管をなめらかに処理中…', 0.5);
+  setTimeout(() => { applySmooth(); hideProgress(); setStatus(S.canalSmooth ? '根管の表面をなめらかにして表示しています（計測値は変わりません。もう一度押すと元に戻ります）' : '根管の表示を元に戻しました'); }, 20);
+};
 /**
  * なめらかな表面（模型風）：解析したラベル（歯・エナメル質・根管）だけから3D用の場を作り直す。
  * 歯は約 r mm でならした面。根管は少し弱め（約 0.8r）にならし、細い根管も消えないよう最低限の太さ（約0.2mm）を保つ。
