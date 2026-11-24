@@ -4721,17 +4721,84 @@ function maxFilter3(a, nx, ny, nz, r) {
  * 近く（約0.3mm）の最大値で割ってから 0.5 の面をとる：太い所は普通にならした面、細い根管はならしても消えず太さのそろった管になる
  */
 function smoothCanalRgba(F, base) {
-  const { nx, ny, nz, sp, labels: L } = F, n = L.length, vs = Math.min(...sp);
-  const C = new Float32Array(n); for (let i = 0; i < n; i++) if (L[i] === 3) C[i] = 1;
+  const { nx, ny, nz, sp, labels: L } = F, n = L.length, nxy = nx * ny, vs = Math.min(...sp), s2 = Math.min(sp[0], sp[1]), dz = sp[2];
+  const cm = new Uint8Array(n); for (let i = 0; i < n; i++) if (L[i] === 3) cm[i] = 1;
+  // 太い所（幅およそ0.6mm以上：歯髄腔・太い根管）：マスクをならし、近くの最大値で割った場の 0.5 の面
+  const ke = Math.max(2, Math.round(0.3 / vs));
+  let er = cm; for (let k = 0; k < ke; k++) er = erode6(er, nx, ny, nz);
+  const thick = dilate6(er, nx, ny, nz, ke), thickN = dilate6(thick, nx, ny, nz, 2);
+  // 歯髄腔のまわり（太い所から 0.5mm 以内）は、細い所も含めたマスクで従来どおりならす（管にすると縁が毛羽立つ）
+  const nearThick = dilate6(thick, nx, ny, nz, Math.max(2, Math.round(0.5 / vs)));
+  const C = new Float32Array(n); for (let i = 0; i < n; i++) if (cm[i]) C[i] = 1;
   boxBlur3(C, nx, ny, nz, Math.max(1, Math.round((window.CSR ?? 0.15) / vs / 1.4)), 3);
   const M = Float32Array.from(C); maxFilter3(M, nx, ny, nz, Math.max(1, Math.round((window.CSM ?? 0.3) / vs)));
+  const field = new Float32Array(n);
+  for (let i = 0; i < n; i++) { const m = M[i]; if (m >= 0.02) field[i] = Math.min(1, C[i] / Math.max(m, 0.02)) * Math.min(1, m / 0.06); }
+  // 細い根管：断面ごとの塊を高さ方向につないで中心線をとり、途切れ（1.5mm まで、横のずれが小さいもの）をつなぎ、
+  // 中心線と太さを高さ方向にならした管として描く（画素の段差によるジグザグ・途切れ・ずれをなくす）
+  const thin = new Uint8Array(n); for (let i = 0; i < n; i++) if (cm[i] && !nearThick[i]) thin[i] = 1;
+  const chains = []; let prev = [], prevLab = null;
+  for (let z = 0; z < nz; z++) {
+    const lab = new Int32Array(nxy), cur = []; let nc = 0;
+    for (let q0 = 0; q0 < nxy; q0++) { if (!thin[z * nxy + q0] || lab[q0]) continue;
+      nc++; const st = [q0]; lab[q0] = nc; let a = 0, sx = 0, sy = 0, touchThick = false;
+      while (st.length) { const q = st.pop(), x = q % nx, y = (q / nx) | 0; a++; sx += x; sy += y; if (nearThick[Math.min(n - 1, (z + 1) * nxy + q)] || nearThick[Math.max(0, (z - 1) * nxy + q)] || x > 0 && nearThick[z * nxy + q - 1] || x < nx - 1 && nearThick[z * nxy + q + 1]) touchThick = true;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const X = x + dx, Y = y + dy; if (X < 0 || Y < 0 || X >= nx || Y >= ny) continue; const t = Y * nx + X; if (!lab[t] && thin[z * nxy + t]) { lab[t] = nc; st.push(t); } } }
+      const k = { c: nc, cx: sx / a, cy: sy / a, z, a, touchThick };
+      // 前の断面の塊：重なりが最大のもの（無ければ 0.25mm 以内で最も近いもの）
+      let best = null;
+      if (prevLab) { let bc = 0; const cnt = new Map();
+        for (let q = 0; q < nxy; q++) if (lab[q] === nc && prevLab[q]) cnt.set(prevLab[q], (cnt.get(prevLab[q]) || 0) + 1);
+        for (const [c2, v] of cnt) if (v > bc) { bc = v; best = prev.find((p) => p.c === c2); }
+        if (!best) { let bd = 0.25 / s2; for (const p of prev) { const d = Math.hypot(p.cx - k.cx, p.cy - k.cy); if (d < bd) { bd = d; best = p; } } } }
+      if (best && !best.taken) { best.taken = true; best.chain.push(k); k.chain = best.chain; } else { k.chain = [k]; chains.push(k.chain); }
+      cur.push(k);
+    }
+    prev = cur; prevLab = lab;
+  }
+  // 途切れをつなぐ：鎖の終わりから 1.5mm 以内に始まる鎖で、横のずれが 0.4mm＋高さの差の 0.4 倍以内のもの（最も近いもの）
+  const gapZ = Math.round((window.CGAPD ?? 1.5) / dz);
+  const alive = chains.filter((c) => c.length >= 2 || c[0].touchThick);
+  const used = new Set();
+  for (const a of alive) {
+    if (a.next) continue;
+    const e = a[a.length - 1]; let best = null, bd = Infinity;
+    for (const b of alive) { if (b === a || used.has(b)) continue; const st = b[0], gz = st.z - e.z; if (gz < 1 || gz > gapZ) continue;
+      const lat = Math.hypot(st.cx - e.cx, st.cy - e.cy) * s2; if (lat > 0.4 + 0.4 * gz * dz) continue; const d = lat + gz * dz * 0.3; if (d < bd) { bd = d; best = b; } }
+    if (best) { a.next = best; used.add(best); }
+  }
+  // 逆向き（z の減る向きの途切れ）も同じ規則で：鎖の始まりの手前に終わる鎖は上で処理済み。つないだ列を作る
+  const g = (sig) => { const r = Math.max(1, Math.ceil(2 * sig)), w = []; let t = 0; for (let k = -r; k <= r; k++) { const v = Math.exp(-k * k / (2 * sig * sig)); w.push(v); t += v; } return w.map((v) => v / t); };
+  const wz = g(Math.max(1, (window.CSZ ?? 0.35) / dz)), wr = wz.length >> 1;
+  const tube = new Float32Array(n);
+  for (const a of alive) {
+    if (used.has(a)) continue;   // 先頭の鎖からたどる
+    const P = [];
+    for (let c = a; c; c = c.next) {
+      if (P.length) { const e = P[P.length - 1], st = c[0];
+        for (let z = e.z + 1; z < st.z; z++) { const t = (z - e.z) / (st.z - e.z); P.push({ cx: e.cx + t * (st.cx - e.cx), cy: e.cy + t * (st.cy - e.cy), z, a: Math.min(e.a, st.a), gap: true }); } }
+      for (const k of c) P.push(k);
+    }
+    if (P.length * dz < 0.5 && !P.some((k) => k.touchThick)) continue;   // 0.5mm 未満の孤立した小片は描かない
+    const K = P.length, rs = P.map((k) => Math.sqrt(k.a / Math.PI) * s2);
+    for (let i = 0; i < K; i++) {
+      let sx = 0, sy = 0, sr = 0, sw = 0;
+      for (let j = 0; j < wz.length; j++) { const ii = i + j - wr; if (ii < 0 || ii >= K) continue; const w = wz[j]; sx += w * P[ii].cx; sy += w * P[ii].cy; sr += w * rs[ii]; sw += w; }
+      const cx = sx / sw, cy = sy / sw, r = clamp(sr / sw, 0.07, 0.45), z = P[i].z, R = Math.ceil(r / s2) + 2;
+      for (let y = Math.max(0, Math.floor(cy - R)); y <= Math.min(ny - 1, Math.ceil(cy + R)); y++) for (let x = Math.max(0, Math.floor(cx - R)); x <= Math.min(nx - 1, Math.ceil(cx + R)); x++) {
+        const d = Math.hypot(x - cx, y - cy) * s2, v = clamp(0.5 + (r - d) / (2 * s2), 0, 1), q = z * nxy + y * nx + x;
+        if (v > tube[q]) tube[q] = v; }
+    }
+  }
+  // 高さ方向に軽くならす（断面ごとの円の段差を消す）
+  boxBlur3(tube, nx, ny, nz, 0, 1, 1);
   const out = Uint8Array.from(base);
   for (let i = 0; i < n; i++) {
-    const m = M[i]; if (m < 0.02) { out[i * 4 + 2] = 0; continue; }
-    const c = Math.min(1, C[i] / Math.max(m, 0.02)) * Math.min(1, m / 0.06);   // 根管から遠い所（裾）は 0 へ
-    out[i * 4 + 2] = Math.round(c * 255);
+    const c = nearThick[i] ? Math.max(field[i], tube[i]) : tube[i];
+    out[i * 4 + 2] = Math.round(Math.min(1, c) * 255);
     if (c > 0.35 && out[i * 4 + 1] < 140) out[i * 4 + 1] = 140;   // 根管は必ず歯の内側
   }
+  if (window.DEBUG_SEP) console.log('canal tube', 'chains', chains.length, 'alive', alive.length, 'linked', used.size);
   return out;
 }
 $('canalSmooth').onclick = () => {
