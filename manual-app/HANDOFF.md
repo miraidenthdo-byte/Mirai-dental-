@@ -32,6 +32,7 @@
 - 退職者対策：管理者ページで「利用を停止」すると即ログアウト。コード再発行、全員ログアウト、端末一覧
 - 画像・動画：アプリから追加でき、Google ドライブの非公開フォルダに保存。ログイン中の人だけがアプリ経由で見られる
 - Slack通知：マニュアルの追加・更新・削除をチャンネルに送る（管理者ページ「スタッフ管理」→「Slack通知」で Webhook URL を登録）
+- Notion連携（2026-11-27 追加）：アプリ → Notion の一方通行。保存・削除すると `notion` シートに「未反映」を積み、画面が裏で `notionFlush` を呼んで Notion API（2022-06-28）で反映。取り込み元ページは中身を入れ替え（child_page / child_database は残す）、新規は追加先ページの下に作成、削除はゴミ箱へ。連携前に「確認する」（鍵・追加先・書き込みテスト・取り込み元ページ）がすべて通り、管理者が5項目にチェックしないと始められない。模擬テストは `node data/test-notion.js Code.gs`
 - Apps Script が無い環境（ファイルを直接開いた場合）は「体験モード」で動き、データはブラウザ内に保存される
 
 ## 4. 必ず守ること（ハマりどころ）
@@ -49,12 +50,13 @@
 ## 5. 確認のしかた
 
 - 構文チェック：`node -e "const s=require('fs').readFileSync('index.html','utf8');const re=/<script>([\s\S]*?)<\/script>/g;let m;while((m=re.exec(s)))new Function(m[1]);console.log('ok')"`
-- サーバー側：`node data/test-gas.js Code.gs`（全部 ok になること）
+- サーバー側：`node data/test-gas.js Code.gs` と `node data/test-notion.js Code.gs`（全部 ok になること）
 - 画面：Playwright（Chromium）で `file:///…/manual-app/index.html` を開くと体験モードで動く。体験モードのログインコードは画面に表示される（例：111111）。管理者の暗証番号は最初に自分で決める。
 - 本番（Google 上）での動作は、こちらからは確かめられない。ユーザーにスクリーンショットを送ってもらって確認する。
 
 ## 6. 次にやること（候補）
 
 - Slack の「テスト送信」が届くかユーザーと確認する（README の「Slack通知」の手順）
+- Notion連携：ユーザーが鍵を作って登録し、「確認する」がすべて ✅ になるか、1件保存して Notion に反映されるかを確認する（README の「Notion連携」）
 - スタッフ全員の登録と、スマホのホーム画面への追加
 - 必要に応じて：Notion の残りのページ（マニュアルDB以外）の取り込み、通知の対象を増やす（スタッフの完了など）
